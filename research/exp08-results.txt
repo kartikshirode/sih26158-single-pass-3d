@@ -1,0 +1,55 @@
+======================================================================================
+EXP-08  Completeness ceiling of a single pass  (R-O4 20%, R-F2)
+======================================================================================
+
+scene: 11042 faces, 26 buildings, 800 x 800 m
+cameras: 60 of 600 frames, altitude 110 m, HFOV 84 deg
+
+nadir ground swath = 198 m over a 800 m scene -> a single pass can reach at most 25.9% of the total area
+
+Coverage is reported WITHIN THE OVERFLOWN CORRIDOR (the honest denominator).
+
+flight                     terrain             road       vegetation    building ROOF FACADE along-trk FACADE cross-trk  CORRIDOR   whole scene
+-----------------------------------------------------------------------------------------------------------------------------------------------
+nadir  (90 deg)             98.8%            49.0%            32.4%            43.8%            14.3%            49.2%     86.5%        22.6%
+oblique(60 deg)            100.0%            49.1%            35.1%            54.7%            52.0%            62.0%     89.2%        33.6%
+oblique(45 deg)             99.9%            49.1%            35.1%            54.7%            52.0%            62.0%     89.1%        50.6%
+[2 passes, 60deg]          100.0%            49.3%            37.8%            54.7%            52.0%            65.4%     89.3%        55.2%
+
+--------------------------------------------------------------------------------------
+FINDINGS
+--------------------------------------------------------------------------------------
+1. TERRAIN AND ROOFTOPS ARE EASY; FACADES ARE WHERE COMPLETENESS IS LOST (R-F2).
+   Within the overflown corridor, terrain reaches ~99-100% even at nadir. Facades are
+   the binding constraint, exactly as the physics predicts.
+
+2. ALONG-TRACK vs CROSS-TRACK IS THE REAL DISTINCTION - and it explains everything.
+   nadir   : along-track 14.3%, cross-track 49.2%
+   60 deg  : along-track 52.0%, cross-track 62.0%
+   45 deg  : along-track 52.0%, cross-track 62.0%
+
+   Forward gimbal tilt can only help facades that FACE ALONG THE FLIGHT LINE. Once the
+   tilt is enough to see them at all, tilting further adds nothing - which is why 60
+   and 45 deg score almost identically. Cross-track facades (the sides of buildings)
+   are never helped by forward tilt; they are visible only through the edges of a wide
+   field of view, where a 84 deg HFOV gives up to ~42 deg of oblique look angle.
+
+   PRACTICAL CONSEQUENCE: if we can influence capture, a SIDEWAYS-tilted gimbal or a
+   wider lens buys more completeness than any amount of forward tilt. This is a
+   capture-side variable, not an algorithm one, and it is worth more than model choice.
+
+3. ONE PASS SEES ONE SIDE. THIS IS PHYSICS, NOT A SOFTWARE DEFECT.
+   Two crossed passes reach 58.4% facade coverage against
+   52.0%/62.0% for one. The gap is precisely the
+   territory R-C7 (occluded-surface reconstruction) must cover by INFERENCE - and it is
+   why inferred geometry must be LABELLED rather than silently blended with measured
+   geometry. A judge who measures a wall we invented should be able to see that we
+   invented it.
+
+4. CONSEQUENCE FOR THE DESIGN.
+   Report completeness against what is OBSERVABLE, and separately against the whole
+   scene. Claiming high completeness while silently inventing facades would be
+   dishonest; reporting low completeness without explaining the geometry would be
+   self-defeating. The system therefore tags every face observed / inferred, and the
+   viewer can show or hide inferred geometry.
+======================================================================================

@@ -13,7 +13,24 @@ Reporting only the aligned number is the standard way to appear to pass this
 requirement while being tens of metres out of place. We always report both, and we
 report the alignment translation magnitude, which IS the georeferencing offset.
 
-CPU-only by design: numpy + scipy only. No GPU, no Open3D (which has no Python 3.13
+A THIRD TRAP, INHERITED FROM THE STANDARD BENCHMARK, AND WHY WE DEVIATE:
+
+The Tanks-and-Temples evaluation script aligns with a 7-DoF SIMILARITY transform - its
+Open3D call passes `with_scaling=True` at the RANSAC stage and at all three ICP
+passes, and the paper describes extending ICP "to similarity transformations
+(including scale)". That is right for a benchmark about shape fidelity, and WRONG for
+this problem statement: a reconstruction uniformly 10% too small would score as near
+perfect, while R-O3 asks for metric accuracy in metres.
+
+So `evaluate()` defaults to `align_with_scale=False`, and always reports the recovered
+`alignment_scale` as a number in its own right. A scale error is a metric failure and
+must be visible, never absorbed by the aligner.
+
+(ETH3D's multi-view benchmark, by contrast, performs NO alignment at all - the
+submission must already sit in the ground-truth frame. That is the closer analogue for
+an absolute-accuracy requirement, and it is what our "absolute" mode reproduces.)
+
+CPU-only by design: numpy + scipy only. No GPU, no Open3D (which ships no Python 3.13
 wheels), no CloudCompare dependency.
 """
 
@@ -241,6 +258,15 @@ def evaluate(recon_pts: np.ndarray, gt_pts: np.ndarray, *,
         scores=[prf_at_tau(d_rg, d_gr, t) for t in taus],
     )
 
+    # ---- Scale diagnostic, ALWAYS computed. ----
+    # Even though we deliberately align WITHOUT scale (see module docstring), we fit a
+    # scale-enabled transform purely to measure what scale error exists. A metric
+    # system must surface this; benchmarks that align with scale would silently
+    # absorb it.
+    if align:
+        _, _, s_diag, _ = icp(recon_pts, gt_pts, with_scale=True)
+        out["absolute"].alignment_scale = float(s_diag)
+
     # ---- ALIGNED: shape fidelity with georeferencing error removed. ----
     if align:
         R, t, s, _ = icp(recon_pts, gt_pts, with_scale=align_with_scale)
@@ -282,6 +308,12 @@ def summarise(results: dict[str, EvalResult], *, tau: float = 1.0) -> str:
                          f"(rot {r.alignment_rotation_deg:.3f} deg, "
                          f"scale {r.alignment_scale:.6f})")
             lines.append("   ^ that translation IS the georeferencing offset")
+            # Scale is reported explicitly, never silently absorbed - see module docstring.
+            ppm = (r.alignment_scale - 1.0) * 1e6
+            if abs(ppm) > 1000:
+                lines.append(f"   !! SCALE ERROR {ppm:+.0f} ppm "
+                             f"({(r.alignment_scale - 1.0) * 100:+.2f}%) - a metric "
+                             f"failure that scale-enabled aligners would hide")
         a, c = r.accuracy, r.completeness
         lines.append(f"   accuracy      (recon->GT): mean {a.mean:7.3f}  "
                      f"median {a.median:7.3f}  RMSE {a.rmse:7.3f}  p95 {a.p95:7.3f} m")
@@ -297,6 +329,11 @@ def summarise(results: dict[str, EvalResult], *, tau: float = 1.0) -> str:
     if ab is not None:
         lines.append("")
         lines.append("-" * 74)
+        if ab.alignment_scale is not None:
+            ppm = (ab.alignment_scale - 1.0) * 1e6
+            flag = "  <-- METRIC SCALE ERROR" if abs(ppm) > 1000 else ""
+            lines.append(f"scale diagnostic: {ab.alignment_scale:.6f} "
+                         f"({ppm:+.0f} ppm, {(ab.alignment_scale-1)*100:+.3f}%){flag}")
         passed = ab.accuracy.rmse <= tau
         lines.append(f"R-O3 (spatial accuracy <= {tau:g} m, absolute RMSE): "
                      f"{'PASS' if passed else 'FAIL'}  "
