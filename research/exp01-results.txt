@@ -1,0 +1,54 @@
+====================================================================================
+EXP-01  Cost of the classical photogrammetry spine
+====================================================================================
+cv2 4.11.0 | threads 18 | budget 900 s
+
+--- 1080p (1920x1080) ---
+  SIFT extract      :    310.5 ms/frame   (8000 keypoints)
+  BF match (pair)   :    206.2 ms/pair
+
+--- 4K (3840x2160) ---
+  SIFT extract      :   1788.7 ms/frame   (8000 keypoints)
+  BF match (pair)   :    275.0 ms/pair
+
+------------------------------------------------------------------------------------
+EXTRAPOLATION TO 600 KEYFRAMES  (arithmetic stated in full)
+------------------------------------------------------------------------------------
+
+1080p:
+  feature extraction            186.3 s  ( 20.7% of the 900 s budget)
+  exhaustive matching         37062.8 s  (179,700 pairs)  = 10.3 hours
+  sequential matching (x12)    1485.0 s  (7,200 pairs)
+  --> features + sequential    1671.3 s  (186% of budget), BEFORE SfM solve, dense MVS, meshing, texturing
+
+4K:
+  feature extraction           1073.2 s  (119.2% of the 900 s budget)
+  exhaustive matching         49414.3 s  (179,700 pairs)  = 13.7 hours
+  sequential matching (x12)    1979.9 s  (7,200 pairs)
+  --> features + sequential    3053.1 s  (339% of budget), BEFORE SfM solve, dense MVS, meshing, texturing
+
+------------------------------------------------------------------------------------
+CONCLUSION (EXP-01)
+------------------------------------------------------------------------------------
+  These are CPU numbers on a laptop, and a GPU would speed up feature extraction
+  substantially - so treat the absolute values as indicative. Two conclusions survive
+  that caveat, because they are about SHAPE not constant factors:
+
+  1. EXHAUSTIVE MATCHING IS ARITHMETICALLY IMPOSSIBLE HERE.
+     600 keyframes is 179,700 pairs. That is hours, not minutes, on any hardware, and
+     no constant-factor speedup closes a gap of that size. Any classical pipeline used
+     here MUST exploit the video's sequential structure rather than match all pairs -
+     which is exactly what COLMAP's default exhaustive matcher does not do.
+
+  2. EVEN WITH SEQUENTIAL MATCHING, THE FRONT END ALONE CONSUMES A LARGE FRACTION OF
+     THE BUDGET - and the front end is the cheap part. Incremental SfM with repeated
+     bundle adjustment, dense MVS, Poisson meshing and texturing all come after it.
+
+  This is why the architecture puts a feed-forward model on the spine and demotes
+  classical tooling to the refinement-and-export tail, where it is fast and unmatched.
+
+  HONEST LIMITS OF THIS EXPERIMENT: synthetic texture, CPU only, no GPU SIFT, and no
+  measurement of the SfM solve or dense stages. It bounds the problem from BELOW; it
+  does not prove the exact runtime of any specific pipeline. A full timed ODM run on
+  the target GPU remains a Phase-A action item (needs Docker + GPU).
+====================================================================================

@@ -21,9 +21,34 @@ This single number eliminates the obvious approach.
 **Therefore: the spine is a feed-forward multi-view geometry model, and classical photogrammetry
 tooling is demoted to the refinement-and-export tail, where it is fast and unmatched.**
 
-This conclusion is forced by arithmetic, and it will be *measured* not asserted — the baseline
-experiment (EXP-01, §9) times the classical pipeline explicitly so the design record contains
-evidence rather than an argument.
+### 1.1 This is measured, not asserted (EXP-01)
+
+`src/experiments/exp01_classical_cost.py` measures the classical front end's dominant costs
+(SIFT extraction + pairwise matching) on real image data and extrapolates with stated arithmetic
+to 600 keyframes:
+
+| | 1080p | 4K |
+|---|---|---|
+| Feature extraction, 600 frames | 186 s (21% of budget) | 1,073 s (**119% of budget**) |
+| **Exhaustive matching** (179,700 pairs) | 37,063 s = **10.3 h** | 49,414 s = **13.7 h** |
+| Sequential matching (×12 neighbours) | 1,485 s | 1,980 s |
+| **Front end alone** | **1,671 s = 186% of budget** | **3,053 s = 339% of budget** |
+
+…and the front end is the *cheap* part. Incremental SfM with repeated bundle adjustment, dense
+MVS, Poisson meshing and texturing all come afterwards.
+
+Two conclusions survive the "but a GPU would be faster" objection, because they concern *shape*
+rather than constant factors:
+
+1. **Exhaustive matching is arithmetically impossible here.** 600 keyframes is 179,700 pairs —
+   hours on any hardware. No constant-factor speedup closes that gap. Any classical pipeline used
+   here *must* exploit the video's sequential structure, which COLMAP's default exhaustive
+   matcher does not.
+2. **Even sequential matching consumes more than the entire budget before SfM begins.**
+
+*Honest limits:* CPU-only, synthetic texture, no GPU SIFT, and the SfM solve and dense stages are
+not measured. This **bounds the problem from below**; it does not predict any specific pipeline's
+exact runtime. A full timed ODM run on the target GPU remains a Phase-A action item.
 
 ---
 
