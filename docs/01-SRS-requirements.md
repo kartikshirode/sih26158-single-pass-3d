@@ -82,6 +82,13 @@ Traced to the PDF p.38 "Desired Output" table. These are pass/fail.
 | **R-O5** | Output formats | OBJ, PLY, LAS, GeoTIFF, .glb/.gltf, .fbx | T-EXPORT-02 |
 | **R-O6** | Visualisation | Web-based **or** desktop viewer | T-UI-01 |
 
+> **R-O5 carries one unresolved item: `.fbx`.** FBX is a proprietary Autodesk format with no known
+> permissively-licensed writer. OBJ, PLY, LAS, GeoTIFF and glTF all have clean routes; FBX does
+> not. Candidate resolutions are a Blender CLI export (GPL, invoked as a separate process, which
+> avoids linking) or the Autodesk FBX SDK (proprietary terms). **Status: open**, pending the
+> export-tooling verification still outstanding. If no acceptable route exists this must be raised
+> with the organisers, not quietly dropped.
+
 **Derived, non-negotiable, from the Description paragraph:** the model must be *georeferenced* and
 *metrically accurate* — R-O3 is an absolute-world-frame requirement, not merely a self-consistent
 shape. This distinction is the single most common way to fail this PS while appearing to pass it;

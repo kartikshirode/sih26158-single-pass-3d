@@ -43,10 +43,10 @@ measured the hard parts, and here is a working slice."*
 | A1 | Requirements spec with full traceability | **DONE** — `01-SRS-requirements.md` |
 | A2 | Architecture with the 900 s budget allocated | **DONE** — `02-architecture.md` |
 | A3 | Licence register, primary-source verified | **DONE** — `research/01-licensing-findings.md` |
-| A4 | **Evaluation harness, unit-tested** | **DONE** — `src/eval3d/`, 20/20 checks pass |
+| A4 | **Evaluation harness, unit-tested** | **DONE** — `src/eval3d/`, 21/21 checks pass |
 | A5 | **EXP-05: achievable accuracy vs GNSS class** | **DONE** — `research/exp05-results.txt` |
-| A6 | EXP-01: time the classical baseline (forces §1 of architecture by evidence) | To do |
-| A7 | Synthetic scene + flight generator (GT without a drone or GPU) | To do |
+| A6 | EXP-01: cost of the classical baseline | **DONE (partial)** — component-cost lower bound measured; a full timed ODM run on a GPU is still outstanding |
+| A7 | Synthetic scene + flight generator (GT without a drone or GPU) | **PARTIAL** — scene, flight and visibility done (`src/simscene/`); **still needs rendered frames + GPS-tagged output**, which A8 depends on |
 | A8 | Thin slice: short clip → georeferenced point cloud → exports → viewer | To do |
 | A9 | Idea PPT + demo video | To do |
 

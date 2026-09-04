@@ -324,7 +324,7 @@ a{color:var(--s1)}
         multipath, orbit &mdash; with a correlation time of minutes. Over a single 10-minute flight it is
         effectively a constant offset, and constants do not average away. Any claim of
         &ldquo;we average hundreds of fixes, so we are sub-metre&rdquo; is false; this experiment exists to
-        stop us making it.</figcaption>
+        stop us making it. The wobble in the solid line is trial-to-trial spread at 25 trials per point, not a trend &mdash; what matters is that it never descends.</figcaption>
       </figure>
     </div>
 
@@ -435,7 +435,7 @@ a{color:var(--s1)}
   <div class="body"><div class="spacer"></div><div>
     <p>The evaluation harness was written and unit-tested before the pipeline it will judge, so
     every architecture choice becomes an experiment rather than an opinion. It is CPU-only, so the
-    absent GPU quota does not block it. <strong>20 of 20 checks pass</strong> &mdash; and building it
+    absent GPU quota does not block it. <strong>21 of 21 checks pass</strong> &mdash; and building it
     first has already caught five real defects.</p>
 
     <div class="call">
@@ -510,7 +510,13 @@ a{color:var(--s1)}
       physics.</li>
       <li>Every inferred face is tagged and can be hidden in the viewer. A judge who measures a
       wall we invented should be able to see that we invented it.</li>
+      <li><strong>One required output format has no clean route.</strong> FBX is proprietary, with
+      no known permissively-licensed writer &mdash; the other five formats do. Likely resolution is a
+      Blender CLI export as a separate process. <span class="stamp st-unv">Open</span></li>
     </ul>
+    <p>Export tooling, drone-metadata parsing and geoid-grid handling are still being verified from
+    primary sources; the figures above do not depend on them, but the ingestion and export designs
+    do. Treat those two areas as provisional until that verification lands.</p>
     <div class="call">
       <p class="lbl">Open questions for the organisers &mdash; these change what is claimable</p>
       <p>Does the dataset include RTK/PPK corrections? Is &ldquo;&le; 1 m&rdquo; absolute or relative? Is
@@ -544,7 +550,7 @@ a{color:var(--s1)}
 
 <div class="foot">
   <span>SIH26158 &middot; feasibility &amp; build plan &middot; v1.0</span>
-  <span>Evidence: 3 experiments &middot; 20/20 harness checks &middot; 5 defects caught</span>
+  <span>Evidence: 3 experiments &middot; 21/21 harness checks &middot; 5 defects caught</span>
 </div>
 
 </div>

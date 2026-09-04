@@ -114,7 +114,7 @@ came out of `src/eval3d/`. No hand-computed numbers in slides.
 
 | Component | State |
 |---|---|
-| `src/eval3d/metrics.py` | **Implemented, 20/20 unit checks passing** |
+| `src/eval3d/metrics.py` | **Implemented, 21/21 unit checks passing** |
 | `src/eval3d/gnss.py` | **Implemented**, self-tuning robust Sim(3) |
 | `src/simscene/` | **Implemented**, occlusion verified against analytic cases |
 | EXP-01 classical cost | **Run** — `research/exp01-results.txt` |
