@@ -1,0 +1,550 @@
+<title>Single-Pass Drone 3D &middot; SIH26158</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+:root{
+  --paper:#FAFAF8; --surface:#FFFFFF; --surface-2:#F2F3F0;
+  --ink:#14191D; --ink-2:#3F4952; --ink-3:#6B757E;
+  --rule:#DDE0DA; --rule-2:#C6CBC3;
+  --s1:#1670B8; --s2:#B06C08;
+  --good:#2E6B45; --bad:#B0322A; --warn:#B06C08;
+  --good-bg:#EAF2EC; --bad-bg:#FBEDEB; --warn-bg:#FAF2E4; --s1-bg:#EAF2F9;
+  --mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+  --sans:"IBM Plex Sans",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  --disp:"Archivo","IBM Plex Sans",-apple-system,sans-serif;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --paper:#12161A; --surface:#1A1F24; --surface-2:#222831;
+  --ink:#E6E9EC; --ink-2:#B3BBC3; --ink-3:#828C96;
+  --rule:#2B323A; --rule-2:#3A434D;
+  --s1:#4A9BD8; --s2:#C28020;
+  --good:#5BA372; --bad:#E0736A; --warn:#C28020;
+  --good-bg:#182A20; --bad-bg:#2E1B19; --warn-bg:#2A2113; --s1-bg:#152632;
+}}
+:root[data-theme="dark"]{
+  --paper:#12161A; --surface:#1A1F24; --surface-2:#222831;
+  --ink:#E6E9EC; --ink-2:#B3BBC3; --ink-3:#828C96;
+  --rule:#2B323A; --rule-2:#3A434D;
+  --s1:#4A9BD8; --s2:#C28020;
+  --good:#5BA372; --bad:#E0736A; --warn:#C28020;
+  --good-bg:#182A20; --bad-bg:#2E1B19; --warn-bg:#2A2113; --s1-bg:#152632;
+}
+*{box-sizing:border-box}
+body{background:var(--paper);color:var(--ink);font-family:var(--sans);
+  font-size:15px;line-height:1.62;-webkit-font-smoothing:antialiased}
+.wrap{max-width:1080px;margin:0 auto;padding:0 28px 96px}
+
+/* ---- masthead: survey-sheet title block ---- */
+.mast{border-bottom:2px solid var(--ink);padding:44px 0 18px;margin-bottom:40px}
+.mast .eyebrow{font-family:var(--mono);font-size:11px;letter-spacing:.14em;
+  text-transform:uppercase;color:var(--ink-3);display:flex;flex-wrap:wrap;gap:18px}
+h1{font-family:var(--disp);font-weight:700;font-size:clamp(31px,4.6vw,50px);
+  line-height:1.04;letter-spacing:-.022em;margin:16px 0 12px;text-wrap:balance;max-width:19ch}
+.sub{font-size:17px;color:var(--ink-2);max-width:60ch;margin:0}
+.titleblock{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));
+  gap:1px;background:var(--rule);border:1px solid var(--rule);margin-top:30px}
+.tb{background:var(--surface);padding:11px 13px}
+.tb dt{font-family:var(--mono);font-size:10px;letter-spacing:.11em;text-transform:uppercase;
+  color:var(--ink-3);margin:0 0 3px}
+.tb dd{margin:0;font-size:13.5px;font-weight:500;font-family:var(--mono)}
+
+/* ---- section w/ numbered rail ---- */
+section{margin:0 0 56px;scroll-margin-top:20px}
+.shead{display:grid;grid-template-columns:52px 1fr;gap:16px;align-items:baseline;
+  border-bottom:1px solid var(--rule-2);padding-bottom:9px;margin-bottom:22px}
+.snum{font-family:var(--mono);font-size:12px;color:var(--ink-3);font-weight:500;
+  letter-spacing:.06em;padding-top:5px}
+.shead h2{font-family:var(--disp);font-weight:600;font-size:23px;letter-spacing:-.014em;
+  margin:0;text-wrap:balance}
+.body{display:grid;grid-template-columns:52px 1fr;gap:16px}
+.body>.spacer{}
+p{margin:0 0 15px;max-width:68ch}
+p:last-child{margin-bottom:0}
+strong{font-weight:600}
+code{font-family:var(--mono);font-size:.87em;background:var(--surface-2);
+  padding:1.5px 5px;border-radius:2px}
+
+/* ---- evidence stamps: the structural device ---- */
+.stamp{display:inline-flex;align-items:center;gap:5px;font-family:var(--mono);
+  font-size:10px;font-weight:600;letter-spacing:.09em;text-transform:uppercase;
+  padding:2.5px 7px;border-radius:2px;white-space:nowrap;vertical-align:middle}
+.st-meas{background:var(--s1-bg);color:var(--s1);border:1px solid currentColor}
+.st-src{background:var(--good-bg);color:var(--good);border:1px solid currentColor}
+.st-block{background:var(--bad-bg);color:var(--bad);border:1px solid currentColor}
+.st-unv{background:var(--warn-bg);color:var(--warn);border:1px solid currentColor}
+
+/* ---- findings ---- */
+.find{border-left:3px solid var(--rule-2);padding:0 0 0 18px;margin:0 0 30px}
+.find.crit{border-left-color:var(--bad)}
+.find.meas{border-left-color:var(--s1)}
+.find h3{font-family:var(--disp);font-weight:600;font-size:17.5px;margin:0 0 4px;
+  letter-spacing:-.008em;text-wrap:balance}
+.find .meta{margin:0 0 10px}
+
+/* ---- tables ---- */
+.tscroll{overflow-x:auto;margin:0 0 16px;border:1px solid var(--rule)}
+table{border-collapse:collapse;width:100%;font-size:13.5px;background:var(--surface)}
+th,td{padding:8px 12px;text-align:left;border-bottom:1px solid var(--rule);
+  vertical-align:top}
+thead th{font-family:var(--mono);font-size:10.5px;letter-spacing:.09em;
+  text-transform:uppercase;color:var(--ink-3);font-weight:600;
+  background:var(--surface-2);white-space:nowrap}
+tbody tr:last-child td{border-bottom:none}
+td.num,th.num{text-align:right;font-family:var(--mono);font-variant-numeric:tabular-nums}
+td.mono{font-family:var(--mono);font-size:12.5px}
+.pass{color:var(--good);font-weight:600;font-family:var(--mono);font-size:12px}
+.fail{color:var(--bad);font-weight:600;font-family:var(--mono);font-size:12px}
+
+/* ---- charts ---- */
+figure{margin:0 0 26px;border:1px solid var(--rule);background:var(--surface);padding:18px 18px 14px}
+figcaption{font-size:12.5px;color:var(--ink-2);margin-top:12px;padding-top:10px;
+  border-top:1px solid var(--rule);max-width:none}
+figcaption b{color:var(--ink);font-weight:600}
+.ftitle{font-family:var(--disp);font-weight:600;font-size:14.5px;margin:0 0 3px}
+.fsub{font-family:var(--mono);font-size:10.5px;letter-spacing:.07em;
+  text-transform:uppercase;color:var(--ink-3);margin:0 0 14px}
+.legend{display:flex;gap:18px;flex-wrap:wrap;font-size:12px;margin:0 0 12px;
+  font-family:var(--mono)}
+.legend span{display:inline-flex;align-items:center;gap:6px;color:var(--ink-2)}
+.swatch{width:11px;height:11px;border-radius:2px;display:inline-block}
+svg{display:block;width:100%;height:auto;overflow:visible}
+.gridline{stroke:var(--rule);stroke-width:1}
+.axis{stroke:var(--rule-2);stroke-width:1}
+.tick{font-family:var(--mono);font-size:10px;fill:var(--ink-3)}
+.vlabel{font-family:var(--mono);font-size:10.5px;fill:var(--ink);font-weight:600}
+.clabel{font-family:var(--mono);font-size:10.5px;fill:var(--ink-2)}
+.thresh{stroke:var(--bad);stroke-width:1.5;stroke-dasharray:5 3}
+.threshlab{font-family:var(--mono);font-size:10px;fill:var(--bad);font-weight:600}
+
+/* ---- callout ---- */
+.call{background:var(--surface);border:1px solid var(--rule);
+  border-left:3px solid var(--s2);padding:15px 18px;margin:0 0 20px}
+.call p{margin:0 0 9px}
+.call p:last-child{margin:0}
+.call .lbl{font-family:var(--mono);font-size:10px;letter-spacing:.11em;
+  text-transform:uppercase;color:var(--s2);font-weight:600;margin:0 0 6px}
+
+ul{margin:0 0 15px;padding-left:19px;max-width:68ch}
+li{margin-bottom:7px}
+li::marker{color:var(--ink-3)}
+
+.pipe{display:grid;gap:1px;background:var(--rule);border:1px solid var(--rule);margin-bottom:18px}
+.stage{background:var(--surface);display:grid;grid-template-columns:104px 1fr 76px;
+  gap:14px;padding:11px 14px;align-items:baseline}
+.stage .sid{font-family:var(--mono);font-size:11px;color:var(--ink-3);font-weight:600;
+  letter-spacing:.05em}
+.stage .sname{font-size:13.5px}
+.stage .sname b{font-family:var(--disp);font-weight:600;display:block;font-size:14px;margin-bottom:1px}
+.stage .sbud{font-family:var(--mono);font-size:12.5px;text-align:right;
+  font-variant-numeric:tabular-nums;color:var(--ink-2);font-weight:500}
+.stage.total{background:var(--surface-2)}
+.stage.total .sbud{color:var(--ink);font-weight:600}
+
+.foot{border-top:2px solid var(--ink);padding-top:16px;margin-top:56px;
+  font-size:12.5px;color:var(--ink-3);font-family:var(--mono);
+  display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap}
+a{color:var(--s1)}
+@media (max-width:720px){
+  .shead,.body{grid-template-columns:1fr;gap:6px}
+  .snum{padding-top:0}
+  .body>.spacer{display:none}
+  .stage{grid-template-columns:1fr;gap:4px}
+  .stage .sbud{text-align:left}
+}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+
+<div class="wrap">
+
+<header class="mast">
+  <div class="eyebrow">
+    <span>SIH26158</span><span>National Technical Research Organisation</span>
+    <span>Software &middot; Drone &amp; Robotics</span><span>04 Sep 2026</span>
+  </div>
+  <h1>Single-Pass Drone Video to 3D</h1>
+  <p class="sub">Feasibility findings, architecture, and build plan &mdash; with the hard limits
+  measured rather than assumed. Three of the conclusions below overturn what the obvious
+  approach would have been.</p>
+
+  <dl class="titleblock">
+    <div class="tb"><dt>Accuracy target</dt><dd>&le; 1 m</dd></div>
+    <div class="tb"><dt>Time budget</dt><dd>900 s / 10-min video</dd></div>
+    <div class="tb"><dt>Scored on</dt><dd>30 / 20 / 20 / 15 / 10 / 5</dd></div>
+    <div class="tb"><dt>Grand finale</dt><dd>Dec 2026 &middot; 36 h</dd></div>
+  </dl>
+</header>
+
+<!-- ===================== 1 ===================== -->
+<section>
+  <div class="shead"><div class="snum">01</div>
+    <h2>The targets are not on the portal</h2></div>
+  <div class="body"><div class="spacer"></div><div>
+    <p>The sih.gov.in listing for this problem statement contains an editorial placeholder where
+    the numbers should be &mdash; literally the sentence <em>&ldquo;Add &lsquo;Desired Output&rsquo; and &lsquo;Evaluation
+    Criteria&rsquo; table here&rdquo;</em>. The binding targets exist only inside the linked Drive PDF, which
+    has no text layer and must be read as rendered images.</p>
+    <p><span class="stamp st-src">Verified &middot; primary source</span> Any team working from the
+    portal alone will not know the accuracy target, the time budget, or the scoring weights.</p>
+
+    <div class="tscroll"><table>
+      <thead><tr><th>Desired output</th><th>Target</th><th>Evaluation criterion</th><th class="num">Weight</th></tr></thead>
+      <tbody>
+        <tr><td>Reconstruction type</td><td class="mono">3D mesh / point cloud</td><td>Reconstruction accuracy</td><td class="num">30%</td></tr>
+        <tr><td>Processing time</td><td class="mono">&lt; 15 min per 10-min video</td><td>Model completeness</td><td class="num">20%</td></tr>
+        <tr><td>Spatial accuracy</td><td class="mono">&le; 1 m</td><td>Processing speed</td><td class="num">20%</td></tr>
+        <tr><td>Coverage</td><td class="mono">Entire visible scene</td><td>Innovation</td><td class="num">15%</td></tr>
+        <tr><td>Output formats</td><td class="mono">OBJ &middot; PLY &middot; LAS &middot; GeoTIFF &middot; glTF &middot; FBX</td><td>Scalability</td><td class="num">10%</td></tr>
+        <tr><td>Visualisation</td><td class="mono">Web or desktop viewer</td><td>User interface</td><td class="num">5%</td></tr>
+      </tbody>
+    </table></div>
+    <p>Accuracy, completeness and speed are <strong>70% of the score and all three are objectively
+    measurable</strong>. That single fact set the whole engineering approach: build the measuring
+    instrument first, then let it decide the architecture.</p>
+  </div></div>
+</section>
+
+<!-- ===================== 2 ===================== -->
+<section>
+  <div class="shead"><div class="snum">02</div>
+    <h2>Four findings that changed the design</h2></div>
+  <div class="body"><div class="spacer"></div><div>
+
+    <div class="find crit">
+      <h3>The obvious model is licensed out of this job</h3>
+      <p class="meta"><span class="stamp st-src">Verified &middot; primary source</span></p>
+      <p>VGGT is the highest-profile model for exactly this task. Its Acceptable Use Policy
+      prohibits <em>&ldquo;Military, warfare, nuclear industries or applications, espionage&rdquo;</em>. The
+      customer is India&rsquo;s technical intelligence agency and the problem statement lists military
+      reconnaissance and border mapping among its applications. This applies to both checkpoints &mdash;
+      the 2025 &ldquo;commercial&rdquo; relicensing is explicitly <em>commercial except military</em>.</p>
+      <p><strong>Replacement: MapAnything</strong> &mdash; Apache-2.0 for both code and weights, with no
+      field-of-use restriction. It also wins on merit, which is the argument we lead with: it
+      regresses <strong>metric</strong> geometry natively where VGGT is scale-ambiguous, and it
+      accepts <code>intrinsics</code>, <code>camera_poses</code>, <code>depth_z</code> and
+      <code>is_metric_scale</code> as first-class inputs &mdash; precisely where GPS and flight metadata
+      enter the pipeline.</p>
+    </div>
+
+    <div class="find meas">
+      <h3>&le; 1 m absolute is unreachable from consumer GPS &mdash; at any frame count</h3>
+      <p class="meta"><span class="stamp st-meas">Measured &middot; EXP-05</span></p>
+      <p>A GNSS error model with a correlated Gauss&ndash;Markov bias, random walk and white noise,
+      over a 600-keyframe pass, 40 trials per condition. The limit is the sensor, not the
+      algorithm.</p>
+
+      <figure>
+        <p class="ftitle">Absolute georeferencing error by GNSS class</p>
+        <p class="fsub">600 keyframes &middot; 40 trials &middot; no ground control points</p>
+        <svg viewBox="0 0 620 216" role="img" aria-label="Consumer GNSS 4.12 metres, SBAS 1.86 metres, RTK 0.097 metres, against a 1 metre requirement">
+          <line class="gridline" x1="128" y1="20" x2="596" y2="20"></line>
+          <line class="gridline" x1="128" y1="66" x2="596" y2="66"></line>
+          <line class="gridline" x1="128" y1="112" x2="596" y2="112"></line>
+          <line class="gridline" x1="128" y1="158" x2="596" y2="158"></line>
+          <text class="tick" x="122" y="24" text-anchor="end">5 m</text>
+          <text class="tick" x="122" y="70" text-anchor="end">3.33</text>
+          <text class="tick" x="122" y="116" text-anchor="end">1.67</text>
+          <text class="tick" x="122" y="162" text-anchor="end">0</text>
+
+          <!-- bars: scale 5m -> 138px, baseline y=158 -->
+          <rect x="150" y="44.3" width="96" height="113.7" fill="#B0322A" rx="3"></rect>
+          <rect x="150" y="151" width="96" height="7" fill="#B0322A"></rect>
+          <rect x="298" y="106.7" width="96" height="51.3" fill="#B0322A" rx="3"></rect>
+          <rect x="298" y="151" width="96" height="7" fill="#B0322A"></rect>
+          <rect x="446" y="155.3" width="96" height="2.7" fill="#2E6B45" rx="1.3"></rect>
+
+          <text class="vlabel" x="198" y="38" text-anchor="middle">4.12 m</text>
+          <text class="vlabel" x="346" y="100" text-anchor="middle">1.86 m</text>
+          <text class="vlabel" x="494" y="149" text-anchor="middle">0.097 m</text>
+
+          <line class="axis" x1="128" y1="158" x2="596" y2="158"></line>
+          <line class="thresh" x1="128" y1="130.4" x2="596" y2="130.4"></line>
+          <text class="threshlab" x="596" y="126" text-anchor="end">requirement &le; 1 m</text>
+
+          <text class="clabel" x="198" y="176" text-anchor="middle">Consumer GNSS</text>
+          <text class="clabel" x="346" y="176" text-anchor="middle">SBAS</text>
+          <text class="clabel" x="494" y="176" text-anchor="middle">RTK / PPK</text>
+          <text class="tick" x="198" y="194" text-anchor="middle" fill="#B0322A">FAIL</text>
+          <text class="tick" x="346" y="194" text-anchor="middle" fill="#B0322A">FAIL</text>
+          <text class="tick" x="494" y="194" text-anchor="middle" fill="#2E6B45">PASS</text>
+        </svg>
+        <figcaption><b>Consequence.</b> Whether we may claim &le; 1 m absolute depends entirely on
+        whether the supplied dataset carries RTK corrections &mdash; which the problem statement lists
+        as <em>optional</em>. This must be asked of the organisers.</figcaption>
+      </figure>
+
+      <figure>
+        <p class="ftitle">More frames do not help</p>
+        <p class="fsub">Measured error vs what averaging would predict</p>
+        <div class="legend">
+          <span><i class="swatch" style="background:var(--s1)"></i>Measured error</span>
+          <span><i class="swatch" style="background:var(--s2)"></i>If noise averaged out (1/&radic;N)</span>
+        </div>
+        <svg viewBox="0 0 620 210" role="img" aria-label="Measured error stays near 4 metres from 50 to 2400 keyframes while a one-over-root-N model falls from 3.86 to 0.56 metres">
+          <line class="gridline" x1="86" y1="18" x2="600" y2="18"></line>
+          <line class="gridline" x1="86" y1="58" x2="600" y2="58"></line>
+          <line class="gridline" x1="86" y1="98" x2="600" y2="98"></line>
+          <line class="gridline" x1="86" y1="138" x2="600" y2="138"></line>
+          <text class="tick" x="80" y="22" text-anchor="end">6 m</text>
+          <text class="tick" x="80" y="62" text-anchor="end">4</text>
+          <text class="tick" x="80" y="102" text-anchor="end">2</text>
+          <text class="tick" x="80" y="142" text-anchor="end">0</text>
+
+          <!-- x: 50,150,300,600,1200,2400 at even spacing; y = 138 - v*20 -->
+          <polyline fill="none" stroke="#1670B8" stroke-width="2" stroke-linejoin="round"
+            points="120,60.9 216,44.3 312,57.3 408,49.6 504,55.4 600,46.4"></polyline>
+          <polyline fill="none" stroke="#B06C08" stroke-width="2" stroke-dasharray="6 4" stroke-linejoin="round"
+            points="120,60.9 216,93.5 312,106.5 408,115.7 504,122.3 600,126.9"></polyline>
+
+          <circle cx="120" cy="60.9" r="4" fill="#1670B8"></circle>
+          <circle cx="216" cy="44.3" r="4" fill="#1670B8"></circle>
+          <circle cx="312" cy="57.3" r="4" fill="#1670B8"></circle>
+          <circle cx="408" cy="49.6" r="4" fill="#1670B8"></circle>
+          <circle cx="504" cy="55.4" r="4" fill="#1670B8"></circle>
+          <circle cx="600" cy="46.4" r="4" fill="#1670B8"></circle>
+          <circle cx="216" cy="93.5" r="4" fill="#B06C08"></circle>
+          <circle cx="312" cy="106.5" r="4" fill="#B06C08"></circle>
+          <circle cx="408" cy="115.7" r="4" fill="#B06C08"></circle>
+          <circle cx="504" cy="122.3" r="4" fill="#B06C08"></circle>
+          <circle cx="600" cy="126.9" r="4" fill="#B06C08"></circle>
+
+          <text class="vlabel" x="600" y="38" text-anchor="end" fill="#1670B8">4.58 m</text>
+          <text class="vlabel" x="600" y="143" text-anchor="end" fill="#B06C08">0.56 m</text>
+
+          <line class="axis" x1="86" y1="138" x2="600" y2="138"></line>
+          <text class="clabel" x="120" y="156" text-anchor="middle">50</text>
+          <text class="clabel" x="216" y="156" text-anchor="middle">150</text>
+          <text class="clabel" x="312" y="156" text-anchor="middle">300</text>
+          <text class="clabel" x="408" y="156" text-anchor="middle">600</text>
+          <text class="clabel" x="504" y="156" text-anchor="middle">1200</text>
+          <text class="clabel" x="600" y="156" text-anchor="middle">2400</text>
+          <text class="tick" x="343" y="176" text-anchor="middle">keyframes used for georeferencing</text>
+        </svg>
+        <figcaption><b>Why.</b> GNSS error is dominated by a slowly-varying bias &mdash; ionosphere,
+        multipath, orbit &mdash; with a correlation time of minutes. Over a single 10-minute flight it is
+        effectively a constant offset, and constants do not average away. Any claim of
+        &ldquo;we average hundreds of fixes, so we are sub-metre&rdquo; is false; this experiment exists to
+        stop us making it.</figcaption>
+      </figure>
+    </div>
+
+    <div class="find meas">
+      <h3>Facades, not algorithms, cap completeness</h3>
+      <p class="meta"><span class="stamp st-meas">Measured &middot; EXP-08</span></p>
+      <p>A surface never observed cannot be recovered by any algorithm &mdash; only inferred. Coverage
+      is computed within the corridor the aircraft actually overflies, requiring two or more views
+      so the point is genuinely triangulable.</p>
+
+      <figure>
+        <p class="ftitle">Facade coverage by gimbal pitch</p>
+        <p class="fsub">Within overflown corridor &middot; 2+ views required</p>
+        <div class="legend">
+          <span><i class="swatch" style="background:var(--s1)"></i>Along-track facades</span>
+          <span><i class="swatch" style="background:var(--s2)"></i>Cross-track facades</span>
+        </div>
+        <svg viewBox="0 0 620 208" role="img" aria-label="Along-track facade coverage rises from 14.3 percent at nadir to 52 percent at 60 and 45 degrees; cross-track from 49.2 to 62 percent">
+          <line class="gridline" x1="70" y1="16" x2="600" y2="16"></line>
+          <line class="gridline" x1="70" y1="56" x2="600" y2="56"></line>
+          <line class="gridline" x1="70" y1="96" x2="600" y2="96"></line>
+          <line class="gridline" x1="70" y1="136" x2="600" y2="136"></line>
+          <text class="tick" x="64" y="20" text-anchor="end">75%</text>
+          <text class="tick" x="64" y="60" text-anchor="end">50%</text>
+          <text class="tick" x="64" y="100" text-anchor="end">25%</text>
+          <text class="tick" x="64" y="140" text-anchor="end">0</text>
+
+          <!-- scale: 75% -> 120px, baseline 136 -->
+          <rect x="112" y="113.1" width="62" height="22.9" fill="#1670B8" rx="3"></rect>
+          <rect x="178" y="57.3" width="62" height="78.7" fill="#B06C08" rx="3"></rect>
+          <text class="vlabel" x="143" y="107" text-anchor="middle">14.3%</text>
+          <text class="vlabel" x="209" y="51" text-anchor="middle">49.2%</text>
+
+          <rect x="290" y="52.8" width="62" height="83.2" fill="#1670B8" rx="3"></rect>
+          <rect x="356" y="36.8" width="62" height="99.2" fill="#B06C08" rx="3"></rect>
+          <text class="vlabel" x="321" y="46" text-anchor="middle">52.0%</text>
+          <text class="vlabel" x="387" y="30" text-anchor="middle">62.0%</text>
+
+          <rect x="468" y="52.8" width="62" height="83.2" fill="#1670B8" rx="3"></rect>
+          <rect x="534" y="36.8" width="62" height="99.2" fill="#B06C08" rx="3"></rect>
+          <text class="vlabel" x="499" y="46" text-anchor="middle">52.0%</text>
+          <text class="vlabel" x="565" y="30" text-anchor="middle">62.0%</text>
+
+          <line class="axis" x1="70" y1="136" x2="600" y2="136"></line>
+          <text class="clabel" x="176" y="154" text-anchor="middle">Nadir (90&deg;)</text>
+          <text class="clabel" x="354" y="154" text-anchor="middle">Oblique 60&deg;</text>
+          <text class="clabel" x="532" y="154" text-anchor="middle">Oblique 45&deg;</text>
+          <text class="tick" x="443" y="174" text-anchor="middle">&mdash; identical: forward tilt saturates &mdash;</text>
+        </svg>
+        <figcaption><b>The lever is capture, not code.</b> Forward gimbal tilt only ever helps
+        facades that face <em>along</em> the flight line, and saturates once they are visible at
+        all &mdash; which is why 60&deg; and 45&deg; are identical. Cross-track facades are reachable only
+        through a wide field of view. A <b>sideways</b> tilt or a wider lens buys more completeness
+        than any model choice. Terrain, by contrast, reaches 99&ndash;100% even at nadir.</figcaption>
+      </figure>
+    </div>
+
+    <div class="find meas">
+      <h3>Classical photogrammetry cannot be the spine</h3>
+      <p class="meta"><span class="stamp st-meas">Measured &middot; EXP-01</span></p>
+      <p>Measured SIFT extraction and pairwise matching costs, extrapolated to 600 keyframes with
+      the arithmetic stated in full:</p>
+      <div class="tscroll"><table>
+        <thead><tr><th>Stage, 600 keyframes</th><th class="num">1080p</th><th class="num">4K</th><th>vs 900 s budget</th></tr></thead>
+        <tbody>
+          <tr><td>Feature extraction</td><td class="num">186 s</td><td class="num">1,073 s</td><td class="mono">21% &rarr; 119%</td></tr>
+          <tr><td>Exhaustive matching <span class="mono">(179,700 pairs)</span></td><td class="num">10.3 h</td><td class="num">13.7 h</td><td class="fail">impossible</td></tr>
+          <tr><td>Sequential matching (&times;12)</td><td class="num">1,485 s</td><td class="num">1,980 s</td><td class="mono">165% &rarr; 220%</td></tr>
+          <tr><td><strong>Front end alone</strong></td><td class="num">1,671 s</td><td class="num">3,053 s</td><td class="fail">186% &rarr; 339%</td></tr>
+        </tbody>
+      </table></div>
+      <p>&hellip;and the front end is the cheap part &mdash; the SfM solve, dense stereo, meshing and texturing
+      all come after it. Two conclusions survive the &ldquo;but a GPU is faster&rdquo; objection because they
+      concern shape rather than constant factors: exhaustive matching over 179,700 pairs is hours
+      on any hardware, and even sequential matching exceeds the entire budget before SfM begins.</p>
+      <p><span class="stamp st-unv">Stated limit</span> CPU-only, synthetic texture, dense stages
+      unmeasured. This bounds the problem from below; it does not predict any specific pipeline&rsquo;s
+      runtime. A timed OpenDroneMap run on the target GPU remains an open action.</p>
+    </div>
+
+  </div></div>
+</section>
+
+<!-- ===================== 3 ===================== -->
+<section>
+  <div class="shead"><div class="snum">03</div><h2>Architecture and the 900-second budget</h2></div>
+  <div class="body"><div class="spacer"></div><div>
+    <p>A feed-forward geometry model on the spine; classical photogrammetry demoted to the
+    refinement-and-export tail where it is fast and unmatched. Roughly 18,000 frames are reduced to
+    about 600 keyframes &mdash; the figure OpenDroneMap&rsquo;s own <code>--video-limit</code> default of 500
+    anchors &mdash; then processed in overlapping chunks of ~48 views and stitched through a pose graph
+    anchored on GPS, so drift is bounded globally rather than accumulating along the pass.</p>
+    <div class="pipe">
+      <div class="stage"><span class="sid">S1 INGEST</span><span class="sname"><b>Decode &amp; condition</b>Metadata auto-detect, GPS time-sync, blur- and baseline-aware keyframing, intrinsics resolution</span><span class="sbud">120 s</span></div>
+      <div class="stage"><span class="sid">S2 MASK</span><span class="sname"><b>Dynamic objects</b>Semantic segmentation plus multi-view consistency &mdash; the geometric layer needs no class list</span><span class="sbud">overlapped</span></div>
+      <div class="stage"><span class="sid">S3 GEOMETRY</span><span class="sname"><b>Feed-forward reconstruction</b>MapAnything on ~15 overlapping chunks, GPS and intrinsics as priors, inter-chunk pose graph</span><span class="sbud">400 s</span></div>
+      <div class="stage"><span class="sid">S4 GEOREF</span><span class="sname"><b>Place it on Earth</b>Robust Sim(3) to GPS, GPS-prior bundle adjustment, UTM, ellipsoid-to-geoid height</span><span class="sbud">60 s</span></div>
+      <div class="stage"><span class="sid">S5 SURFACE</span><span class="sname"><b>Mesh, texture, close</b>Poisson meshing, best-view texturing, bounded occlusion closure &mdash; every inferred face tagged</span><span class="sbud">250 s</span></div>
+      <div class="stage"><span class="sid">S6 EXPORT</span><span class="sname"><b>Six formats and a viewer</b>OBJ &middot; PLY &middot; LAS &middot; GeoTIFF &middot; GLB &middot; FBX</span><span class="sbud">60 s</span></div>
+      <div class="stage total"><span class="sid">TOTAL</span><span class="sname">with 10 s reserve against the 15-minute requirement</span><span class="sbud">900 s</span></div>
+    </div>
+  </div></div>
+</section>
+
+<!-- ===================== 4 ===================== -->
+<section>
+  <div class="shead"><div class="snum">04</div><h2>Measuring instrument, built first</h2></div>
+  <div class="body"><div class="spacer"></div><div>
+    <p>The evaluation harness was written and unit-tested before the pipeline it will judge, so
+    every architecture choice becomes an experiment rather than an opinion. It is CPU-only, so the
+    absent GPU quota does not block it. <strong>20 of 20 checks pass</strong> &mdash; and building it
+    first has already caught five real defects.</p>
+
+    <div class="call">
+      <p class="lbl">The trap it exists to prevent</p>
+      <p>Best-fit alignment silently absorbs georeferencing error. On a model with a real
+      <strong>2.68 m</strong> offset, ICP-aligned scoring reports <strong>0.21 m</strong> &mdash;
+      flattering by <strong>12.8&times;</strong>. The harness therefore always prints absolute and
+      aligned error side by side.</p>
+      <p>The standard Tanks-and-Temples protocol compounds this: it aligns with a 7-DoF
+      <em>similarity</em>, forgiving scale. A model uniformly 5% too small scores
+      <strong>0.000 m</strong> under that protocol and <strong>1.083 m</strong> under ours. Our
+      aligner fits no scale and reports scale error as a number in its own right.</p>
+    </div>
+
+    <div class="tscroll"><table>
+      <thead><tr><th>Defect found by testing</th><th>Symptom</th><th>Resolution</th></tr></thead>
+      <tbody>
+        <tr><td>Z-buffer built from query points alone</td><td class="mono">fully hidden wall read 70.6% visible</td><td>Separate dense occluder cloud &rarr; 0.0%</td></tr>
+        <tr><td>Coverage scored against the whole scene</td><td class="mono">measured scene size, not reconstruction</td><td>Score within the overflown corridor</td></tr>
+        <tr><td>Fixed RANSAC threshold below noise floor</td><td class="mono">5.29 m vs 4.08 m for plain least squares</td><td>Self-tuning threshold from residual MAD</td></tr>
+        <tr><td>Architecture claimed RANSAC improves accuracy</td><td class="mono">it does not &mdash; it bounds the worst case</td><td>Claim corrected in the design record</td></tr>
+        <tr><td>Test assumed ICP recovers offset on flat ground</td><td class="mono">recovered 1.1 m of a true 5 m</td><td>Sliding ambiguity documented as a limit</td></tr>
+      </tbody>
+    </table></div>
+    <p>The third and fourth are worth stating plainly: a robust estimator tuned below the noise
+    floor is <em>worse than no robust estimator at all</em>, and RANSAC&rsquo;s value here is a bounded
+    worst case &mdash; error flat near 4.1 m however bad the GPS gets &mdash; not a better average.</p>
+  </div></div>
+</section>
+
+<!-- ===================== 5 ===================== -->
+<section>
+  <div class="shead"><div class="snum">05</div><h2>Compute: blocked, with a route around it</h2></div>
+  <div class="body"><div class="spacer"></div><div>
+    <p><span class="stamp st-block">Blocked &middot; verified</span> Every GPU path on the project&rsquo;s
+    Google Cloud account is denied, and the cause is a single machine-readable field:
+    <code>ineligibilityReason: NOT_ENOUGH_USAGE_HISTORY</code>. Requests are refused within
+    seconds by an automated gate, so there is no reviewer to appeal to, and asking for less does
+    not help &mdash; both 4 GPUs and 1 were refused identically.</p>
+    <ul>
+      <li>Compute Engine global gate, L4 and preemptible L4 in Mumbai &mdash; all refused.</li>
+      <li>Cloud Run L4 &mdash; both the zonal-redundant and non-redundant pools are zero, confirmed by a
+      live deploy that fails admission either way.</li>
+      <li>Two traps recorded so they are not rediscovered: the retired K80/P100/V100 rows showing
+      <code>limit=1</code> are <em>not</em> usable GPU access, and the quota API lists
+      <code>asia-south1</code> for Cloud Run L4 while deploying there fails &mdash; Cloud Run L4 exists
+      only in <code>asia-southeast1</code>, <code>europe-west1/4</code>,
+      <code>us-central1</code> and <code>us-east4</code>.</li>
+    </ul>
+    <p>Requests are filed and will be re-evaluated; the gate is a spend-history gate, so the
+    unblocking move is to run ordinary billed CPU work on the project now &mdash; which the pipeline&rsquo;s
+    ingest, georeferencing and export stages need anyway. Meanwhile the Baramati Slurm cluster
+    covers development today. <strong>This constraint improved the design</strong>: the target
+    deployment is a single 24 GB GPU, because a field mapping system that needs eight of them is
+    not something NTRO can deploy.</p>
+  </div></div>
+</section>
+
+<!-- ===================== 6 ===================== -->
+<section>
+  <div class="shead"><div class="snum">06</div><h2>What we may claim, in writing</h2></div>
+  <div class="body"><div class="spacer"></div><div>
+    <p>Recorded now so it cannot drift under deadline pressure in December.</p>
+    <ul>
+      <li><strong>If the dataset carries RTK/PPK</strong> &mdash; claim &le; 1 m absolute, evidenced.</li>
+      <li><strong>If it does not</strong> &mdash; claim &le; 1 m <em>relative/shape</em> accuracy, which is
+      achievable and is what &ldquo;metric accuracy without ground control points&rdquo; conventionally means,
+      and state the absolute georeferencing error separately and plainly.</li>
+      <li><strong>Never</strong> quote the aligned number as though it were absolute.</li>
+      <li>Completeness is reported against two denominators &mdash; observable surface, and whole scene &mdash;
+      because reporting only the first hides a real limitation and only the second penalises us for
+      physics.</li>
+      <li>Every inferred face is tagged and can be hidden in the viewer. A judge who measures a
+      wall we invented should be able to see that we invented it.</li>
+    </ul>
+    <div class="call">
+      <p class="lbl">Open questions for the organisers &mdash; these change what is claimable</p>
+      <p>Does the dataset include RTK/PPK corrections? Is &ldquo;&le; 1 m&rdquo; absolute or relative? Is
+      evaluation against a LiDAR or multi-pass survey reference? Is the single pass nadir or
+      oblique? <span class="stamp st-unv">Unverified</span> Each is currently an assumption on the
+      register, and the design satisfies the strictest reading of all four.</p>
+    </div>
+  </div></div>
+</section>
+
+<!-- ===================== 7 ===================== -->
+<section>
+  <div class="shead"><div class="snum">07</div><h2>Plan against the real calendar</h2></div>
+  <div class="body"><div class="spacer"></div><div>
+    <p>Internal hackathons run this month, screening in October, the 36-hour finale in December.
+    The near-term deliverable is therefore <strong>not a finished system</strong> &mdash; it is an idea
+    submission that survives screening, which means a credible thin slice plus rigorous evidence.</p>
+    <div class="tscroll"><table>
+      <thead><tr><th>Phase</th><th>Window</th><th>Definition of done</th><th>State</th></tr></thead>
+      <tbody>
+        <tr><td><strong>A</strong> Evidence &amp; thin slice</td><td class="mono">Sep &rarr; early Oct</td><td>Requirements, architecture, licence register, tested harness, three experiments, end-to-end slice, PPT + video</td><td><span class="pass">6 of 9 done</span></td></tr>
+        <tr><td><strong>B</strong> Full pipeline</td><td class="mono">Oct &rarr; Nov</td><td>All eleven stages built; end-to-end under 900 s on the target GPU; remaining experiments</td><td class="mono">if shortlisted</td></tr>
+        <tr><td><strong>C</strong> Finale readiness</td><td class="mono">Nov &rarr; Dec</td><td>Runbook for an unknown dataset, offline bundle, pre-measured degradation ladder, three timed dry runs</td><td class="mono">36 h, on site</td></tr>
+      </tbody>
+    </table></div>
+    <p>Two things to start immediately regardless: put the four questions above to the organisers,
+    and begin billed CPU usage on the cloud project, since that is the only thing that unblocks GPU
+    quota and it needs calendar time to accrue.</p>
+  </div></div>
+</section>
+
+<div class="foot">
+  <span>SIH26158 &middot; feasibility &amp; build plan &middot; v1.0</span>
+  <span>Evidence: 3 experiments &middot; 20/20 harness checks &middot; 5 defects caught</span>
+</div>
+
+</div>
