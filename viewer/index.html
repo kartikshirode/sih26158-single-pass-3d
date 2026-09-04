@@ -1,0 +1,317 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SIH26158 Model Viewer</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+  :root{
+    --paper:#12161A; --panel:#1A1F24; --rule:#2B323A;
+    --ink:#E6E9EC; --ink-2:#B3BBC3; --ink-3:#828C96;
+    --accent:#4A9BD8; --warn:#C28020; --good:#5BA372;
+    --mono:"IBM Plex Mono",ui-monospace,monospace;
+    --sans:"IBM Plex Sans",-apple-system,sans-serif;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;overflow:hidden;background:var(--paper);color:var(--ink);
+    font-family:var(--sans);font-size:14px}
+  #app{position:fixed;inset:0}
+  canvas{display:block}
+  .panel{position:fixed;background:rgba(26,31,36,.94);border:1px solid var(--rule);
+    backdrop-filter:blur(8px)}
+  #hud{top:14px;left:14px;padding:14px 16px;min-width:280px;max-width:330px}
+  #hud h1{font-size:15px;margin:0 0 2px;font-weight:600;letter-spacing:-.01em}
+  #hud .sub{font-family:var(--mono);font-size:10px;letter-spacing:.09em;
+    text-transform:uppercase;color:var(--ink-3);margin-bottom:12px}
+  dl{display:grid;grid-template-columns:auto 1fr;gap:4px 14px;margin:0;font-size:12px}
+  dt{color:var(--ink-3);font-family:var(--mono);font-size:10.5px;letter-spacing:.05em;
+    text-transform:uppercase;align-self:center}
+  dd{margin:0;font-family:var(--mono);font-variant-numeric:tabular-nums;text-align:right}
+  .ok{color:var(--good)} .bad{color:var(--warn)}
+  #tools{bottom:14px;left:14px;padding:12px 14px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  button{font-family:var(--sans);font-size:12px;font-weight:500;padding:6px 11px;
+    background:#222831;color:var(--ink);border:1px solid var(--rule);border-radius:3px;
+    cursor:pointer}
+  button:hover{border-color:var(--accent);color:var(--accent)}
+  button[aria-pressed="true"]{background:var(--accent);color:#0d1418;border-color:var(--accent)}
+  button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+  #measure{position:fixed;bottom:14px;right:14px;padding:12px 14px;min-width:220px;display:none}
+  #measure.on{display:block}
+  #measure .big{font-family:var(--mono);font-size:22px;font-weight:600;color:var(--accent);
+    font-variant-numeric:tabular-nums}
+  #measure .hint{font-size:11px;color:var(--ink-3);margin-top:6px}
+  #legend{top:14px;right:14px;padding:11px 14px;font-size:11.5px}
+  #legend div{display:flex;align-items:center;gap:8px;margin:3px 0;color:var(--ink-2)}
+  .sw{width:11px;height:11px;border-radius:2px;flex:none}
+  #err{position:fixed;inset:0;display:none;place-items:center;text-align:center;padding:30px}
+  #err.on{display:grid}
+  #err code{font-family:var(--mono);font-size:12px;color:var(--warn);display:block;margin-top:10px}
+</style>
+</head>
+<body>
+<div id="app"></div>
+
+<div class="panel" id="hud">
+  <h1>Single-Pass Reconstruction</h1>
+  <div class="sub">SIH26158 &middot; NTRO</div>
+  <dl>
+    <dt>CRS</dt><dd id="m-crs">&mdash;</dd>
+    <dt>Geoid</dt><dd id="m-geoid">&mdash;</dd>
+    <dt>Abs. accuracy</dt><dd id="m-abs">&mdash;</dd>
+    <dt>Shape accuracy</dt><dd id="m-shape">&mdash;</dd>
+    <dt>Completeness</dt><dd id="m-comp">&mdash;</dd>
+    <dt>Points</dt><dd id="m-pts">&mdash;</dd>
+    <dt>Runtime</dt><dd id="m-time">&mdash;</dd>
+  </dl>
+</div>
+
+<div class="panel" id="legend">
+  <div><span class="sw" style="background:#4A9BD8"></span>Observed geometry</div>
+  <div><span class="sw" style="background:#C28020"></span>Inferred (unobserved)</div>
+  <div><span class="sw" style="background:#5BA372"></span>Measurement</div>
+</div>
+
+<div class="panel" id="tools">
+  <button id="b-mesh" aria-pressed="true">Mesh</button>
+  <button id="b-pts" aria-pressed="false">Point cloud</button>
+  <button id="b-inf" aria-pressed="true">Inferred</button>
+  <button id="b-measure" aria-pressed="false">Measure</button>
+  <button id="b-reset">Reset view</button>
+</div>
+
+<div class="panel" id="measure">
+  <div class="big" id="m-dist">&mdash;</div>
+  <div class="hint" id="m-hint">Click two points on the model.</div>
+</div>
+
+<div id="err"><div>
+  <strong>Model not loaded.</strong>
+  <code id="err-msg"></code>
+  <div class="hint" style="margin-top:14px;color:#828C96">
+    Serve this directory over HTTP &mdash; <code>python -m http.server</code> &mdash;
+    with <code>model.glb</code> and <code>run_manifest.json</code> beside it.
+  </div>
+</div></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/0.160.0/three.min.js"></script>
+<script>
+(function () {
+  "use strict";
+  const $ = (id) => document.getElementById(id);
+  const fail = (m) => { $("err").classList.add("on"); $("err-msg").textContent = m; };
+
+  if (!window.THREE) { fail("three.js failed to load from CDN."); return; }
+
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x12161A);
+  scene.fog = new THREE.Fog(0x12161A, 600, 2000);
+
+  const camera = new THREE.PerspectiveCamera(50, innerWidth / innerHeight, 0.5, 8000);
+  const renderer = new THREE.WebGLRenderer({ antialias: true });
+  renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+  renderer.setSize(innerWidth, innerHeight);
+  $("app").appendChild(renderer.domElement);
+
+  scene.add(new THREE.HemisphereLight(0xbfd4e6, 0x2b2417, 1.5));
+  const sun = new THREE.DirectionalLight(0xfff2dd, 1.5);
+  sun.position.set(-160, 320, 180);
+  scene.add(sun);
+
+  // ---- minimal orbit controls (no extra CDN dependency) ----
+  let target = new THREE.Vector3(), sph = new THREE.Spherical(500, 1.02, 0.7);
+  let dragging = false, panning = false, px = 0, py = 0;
+  function applyCam() {
+    sph.phi = Math.max(0.05, Math.min(Math.PI - 0.05, sph.phi));
+    camera.position.setFromSpherical(sph).add(target);
+    camera.lookAt(target);
+  }
+  const el = renderer.domElement;
+  el.addEventListener("pointerdown", (e) => {
+    if (measuring) return;
+    dragging = true; panning = e.button === 2 || e.shiftKey; px = e.clientX; py = e.clientY;
+    el.setPointerCapture(e.pointerId);
+  });
+  el.addEventListener("pointermove", (e) => {
+    if (!dragging) return;
+    const dx = e.clientX - px, dy = e.clientY - py; px = e.clientX; py = e.clientY;
+    if (panning) {
+      const s = sph.radius * 0.0016;
+      const right = new THREE.Vector3().setFromMatrixColumn(camera.matrix, 0);
+      const up = new THREE.Vector3().setFromMatrixColumn(camera.matrix, 1);
+      target.addScaledVector(right, -dx * s).addScaledVector(up, dy * s);
+    } else { sph.theta -= dx * 0.005; sph.phi -= dy * 0.005; }
+    applyCam();
+  });
+  el.addEventListener("pointerup", (e) => { dragging = false; el.releasePointerCapture(e.pointerId); });
+  el.addEventListener("contextmenu", (e) => e.preventDefault());
+  el.addEventListener("wheel", (e) => {
+    e.preventDefault();
+    sph.radius = Math.max(8, Math.min(4000, sph.radius * (1 + Math.sign(e.deltaY) * 0.12)));
+    applyCam();
+  }, { passive: false });
+
+  // ---- measurement (R-F7) ----
+  let measuring = false, picks = [];
+  const mkGroup = new THREE.Group(); scene.add(mkGroup);
+  const ray = new THREE.Raycaster();
+  let pickTargets = [];
+
+  el.addEventListener("click", (e) => {
+    if (!measuring) return;
+    const r = el.getBoundingClientRect();
+    ray.setFromCamera(new THREE.Vector2(
+      ((e.clientX - r.left) / r.width) * 2 - 1,
+      -((e.clientY - r.top) / r.height) * 2 + 1), camera);
+    const hit = ray.intersectObjects(pickTargets, true)[0];
+    if (!hit) return;
+    if (picks.length === 2) { picks = []; mkGroup.clear(); }
+    picks.push(hit.point.clone());
+    const dot = new THREE.Mesh(new THREE.SphereGeometry(1.6, 16, 12),
+      new THREE.MeshBasicMaterial({ color: 0x5BA372 }));
+    dot.position.copy(hit.point); mkGroup.add(dot);
+    if (picks.length === 2) {
+      const d = picks[0].distanceTo(picks[1]);
+      const dz = Math.abs(picks[0].y - picks[1].y);
+      mkGroup.add(new THREE.Line(
+        new THREE.BufferGeometry().setFromPoints(picks),
+        new THREE.LineBasicMaterial({ color: 0x5BA372 })));
+      $("m-dist").textContent = d.toFixed(2) + " m";
+      $("m-hint").textContent = "vertical " + dz.toFixed(2) + " m · click again to restart";
+    } else {
+      $("m-dist").textContent = "—";
+      $("m-hint").textContent = "Now click the second point.";
+    }
+  });
+
+  // ---- load model + manifest ----
+  let meshObj = null, ptsObj = null, infObj = null;
+
+  fetch("run_manifest.json").then(r => r.ok ? r.json() : null).then(m => {
+    if (!m) return;
+    const f = (v, d = 3) => (v === undefined || v === null) ? "—" : (+v).toFixed(d);
+    $("m-crs").textContent = m.crs || "—";
+    $("m-geoid").textContent = f(m.geoid_separation_m, 2) + " m";
+    const abs = m.accuracy_absolute_rmse_m;
+    $("m-abs").textContent = f(abs) + " m";
+    $("m-abs").className = abs <= 1 ? "ok" : "bad";
+    $("m-shape").textContent = f(m.accuracy_aligned_rmse_m) + " m";
+    $("m-comp").textContent = m.completeness_recall_at_1m_observable !== undefined
+      ? (m.completeness_recall_at_1m_observable * 100).toFixed(1) + "%" : "—";
+    $("m-pts").textContent = (m.points_reconstructed || 0).toLocaleString();
+    $("m-time").textContent = f(m.total_s, 1) + " s / 900 s";
+  }).catch(() => {});
+
+  function frame(obj) {
+    const box = new THREE.Box3().setFromObject(obj);
+    const size = box.getSize(new THREE.Vector3());
+    box.getCenter(target);
+    sph.radius = Math.max(size.x, size.z) * 1.1;
+    applyCam();
+  }
+
+  // Minimal GLB reader. cdnjs ships no GLTFLoader build for any three.js version, and
+  // GLB is a simple container - a 12-byte header then length/type-prefixed JSON and
+  // binary chunks - so parsing it directly is smaller and more robust than depending
+  // on a CDN path that may not exist.
+  const GLB = {
+    COMPONENT: { 5120: Int8Array, 5121: Uint8Array, 5122: Int16Array,
+                 5123: Uint16Array, 5125: Uint32Array, 5126: Float32Array },
+    NUM: { SCALAR: 1, VEC2: 2, VEC3: 3, VEC4: 4, MAT4: 16 },
+    parse(buf) {
+      const dv = new DataView(buf);
+      if (dv.getUint32(0, true) !== 0x46546C67) throw new Error("not a GLB file");
+      let off = 12, json = null, bin = null;
+      while (off < dv.byteLength) {
+        const len = dv.getUint32(off, true), type = dv.getUint32(off + 4, true);
+        const data = buf.slice(off + 8, off + 8 + len);
+        if (type === 0x4E4F534A) json = JSON.parse(new TextDecoder().decode(data));
+        else if (type === 0x004E4942) bin = data;
+        off += 8 + len + ((4 - (len % 4)) % 4);
+      }
+      if (!json) throw new Error("no JSON chunk in GLB");
+      return { json, bin };
+    },
+    accessor(g, i) {
+      const a = g.json.accessors[i];
+      const bv = g.json.bufferViews[a.bufferView];
+      const Ctor = GLB.COMPONENT[a.componentType];
+      const n = GLB.NUM[a.type];
+      const start = (bv.byteOffset || 0) + (a.byteOffset || 0);
+      return new Ctor(g.bin, start, a.count * n);
+    },
+    geometries(g) {
+      const out = [];
+      for (const mesh of (g.json.meshes || [])) {
+        for (const prim of mesh.primitives) {
+          if (prim.attributes.POSITION === undefined) continue;
+          const geo = new THREE.BufferGeometry();
+          geo.setAttribute("position", new THREE.BufferAttribute(
+            new Float32Array(GLB.accessor(g, prim.attributes.POSITION)), 3));
+          if (prim.indices !== undefined) {
+            const idx = GLB.accessor(g, prim.indices);
+            geo.setIndex(new THREE.BufferAttribute(
+              idx instanceof Uint32Array ? idx : new Uint32Array(idx), 1));
+          }
+          geo.computeVertexNormals();
+          out.push(geo);
+        }
+      }
+      return out;
+    }
+  };
+
+  fetch("model.glb")
+    .then(r => { if (!r.ok) throw new Error("HTTP " + r.status); return r.arrayBuffer(); })
+    .then(buf => {
+      const g = GLB.parse(buf);
+      const geos = GLB.geometries(g);
+      if (!geos.length) throw new Error("no drawable primitives in model.glb");
+      const src = new THREE.Group();
+      for (const geo of geos) {
+        src.add(new THREE.Mesh(geo, new THREE.MeshStandardMaterial({
+          color: 0x4A9BD8, roughness: 0.92, metalness: 0.02,
+          flatShading: true, side: THREE.DoubleSide })));
+      }
+      window.__geos = geos;
+      // The exported mesh is Z-up (UTM). Rotate to three.js Y-up.
+      src.rotation.x = -Math.PI / 2;
+      src.traverse(o => { if (o.isMesh) pickTargets.push(o); });
+      meshObj = src; scene.add(src); frame(src);
+
+      ptsObj = new THREE.Points(geos[0],
+        new THREE.PointsMaterial({ color: 0x4A9BD8, size: 1.2 }));
+      ptsObj.rotation.x = -Math.PI / 2;
+      ptsObj.visible = false;
+      scene.add(ptsObj);
+
+      animate();
+    })
+    .catch(e => fail("Could not load model.glb - " + (e && e.message ? e.message : "fetch failed")));
+
+  // ---- toolbar ----
+  const toggle = (btn, fn) => btn.addEventListener("click", () => {
+    const on = btn.getAttribute("aria-pressed") !== "true";
+    btn.setAttribute("aria-pressed", String(on)); fn(on);
+  });
+  toggle($("b-mesh"), on => { if (meshObj) meshObj.visible = on; });
+  toggle($("b-pts"), on => { if (ptsObj) ptsObj.visible = on; });
+  toggle($("b-inf"), on => { if (infObj) infObj.visible = on; });
+  toggle($("b-measure"), on => {
+    measuring = on; $("measure").classList.toggle("on", on);
+    if (!on) { picks = []; mkGroup.clear(); }
+    else { $("m-dist").textContent = "—"; $("m-hint").textContent = "Click two points on the model."; }
+  });
+  $("b-reset").addEventListener("click", () => { if (meshObj) frame(meshObj); });
+
+  addEventListener("resize", () => {
+    camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix();
+    renderer.setSize(innerWidth, innerHeight);
+  });
+
+  function animate() { requestAnimationFrame(animate); renderer.render(scene, camera); }
+  applyCam();
+})();
+</script>
+</body>
+</html>

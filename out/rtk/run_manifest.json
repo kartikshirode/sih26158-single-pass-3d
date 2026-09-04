@@ -1,0 +1,40 @@
+{
+  "label": "RTK/PPK",
+  "gnss_class": "rtk",
+  "pitch_deg": 60.0,
+  "frames_in": 600,
+  "keyframes_kept": 540,
+  "sensing_views": 60,
+  "points_reconstructed": 19954,
+  "crs": "EPSG:32643",
+  "geoid_separation_m": -52.542,
+  "geoid_model": "EGM2008 (EPSG:9518)",
+  "gps_inlier_fraction": 0.98,
+  "accuracy_absolute_rmse_m": 0.0984,
+  "accuracy_aligned_rmse_m": 0.0846,
+  "georeferencing_offset_m": 0.0502,
+  "scale_diagnostic": 1.000053,
+  "completeness_recall_at_1m_observable": 1.0,
+  "completeness_recall_at_1m_whole_scene": 0.3373,
+  "observable_fraction_of_scene": 0.3324,
+  "fscore_at_1m": 0.9997,
+  "timings_s": {
+    "S1 ingest": 0.222,
+    "S2 mask": 0.001,
+    "S3 geometry": 1.392,
+    "S4 georef": 1.185,
+    "S5 surface": 0.003,
+    "S6 export": 0.735,
+    "SCORE": 0.235
+  },
+  "total_s": 3.774,
+  "budget_s": 900.0,
+  "within_budget": true,
+  "exports": {
+    "PLY (point cloud)": "model.ply",
+    "OBJ (mesh)": "model.obj",
+    "GLB (glTF)": "model.glb",
+    "LAS 1.4 (+CRS)": "model.las",
+    "GeoTIFF (DSM)": "dsm.tif"
+  }
+}

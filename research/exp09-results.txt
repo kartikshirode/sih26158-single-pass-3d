@@ -1,0 +1,64 @@
+==================================================================================
+EXP-09  Straight-line degeneracy in single-pass georeferencing
+==================================================================================
+
+--- 1. Trajectory error vs SCENE error, straight pass ---
+
+GNSS      fit                       trajectory RMSE    SCENE RMSE   R-O3
+consumer  full Sim(3), 7-DOF                 3.909m      310.955m   FAIL
+consumer  yaw-only (gravity)                 3.548m        3.707m   FAIL
+sbas      full Sim(3), 7-DOF                 1.751m      273.421m   FAIL
+sbas      yaw-only (gravity)                 1.619m        1.692m   FAIL
+rtk       full Sim(3), 7-DOF                 0.042m      267.062m   FAIL
+rtk       yaw-only (gravity)                 0.038m        0.041m   PASS
+
+    Read the RTK row twice. Under an unrestricted 7-DOF fit, RTK gets the TRAJECTORY to
+    0.042 m - essentially perfect - while the SCENE is still
+    267 m out. Centimetre GPS buys nothing here
+    (267 m vs 311 m
+    for consumer - the same order, and the ordering flips between seeds). That is the
+    signature of a DEGENERACY rather than of noise: the error lives in a direction the
+    data does not constrain, so improving the data does not touch it. No GPS upgrade
+    fixes an under-determined system.
+
+--- 2. Error grows with distance from the flight line ---
+
+cross-track band         full Sim(3)    yaw-only
+    0- 25 m from line          216.1m       4.19m
+   25- 75 m from line          235.6m       4.23m
+   75-150 m from line          311.1m       4.24m
+  150-300 m from line          503.0m       4.39m
+  300-500 m from line          724.7m       4.74m
+
+--- 3. Does a non-straight flight fix it? ---
+
+flight path              full Sim(3) SCENE   yaw-only SCENE
+straight (the PS)                  366.94m            3.26m
+gently curved                        7.91m            3.24m
+
+==================================================================================
+CONCLUSION (EXP-09)
+==================================================================================
+  1. THE PROBLEM STATEMENT'S DEFINING CONSTRAINT CREATES A GEOMETRIC DEGENERACY.
+     "Single pass" means near-collinear camera centres. Collinear points cannot
+     constrain rotation about their own axis. Georeferencing a SCENE from such a
+     trajectory with an unrestricted similarity transform is ill-posed - and the
+     failure is invisible if you only measure trajectory error, which is exactly what
+     a naive evaluation does.
+
+  2. THE FIX IS PHYSICAL, NOT NUMERICAL. Roll and pitch are not unknown: gravity fixes
+     them. Constraining the fit to yaw + translation + scale (5 DOF) removes the free
+     direction and collapses scene error from hundreds of metres to
+     3.7 m (consumer) and
+     0.041 m (RTK) - the latter comfortably inside R-O3.
+
+  3. THEREFORE "IMU: optional" IN THE PROBLEM STATEMENT IS MISLEADING.
+     For a single straight pass a vertical reference is NOT optional - without it the
+     problem is under-determined. The reference can come from the IMU (R-I4), from
+     gravity via the terrain, or from the gimbal attitude in the video metadata, but it
+     must come from somewhere. This is worth saying explicitly to the evaluators.
+
+  4. A CURVED FLIGHT PATH WOULD ALSO FIX IT, and the contrast is the proof that this is
+     a degeneracy rather than a bug - but we do not control the flight, so the gravity
+     constraint is the only lever available on our side.
+==================================================================================

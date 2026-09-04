@@ -1,0 +1,7 @@
+numpy==2.2.6
+scipy==1.15.2
+trimesh==4.7.4
+pyproj==3.7.2
+laspy==2.7.0
+rasterio==1.5.1
+google-cloud-storage==2.19.0

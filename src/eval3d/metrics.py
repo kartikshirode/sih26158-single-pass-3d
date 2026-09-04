@@ -273,12 +273,19 @@ def evaluate(recon_pts: np.ndarray, gt_pts: np.ndarray, *,
         moved = apply_transform(recon_pts, R, t, s)
         d_rg_a = nn_distances(moved, gt_pts)
         d_gr_a = nn_distances(gt_pts, moved)
+        # How far the alignment ACTUALLY moved the model. This must be measured as
+        # mean point displacement, NOT as ||t||: for data in a projected CRS the points
+        # sit millions of metres from the origin, so the translation component of a
+        # rigid transform is dominated by rotation-about-origin and is meaningless as a
+        # displacement. (Reproduced: ||t|| reported 11,256 m for a model whose true
+        # offset was ~2 m.)
+        displacement = float(np.mean(np.linalg.norm(moved - recon_pts, axis=1)))
         out["aligned"] = EvalResult(
             mode="aligned",
             accuracy=DistanceStats.from_distances(d_rg_a),
             completeness=DistanceStats.from_distances(d_gr_a),
             scores=[prf_at_tau(d_rg_a, d_gr_a, tt) for tt in taus],
-            alignment_translation_m=float(np.linalg.norm(t)),
+            alignment_translation_m=displacement,
             alignment_scale=float(s),
             alignment_rotation_deg=rotation_angle_deg(R),
         )

@@ -1,0 +1,38 @@
+{
+  "label": "demo",
+  "gnss_class": "consumer",
+  "pitch_deg": 60.0,
+  "frames_in": 600,
+  "keyframes_kept": 540,
+  "sensing_views": 60,
+  "points_reconstructed": 19954,
+  "crs": "EPSG:32643",
+  "geoid_separation_m": -52.542,
+  "geoid_model": "EGM2008 (EPSG:9518)",
+  "gps_inlier_fraction": 0.7817,
+  "accuracy_absolute_rmse_m": 2.2204,
+  "accuracy_aligned_rmse_m": 1.0756,
+  "georeferencing_offset_m": 11256.3053,
+  "scale_diagnostic": 1.004844,
+  "completeness_recall_at_1m": 0.0304,
+  "fscore_at_1m": 0.0455,
+  "timings_s": {
+    "S1 ingest": 0.189,
+    "S2 mask": 0.0,
+    "S3 geometry": 1.246,
+    "S4 georef": 1.307,
+    "S5 surface": 0.085,
+    "S6 export": 0.64,
+    "SCORE": 1.055
+  },
+  "total_s": 4.522,
+  "budget_s": 900.0,
+  "within_budget": true,
+  "exports": {
+    "PLY (point cloud)": "model.ply",
+    "OBJ (mesh)": "model.obj",
+    "GLB (glTF)": "model.glb",
+    "LAS 1.4 (+CRS)": "model.las",
+    "GeoTIFF (DSM)": "dsm.tif"
+  }
+}
