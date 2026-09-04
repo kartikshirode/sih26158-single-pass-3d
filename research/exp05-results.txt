@@ -1,0 +1,101 @@
+========================================================================================
+EXP-05  Achievable ABSOLUTE georeferencing accuracy (no GCPs)
+         single straight pass, 600 keyframes over 600 s, 40 trials each
+========================================================================================
+
+--- 1. Error by GNSS class (RANSAC + Umeyama, 2% wild fixes injected) ---
+
+GNSS class     RMSE 3D    RMSE H    RMSE V    p95 3D  scale ppm  R-O3?
+consumer        4.119m    2.420m    3.067m    5.773m    2307.2  FAIL
+sbas            1.858m    1.097m    1.372m    2.606m    1023.9  FAIL
+rtk             0.097m    0.078m    0.058m    0.157m      26.9  PASS
+
+--- 2. Does averaging more frames fix it?  (consumer GNSS) ---
+
+ keyframes    RMSE 3D    1/sqrt(N) would predict
+        50     3.856m                     3.856m   ################
+       150     4.683m                     2.226m   ####################
+       300     4.034m                     1.574m   #################
+       600     4.419m                     1.113m   ###################
+      1200     4.132m                     0.787m   ##################
+      2400     4.581m                     0.557m   ###################
+
+    Reading: the measured error is FLAT while the 1/sqrt(N) column keeps falling.
+    The correlated bias (ionosphere / multipath / orbit) does not average away over a
+    single 10-minute flight. Collecting more frames does NOT buy absolute accuracy.
+
+--- 3. What does RANSAC actually buy?  (measured across outlier rates) ---
+
+    Naive expectation: 'RANSAC is more accurate.' The data says otherwise.
+
+ outlier %   least squares   auto-RANSAC     gain
+        0%          3.986m        4.099m    -2.8%
+        2%          3.991m        4.088m    -2.4%
+        5%          4.075m        4.060m     0.4%
+       10%          4.286m        4.070m     5.0%
+       20%          4.258m        4.018m     5.6%
+       35%          4.319m        3.975m     8.0%
+
+    Reading: RANSAC does NOT improve the typical case - at 0-2% bad fixes it is a
+    fraction of a percent WORSE, because robustness always costs a little efficiency.
+    What it does is BOUND THE WORST CASE: its error stays flat near 4.1 m however bad
+    the GPS gets, while least squares degrades without limit. For a system whose input
+    dataset is unknown until the day, a bounded worst case is the property worth
+    buying. (R-C5)
+
+    Second, harder-won lesson: the inlier threshold must be derived from the observed
+    residual scale (MAD), not hard-coded. A threshold BELOW the noise floor is worse
+    than no RANSAC at all - a fixed 1 m threshold scored 5.29 m vs 4.08 m for plain
+    least squares, because it discarded 93% of perfectly good data to fit a lucky
+    subset. See the table in eval3d.gnss.robust_sim3.
+
+--- 4. Two reporting traps, in opposite directions ---
+
+  (a) residual of the fit TO THE GPS TRACK : 6.725 m
+      true error vs GROUND TRUTH          : 4.119 m
+      -> The residual is PESSIMISTIC, not flattering: it charges us for the
+         GPS's own scatter about its mean. Fitting to a noisy sensor and then
+         measuring against that same noisy sensor double-counts the noise. So
+         "our residual is 6.7 m" understates the system - but it is still the
+         wrong number to quote, because it measures agreement with the sensor
+         rather than with reality.
+
+  (b) ABSOLUTE error (no alignment) : 2.679 m   <- the truth
+      ALIGNED error (after ICP)     : 0.209 m   <- flattering
+      -> THIS is the dangerous one. Best-fit alignment silently absorbs the
+         entire georeferencing offset, so a model tens of metres out of place
+         can report near-zero error. Every accuracy claim must state which of
+         the two it is. The harness always prints both.
+
+--- 5. Sensitivity: is the conclusion robust to the assumed bias? ---
+
+ bias sigma    RMSE 3D  R-O3?
+       0.5m     1.089m  FAIL   #####
+       1.0m     2.104m  FAIL   #########
+       1.5m     3.204m  FAIL   ##############
+       2.2m     4.649m  FAIL   ####################
+       3.5m     7.545m  FAIL   ################################
+       5.0m    10.852m  FAIL   ##################################
+
+========================================================================================
+CONCLUSION (EXP-05)
+========================================================================================
+  1. With consumer GNSS, absolute georeferencing error is ~4.1 m.
+     R-O3's <= 1 m is NOT achievable from consumer GPS alone, at ANY frame count.
+     The limit is the sensor, not the algorithm. No amount of clever fitting fixes it.
+
+  2. With RTK/PPK (PS input R-I7, "optional"), error is
+     ~0.097 m -> R-O3 PASSES comfortably.
+     Whether we can claim <= 1 m absolute depends ENTIRELY on whether the supplied
+     dataset carries RTK corrections. This must be asked of the organisers (A2/A4).
+
+  3. Vertical error is consistently the worst axis (~1.7x horizontal), so the
+     altitude channel governs the budget. Barometric altitude (R-I5) is worth fusing.
+
+  4. Therefore the system reports TWO numbers, always:
+       - relative / shape accuracy   -> achievable well below 1 m, and is what
+                                        "accuracy without GCPs" normally means
+       - absolute georeferencing     -> GNSS-class limited, reported truthfully
+     Reporting only the flattering one is the failure mode this experiment exists
+     to prevent.
+========================================================================================

@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+data/raw/
+data/cache/
+*.mp4
+*.las
+*.laz
