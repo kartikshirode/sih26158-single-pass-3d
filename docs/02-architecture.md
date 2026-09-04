@@ -228,14 +228,37 @@ and `is_metric_scale`. This is where R-I2–R-I7 physically enter the geometry.
    photogrammetry gets relative geometry far more precisely than GNSS gets absolute position. The
    correct fusion trusts vision for shape and GPS for placement.
 
-### 6.2 The vertical trap
+### 6.2 Two traps that would silently destroy the budget
 
-GNSS altitude is **ellipsoidal (WGS84)**. Maps, DSMs and most reference data are **orthometric
-(geoid)**. Over India the geoid separation is large — tens of metres — so ignoring or
-double-applying it destroys the ≤1 m vertical budget by an order of magnitude while horizontal
-error still looks fine. The conversion is applied explicitly and once, and asserted in tests
-(T-ACC-04). Horizontal work is done in **UTM** (India spans zones 42N–47N), selected automatically
-from the track centroid.
+**(a) The geoid — measured, 24 to 98 m.** GNSS reports ellipsoidal height *h*; maps want
+orthometric *H = h − N*. Measured with PROJ 9.5.1 and the real EGM grids, N across India runs from
+**−24.3 m (Leh)** to **−98.2 m (Kanyakumari)** — India sits on the Indian Ocean Geoid Low, the
+largest on Earth. Worse, **model choice alone can blow the budget**: EGM96 and EGM2008 differ by
+**1.68 m at Amritsar** against a 1 m requirement.
+
+Two silent failure modes, both reproduced: with the grid missing **PROJ returns z unchanged and
+raises nothing** (a "ballpark vertical transformation"), and calling `transform(lon, lat)` without
+z applies no shift at all. Defences, all three: `allow_ballpark=False`, assert `"ballpark" not in
+t.description`, and check `TransformerGroup(...).best_available` at startup. Use **EPSG:9518**
+(WGS 84 + EGM2008 height) and ship the 80 MB grid inside the image for offline running (R-NF6).
+No public Indian national geoid is downloadable, so EGM2008 is the defensible choice.
+*(For reference: ODM applies no geoid correction at all.)*
+
+**(b) UTM is not a metric frame — 0.6 m per km.** UTM is conformal; measured scale error in zone
+43N runs **−400 ppm at the central meridian to +981.5 ppm at the zone edge**, and with the
+elevation factor **−644 to +564 ppm ≈ 0.6 m per kilometre** across India. That is the entire error
+budget over a 1–2 km pass.
+
+**Therefore the similarity fit is done in a local ENU frame and projected to UTM last.** Fitting
+in UTM would bake projection scale error into the reconstruction. The zone is chosen at runtime
+from mean longitude (`zone = int((lon+180)//6)+1` → EPSG:326xx, India spanning 42N–47N), never
+hardcoded, because the flight location is unknown until the event.
+*(EPSG:7755–7787 is a per-state ISRO block, not UTM — do not reach for it.)*
+
+**(c) `abs_alt` from a DJI sidecar is barometric, not GNSS.** Across 11 files and 7+ airframes,
+`abs_alt − rel_alt` is constant to the millimetre. It must never enter bundle adjustment as an
+independent height observation — it would inject a perfectly-correlated fake constraint into the
+very axis that governs the error budget.
 
 ### 6.3 Accuracy budget (to be validated, not assumed)
 

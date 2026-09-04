@@ -510,13 +510,12 @@ a{color:var(--s1)}
       physics.</li>
       <li>Every inferred face is tagged and can be hidden in the viewer. A judge who measures a
       wall we invented should be able to see that we invented it.</li>
-      <li><strong>One required output format has no clean route.</strong> FBX is proprietary, with
-      no known permissively-licensed writer &mdash; the other five formats do. Likely resolution is a
-      Blender CLI export as a separate process. <span class="stamp st-unv">Open</span></li>
+      <li><strong>All six output formats have permissive routes.</strong> An earlier draft of this
+      page recorded FBX as unsolved; that was wrong. <strong>assimp (BSD-3) writes FBX</strong>, and
+      covers OBJ, PLY and glTF too. <span class="stamp st-src">Resolved</span></li>
     </ul>
-    <p>Export tooling, drone-metadata parsing and geoid-grid handling are still being verified from
-    primary sources; the figures above do not depend on them, but the ingestion and export designs
-    do. Treat those two areas as provisional until that verification lands.</p>
+    <p>Export tooling, drone-metadata parsing and geoid handling have since been verified from
+    primary sources &mdash; see section 08.</p>
     <div class="call">
       <p class="lbl">Open questions for the organisers &mdash; these change what is claimable</p>
       <p>Does the dataset include RTK/PPK corrections? Is &ldquo;&le; 1 m&rdquo; absolute or relative? Is
@@ -545,6 +544,63 @@ a{color:var(--s1)}
     <p>Two things to start immediately regardless: put the four questions above to the organisers,
     and begin billed CPU usage on the cloud project, since that is the only thing that unblocks GPU
     quota and it needs calendar time to accrue.</p>
+  </div></div>
+</section>
+
+<section>
+  <div class="shead"><div class="snum">08</div><h2>Late findings that moved the design</h2></div>
+  <div class="body"><div class="spacer"></div><div>
+
+    <div class="find crit">
+      <h3>Indian law decides where this can run</h3>
+      <p class="meta"><span class="stamp st-src">Verified &middot; primary source</span></p>
+      <p>The DST <em>Guidelines for acquiring and producing Geospatial Data and Geospatial Data
+      Services</em> (15 February 2021) set a threshold of <strong>1 m horizontal and 3 m
+      vertical</strong>. Data finer than that may be created and owned only by Indian entities and
+      must be <strong>stored and processed in India</strong> &mdash; on a domestic cloud or on servers
+      physically located here. This problem statement targets exactly 1 m, so the rule is assumed
+      to bind.</p>
+      <p>That removes <code>asia-southeast1</code> (Singapore) &mdash; the nearest region where Cloud
+      Run L4 exists &mdash; and leaves Mumbai only, which is precisely the quota that is denied. It
+      also promotes the Baramati cluster from stopgap to the compliant answer: it is physically in
+      India. For an intelligence customer that is a point to make, not a limitation to hide.</p>
+    </div>
+
+    <div class="find meas">
+      <h3>Two silent ways to lose the whole vertical budget</h3>
+      <p class="meta"><span class="stamp st-meas">Measured with PROJ 9.5.1</span></p>
+      <p>GNSS reports height above the ellipsoid; maps want height above the geoid. Across India
+      that separation runs from <strong>&minus;24.3 m at Leh to &minus;98.2 m at Kanyakumari</strong>
+      &mdash; the Indian Ocean Geoid Low, the largest on Earth. Ignoring it is a blunder of tens of
+      metres. Worse, <strong>the choice of model alone can blow the budget</strong>: EGM96 and
+      EGM2008 disagree by <strong>1.68 m at Amritsar</strong> against a 1 m requirement.</p>
+      <p>And the failure is silent. With the geoid grid missing, PROJ <strong>returns the height
+      unchanged and raises nothing</strong>; calling the transform without a z value applies no
+      shift at all. Both reproduced. Three defences are now specified, and the 80 MB grid ships
+      inside the container so an offline demo still corrects properly.</p>
+      <p>Separately, <strong>UTM is not a metric frame</strong>: its scale error across India runs
+      to roughly <strong>0.6 m per kilometre</strong>, which is the entire budget over a typical
+      pass. The similarity fit is therefore done in a local ENU frame and projected to UTM last.</p>
+    </div>
+
+    <div class="find">
+      <h3>Three traps in the input data itself</h3>
+      <p class="meta"><span class="stamp st-src">Verified &middot; primary source</span></p>
+      <ul>
+        <li><strong><code>abs_alt</code> in a DJI sidecar is barometric, not GNSS.</strong> Across
+        11 files and 7+ airframes, <code>abs_alt &minus; rel_alt</code> is constant to the
+        millimetre. Feeding it to bundle adjustment as an independent height would inject a fake,
+        perfectly-correlated constraint into the one axis that already governs our error.</li>
+        <li><strong>OpenDroneMap stamps every extracted video frame <code>Model: "Unknown"</code></strong>,
+        so the sensor lookup misses and it reconstructs from a generic focal prior regardless of
+        which drone shot the footage.</li>
+        <li><strong>Unit encodings flip silently between DJI generations</strong> &mdash;
+        <code>fnum: 280</code> means f/2.8 on one model and <code>fnum: 3.2</code> is literal on
+        another; the Mavic 3's intrinsics are filed under <em>Hasselblad</em>, not DJI. A parser
+        that assumes one convention corrupts rather than fails.</li>
+      </ul>
+    </div>
+
   </div></div>
 </section>
 

@@ -92,10 +92,17 @@ at 1. There is no human reviewer to appeal to.
 
 | Rung | Resource | Status | Use for |
 |---|---|---|---|
-| 1 | **GCP L4 / A100** (`agentbillboard`, asia-south1) | **BLOCKED** — quota 0 | Production target; timed benchmark of record |
+| 1 | **GCP L4 / H100, `asia-south1` (Mumbai) ONLY** | **BLOCKED** — quota 0 | Production target; timed benchmark of record |
 | 2 | **Baramati HPC cluster** (VPKBIET) | **AVAILABLE NOW** | All Phase B development |
-| 3 | Colab / Kaggle free GPU | Available | Quick model smoke tests |
+| 3 | Colab / Kaggle free GPU | Available | Model smoke tests only — **not** for ≤1 m deliverable data (R-NF8) |
 | 4 | This laptop (Intel Arc, no CUDA) | Available | All CPU work — harness, ingestion, geo, export |
+
+> **R-NF8 narrows the ladder.** Indian geospatial regulation requires data at or finer than 1 m to
+> be stored and processed in India, so `asia-southeast1` (Singapore) — the nearest region where
+> Cloud Run L4 exists — is **excluded**. An India-resident GPU means Compute Engine L4 in
+> `asia-south1` (or H100 in `asia-south1-c`), which is precisely the denied quota. **Baramati is
+> physically in India and therefore compliant**, which promotes it from stopgap to a defensible
+> production answer for this customer.
 
 ### 3.2 Unblocking GCP (start now; it is slow, not hard)
 
@@ -174,7 +181,15 @@ sih26158/
 | **RANSAC threshold below the noise floor is worse than no RANSAC** | 5.29 m vs 4.08 m | Self-tuning MAD threshold |
 | **Ellipsoidal vs orthometric height** | Tens of metres of vertical error | Explicit single conversion + assertion test |
 | **Ultralytics YOLO is AGPL-3.0** | Network copyleft on a hosted service | Prefer permissive detectors; geometric layer is licence-free |
-| **FBX has no permissive writer** | R-O5 format unsatisfiable cleanly | Resolve via Blender CLI (GPL, separate process) or state the constraint |
+| ~~FBX has no permissive writer~~ **— WRONG, corrected** | Would have forced a GPL dependency | **assimp (BSD-3) writes FBX** (`"fbx"`/`"fbxa"`, FBX 2016+). Decoys: FBX2glTF wraps the Autodesk SDK and converts the wrong way; ufbx is import-only |
+| **Data at ≤1 m must be processed in India** | Foreign cloud regions are excluded | asia-south1 only; Baramati is compliant (R-NF8) |
+| **PROJ silently skips the geoid** when the grid is missing, or when z is omitted | 24–98 m vertical error in India | `allow_ballpark=False` + `TransformerGroup.best_available` assert; ship the EGM2008 grid |
+| **EGM96 vs EGM2008 differ by 1.68 m at Amritsar** | Model choice alone blows the 1 m budget | Fix on EGM2008 / EPSG:9518 and state it |
+| **UTM scale error ≈0.6 m per km** across India | Fitting in UTM bakes in projection error | Fit in local ENU; project to UTM last |
+| **DJI `abs_alt` is barometric, not GNSS** (constant to the mm) | A fake correlated height constraint in BA | Never use as an independent height observation |
+| **ODM stamps video frames `Model: "Unknown"`** | Every frame reconstructs from a generic focal prior | Write true Make/Model, or pass `--cameras` |
+| **Mavic 3 intrinsics filed under `Hasselblad L2D-20c`** | A `"DJI "+model` lookup misses it | Key the sensor DB on Make AND Model |
+| **decord is abandoned** (HEAD 2022, 221 open issues) | Dead dependency | Use PyAV; torchcodec for CUDA |
 | **Open3D has no Python 3.13 wheels** | Environment breaks | Pin **Python 3.12** (MapAnything specifies 3.12 anyway) |
 | **Cloud Run L4 not in asia-south1** despite the quota API listing it | Wasted debugging | Use asia-southeast1; trust deploy errors over the quota API |
 | **ODM's video wiki page is from 2018 (ORB_SLAM2)** | Wrong flags | Read `opendm/config.py`: `--video-limit` (500), `--video-resolution` (4000) |

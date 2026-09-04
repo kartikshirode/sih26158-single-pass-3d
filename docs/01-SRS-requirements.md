@@ -82,12 +82,12 @@ Traced to the PDF p.38 "Desired Output" table. These are pass/fail.
 | **R-O5** | Output formats | OBJ, PLY, LAS, GeoTIFF, .glb/.gltf, .fbx | T-EXPORT-02 |
 | **R-O6** | Visualisation | Web-based **or** desktop viewer | T-UI-01 |
 
-> **R-O5 carries one unresolved item: `.fbx`.** FBX is a proprietary Autodesk format with no known
-> permissively-licensed writer. OBJ, PLY, LAS, GeoTIFF and glTF all have clean routes; FBX does
-> not. Candidate resolutions are a Blender CLI export (GPL, invoked as a separate process, which
-> avoids linking) or the Autodesk FBX SDK (proprietary terms). **Status: open**, pending the
-> export-tooling verification still outstanding. If no acceptable route exists this must be raised
-> with the organisers, not quietly dropped.
+> **R-O5 is fully satisfiable with permissive licences.** An earlier draft recorded `.fbx` as
+> having no permissive writer; that was **wrong**. **assimp (BSD-3) writes FBX** — `Exporter.cpp`
+> registers `"fbx"` (binary) and `"fbxa"` (ascii) at FBX 2016+, enabled by default, drivable from
+> Python via `pyassimp` (ISC). assimp alone covers OBJ, PLY, glTF/GLB and FBX. Two decoys to
+> avoid: *FBX2glTF* wraps the account-gated Autodesk SDK and converts the wrong direction, and
+> *ufbx* is import-only.
 
 **Derived, non-negotiable, from the Description paragraph:** the model must be *georeferenced* and
 *metrically accurate* — R-O3 is an absolute-world-frame requirement, not merely a self-consistent
@@ -174,6 +174,7 @@ Traced to PDF pp. 37–38 Key Challenges (i)–(viii). Each is restated as a tes
 | **R-NF5** | **Deployment-legal**: no component whose licence forbids the stated end use | See §7.1 — this is a real disqualifier |
 | **R-NF6** | Runs offline on a single machine, no internet dependency at inference | Finale may be offline; the customer is an intelligence agency |
 | **R-NF7** | Every accuracy claim traceable to a reproducible measurement, never an estimate | Accuracy is 30% |
+| **R-NF8** | **Geospatial data at or finer than 1 m must be stored and processed in India** | Indian law — see §7.3 |
 
 ### 7.1 R-NF5 — the licensing constraint that changes the architecture
 
@@ -191,6 +192,26 @@ with the exception of military applications."*
 
 Every third-party component must be licence-cleared before adoption. See
 `research/01-licensing-findings.md` for the verified register.
+
+### 7.3 R-NF8 — Indian geospatial regulation binds the architecture
+
+**Guidelines for acquiring and producing Geospatial Data and Geospatial Data Services**
+(Department of Science and Technology, 15 February 2021) set a threshold of **1 m horizontal
+(planimetry) and 3 m vertical (elevation)**. Data **finer than that threshold** may be created and
+owned only by **Indian entities**, and must be **stored and processed in India** — explicitly, on
+a domestic cloud or on servers physically located in India.
+
+**This problem statement targets ≤ 1 m, i.e. at or finer than the threshold, so the rule is
+assumed to bind.** Consequences, which are architectural rather than administrative:
+
+- Compute must be **India-resident**: GCP `asia-south1` (Mumbai) or `asia-south2` (Delhi) only.
+- The `asia-southeast1` (Singapore) Cloud Run GPU path is **excluded**, removing the only region
+  where Cloud Run L4 was otherwise reachable for this project.
+- No foreign hosted photogrammetry SaaS.
+- Compliance is by self-certification, so it must be **stated explicitly** in the submission.
+
+The Baramati cluster is physically in India and is therefore compliant. For an intelligence
+customer this is a point to make, not a limitation to hide.
 
 ### 7.2 Absolute vs. relative accuracy — how teams fail R-O3 invisibly
 
