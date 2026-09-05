@@ -43,8 +43,24 @@ else:
 C.append(md("## 1. Install MapAnything and fetch the imagery"))
 
 C.append(code("""%%capture
+# Kaggle ships torch 2.10.0+cu128. Installing MapAnything WITH its deps can pull a
+# different torch and break CUDA, so use --no-deps and add the pure-Python
+# requirements by hand. A missing hydra-core is what broke the first run.
+# MapAnything's own declared deps (pyproject): hydra-core, opencv-python-headless,
+# rerun-sdk, uniception. uniception is on PyPI and is what broke run 2.
+!pip install -q hydra-core omegaconf einops huggingface_hub safetensors trimesh scipy matplotlib pillow requests
+!pip install -q "opencv-python-headless==4.10.0.84" "rerun-sdk~=0.24.1" "uniception==0.1.7"
 !pip install -q --no-deps git+https://github.com/facebookresearch/map-anything.git
-!pip install -q einops huggingface_hub pillow safetensors"""))
+import torch as _t; print("torch after installs:", _t.__version__, "| CUDA", _t.cuda.is_available())"""))
+
+C.append(code("""import importlib, torch
+for m in ("hydra", "omegaconf", "einops", "uniception", "mapanything"):
+    importlib.import_module(m)
+# A dependency install can silently swap torch for a CPU build - check, do not assume.
+print("all imports OK | torch", torch.__version__, "| CUDA", torch.cuda.is_available())
+assert torch.cuda.is_available(), "CUDA lost - a dependency replaced torch"
+from mapanything.models import MapAnything
+print("MapAnything import OK")"""))
 
 C.append(code("""import requests
 
@@ -53,8 +69,11 @@ os.makedirs("/kaggle/working/images", exist_ok=True)
 
 api = "https://api.github.com/repos/OpenDroneMap/odm_data_aukerman/contents/images"
 files = sorted(requests.get(api, timeout=60).json(), key=lambda f: f["name"])
-step = max(1, len(files) // N_IMAGES)
-picked = files[::step][:N_IMAGES]
+
+# CONSECUTIVE frames, not strided. Sampling every ~5th of the 77 gave a mean baseline
+# of 151 m (max 222 m) - far too wide for reliable multi-view matching.
+START = 20
+picked = files[START:START + N_IMAGES]
 
 for f in picked:
     dst = "/kaggle/working/images/" + f["name"]
@@ -135,12 +154,21 @@ print("loaded in", round(t_load, 1), "s  (", round(n_par/1e9, 2), "B params )")
 views = load_images(["/kaggle/working/images/" + r["file"] for r in records])
 print(len(views), "views prepared")
 
+# bf16 needs Ampere (SM 8.0+). A T4 is Turing (7.5), so fall back to fp16 there -
+# asking for bf16 on Turing is either emulated and slow, or an error.
+AMP_DTYPE = "fp32"
+if device == "cuda":
+    major = torch.cuda.get_device_capability(0)[0]
+    AMP_DTYPE = "bf16" if major >= 8 else "fp16"
+print("autocast dtype:", AMP_DTYPE)
+
 if device == "cuda":
     torch.cuda.synchronize(); torch.cuda.reset_peak_memory_stats()
 t0 = time.perf_counter()
 with torch.no_grad():
     preds = model.infer(views, memory_efficient_inference=True,
-                        use_amp=True, amp_dtype="bf16", apply_mask=True)
+                        use_amp=(device == "cuda"), amp_dtype=AMP_DTYPE,
+                        apply_mask=True)
 if device == "cuda":
     torch.cuda.synchronize()
 t_inf = time.perf_counter() - t0
