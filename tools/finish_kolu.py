@@ -29,7 +29,10 @@ def sh(*a):
 
 def main():
     os.makedirs(RAW, exist_ok=True)
-    sh("gsutil", "-m", "cp", "gs://sih26158-mumbai/mapanything/kolu_out/*", RAW)
+    if not os.path.exists(os.path.join(RAW, "points.npy")):
+        # gsutil on Windows is a .cmd shim, so it needs a shell to resolve.
+        subprocess.run("gsutil -m cp gs://sih26158-mumbai/mapanything/kolu_out/* "
+                       + RAW, shell=True, check=True)
 
     res = json.load(open(os.path.join(RAW, "mapanything_result.json")))
     print("\nmodel run:")

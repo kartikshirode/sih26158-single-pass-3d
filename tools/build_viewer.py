@@ -25,9 +25,18 @@ def pack(d: str, tri_budget: int = 160_000, pt_budget: int = 220_000):
     V = np.asarray(m.vertices); F = np.asarray(m.triangles)
     VC = (np.asarray(m.vertex_colors) * 255).astype(np.uint8)
 
-    # One frame for both payloads: model Y is down, so flip to a Y-up viewer.
-    flip = np.array([1.0, -1.0, 1.0])
-    V, P = V * flip, P * flip
+    # One frame for both payloads. The model's own frame is NOT gravity-aligned - its
+    # Y is the camera's down, and this camera is a steep oblique - so the viewer's
+    # "plan" preset would not be a plan. Rotate into the terrain's principal plane,
+    # with the sign fixed by the camera centres (the drone was above the ground).
+    import sys as _sys, os as _os
+    _sys.path.insert(0, _os.path.join(_os.path.dirname(HERE), "src"))
+    from pipeline.render_views import upright_frame
+    centres = (np.load(f"{d}/cam_centres.npy")
+               if os.path.exists(f"{d}/cam_centres.npy") else None)
+    B = upright_frame(P, centres)
+    c0 = P.mean(0)
+    V, P = (V - c0) @ B.T, (P - c0) @ B.T
     mid = (V.max(0) + V.min(0)) / 2.0
     scale = float((V.max(0) - V.min(0)).max()) / 2.0
     q = lambda A: np.clip(np.round((A - mid) / scale * 32000), -32768, 32767).astype(np.int16)
