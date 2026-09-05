@@ -1,0 +1,15 @@
+steps:
+  - name: asia-south1-docker.pkg.dev/$PROJECT_ID/sih26158/mvs:v1
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        echo "### colmap version"; colmap help 2>&1 | head -5
+        for c in feature_extractor exhaustive_matcher point_triangulator bundle_adjuster image_undistorter; do
+          echo "### $c"
+          colmap $c --help 2>&1 | grep -oE '^\s+--[A-Za-z_.]+' | tr -d ' ' | tr '\n' ' '
+          echo
+        done
+        echo "### DensifyPointCloud"; DensifyPointCloud --help 2>&1 | grep -oE '^\s+(-[a-z], )?--[a-z-]+' | tr -d ' ' | tr '\n' ' '; echo
+        echo "### ReconstructMesh"; ReconstructMesh --help 2>&1 | grep -oE '^\s+(-[a-z], )?--[a-z-]+' | tr -d ' ' | tr '\n' ' '; echo
+        echo "### InterfaceCOLMAP"; InterfaceCOLMAP --help 2>&1 | grep -oE '^\s+(-[a-z], )?--[a-z-]+' | tr -d ' ' | tr '\n' ' '; echo

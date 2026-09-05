@@ -132,14 +132,14 @@ def main():
         "--image_path", f"{W}/images",
         "--ImageReader.single_camera", "1",
         "--ImageReader.camera_model", "SIMPLE_RADIAL",
-        "--SiftExtraction.use_gpu", "0",
+        "--FeatureExtraction.use_gpu", "0",
         "--SiftExtraction.max_image_size", str(max(h0, w0)),
         "--SiftExtraction.max_num_features", "16384"], "feature_extractor")
 
     # Exhaustive over 42 images is 861 pairs - cheap, and it gives the triangulation
     # long-baseline pairs that a sequential-only pass would never form.
     sh(["colmap", "exhaustive_matcher", "--database_path", db,
-        "--SiftMatching.use_gpu", "0"], "exhaustive_matcher")
+        "--FeatureMatching.use_gpu", "0"], "exhaustive_matcher")
 
     os.makedirs(f"{W}/sparse_in", exist_ok=True)
     write_model(f"{W}/sparse_in", cams, names, cam, db)
@@ -150,7 +150,8 @@ def main():
     sh(["colmap", "point_triangulator", "--database_path", db,
         "--image_path", f"{W}/images",
         "--input_path", f"{W}/sparse_in",
-        "--output_path", f"{W}/sparse_tri"], "point_triangulator")
+        "--output_path", f"{W}/sparse_tri",
+        "--Mapper.ba_use_gpu", "0"], "point_triangulator")
     before = reproj_error(f"{W}/sparse_tri", "after triangulation")
 
     os.makedirs(f"{W}/sparse_ba", exist_ok=True)
@@ -159,7 +160,8 @@ def main():
         "--input_path", f"{W}/sparse_tri", "--output_path", f"{W}/sparse_ba",
         "--BundleAdjustment.refine_focal_length", "1",
         "--BundleAdjustment.refine_principal_point", "1",
-        "--BundleAdjustment.refine_extra_params", "1"], "bundle_adjuster")
+        "--BundleAdjustment.refine_extra_params", "1",
+        "--BundleAdjustment.use_gpu", "0"], "bundle_adjuster")
     after = reproj_error(f"{W}/sparse_ba", "after bundle adjustment")
 
     sh(["colmap", "image_undistorter", "--image_path", f"{W}/images",
@@ -172,7 +174,6 @@ def main():
     # THE stage this whole rebuild exists for: per-pixel photometric depth at full
     # resolution, with geometric-consistency filtering instead of voxel averaging.
     sh(["DensifyPointCloud", f"{W}/scene.mvs", "-w", W,
-        "--cuda-device", "-2",
         "--resolution-level", RES_LEVEL,
         "--number-views-fuse", "3",
         "--max-threads", str(os.cpu_count() or 8)], "DensifyPointCloud")
@@ -184,12 +185,11 @@ def main():
     sh(["ReconstructMesh", f"{W}/scene_dense.mvs", "-w", W], "ReconstructMesh")
     mesh = f"{W}/scene_dense_mesh.mvs"
     if REFINE and os.path.exists(mesh):
-        sh(["RefineMesh", mesh, "-w", W, "--cuda-device", "-2",
+        sh(["RefineMesh", mesh, "-w", W,
             "--resolution-level", "1"], "RefineMesh", fatal=False)
         mesh = f"{W}/scene_dense_mesh_refine.mvs" if os.path.exists(
             f"{W}/scene_dense_mesh_refine.mvs") else mesh
-    sh(["TextureMesh", mesh, "-w", W, "--cuda-device", "-2"],
-       "TextureMesh", fatal=False)
+    sh(["TextureMesh", mesh, "-w", W], "TextureMesh", fatal=False)
 
     summary = {
         "n_images": n_img, "full_frame": [w0, h0], "model_grid": [W_, H],
