@@ -82,6 +82,7 @@ came out of `src/eval3d/`. No hand-computed numbers in slides.
 | **T-ROB-05** | **Unknown metadata schema** | ≥4 synthetic schema variants + one malformed | Correct auto-detection; clear error, never a crash |
 | **T-ROB-06** | Missing optional inputs | Drop IMU / baro / intrinsics / RTK individually | Runs; documented accuracy degradation |
 | **T-ROB-07** | Adversarial input | 0-byte file, 1-frame video, GPS all-identical, no GPS | Graceful, explicit failure |
+| **T-ROB-08** | **Input admissibility (R-C9)** | 4 real clips: city vista, castle flyover, temple orbit, wildlife overpass | Verdict + reason per clip; the three unreconstructable ones rejected before inference |
 
 ### 3.5 Output and interface — R-O5, R-O6, R-F6…F8
 
@@ -149,6 +150,31 @@ Recorded because "the tests found real bugs" is the evidence that the tests are 
 | D5 | Test asserted ICP recovers a 5 m offset on flat terrain; it recovers 1.1 m because a flat plane slides freely | Failing test T2 | Test scene given vertical structure; ambiguity documented as T2b |
 
 ---
+
+### 4.6 T-ROB-08 — input admissibility · RUN 2026-09-05 · PASS
+
+`python src/ingest/screen.py` on four real clips. No GPU time was spent on any of them.
+
+| Clip | Sky | Horizon | Shots | Longest shot | Verdict |
+|---|---|---|---|---|---|
+| Nicosia city vista (CC BY 3.0) | 51.8% | 100% | 2 | 30.3 s | **REJECT** — unbounded depth; two spliced passes |
+| Toolse castle (CC BY-SA 4.0) | 18.9% | 100% | 4 | 40.0 s | **REJECT** — unbounded depth |
+| Baha'i Temple orbit (CC BY 3.0) | 60.1% | 5.7% | 8 | 14.0 s | **REJECT** — mostly sky; heavily cut |
+| **Kolu wildlife overpass (CC0)** | **11.0%** | 22.7% | **1** | **51.8 s** | **ACCEPT** |
+
+The watermark detector fired only on Nicosia — 0.108% of pixels, resolved to a 4.7%
+bottom crop. The other three clips carry no burned-in overlay, and it correctly
+reported none rather than trimming an edge for nothing.
+
+**What this test would have caught.** All of it. The Nicosia reconstruction was run,
+downloaded, analysed and presented before any of these properties were measured; the
+resulting cloud had a PCA flatness ratio of 0.194 and no recognisable structure. The
+verdict above takes 40 s of CPU per clip.
+
+**Defect it exposed (fixed).** `sky_fraction` measured only the upper 60% of the frame
+while dividing by the full frame area, so it could never exceed 0.60 and scored a full
+horizon vista at 0.445 — under the then-current 0.75 threshold. The metric did not mean
+what its name said. Now whole-frame, with the threshold at 0.15.
 
 ## 5. The accuracy claim we are permitted to make
 

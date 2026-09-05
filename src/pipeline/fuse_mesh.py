@@ -63,14 +63,30 @@ def filter_fuse(P, C, F, M, *, conf_pct=30.0, sor_sigma=1.2, log=print):
     P, C, dd = P[g], C[g], dd[g]
     log(f"outlier removal  {len(P):>10,}")
 
-    vox = float(np.percentile(dd[:, 1], 55) * 1.4)
+    # Voxel size, self-tuned. Deriving it from nearest-neighbour distance in the
+    # CONCATENATED cloud is wrong: points from different views interleave, so the
+    # measured spacing is smaller than a single view's and the voxel ends up too
+    # fine to merge the duplicate surfaces it exists to merge (measured 1.2
+    # points/cell where three views overlapped). Solve for the size that actually
+    # hits the target occupancy instead.
+    target = 2.5
+    lo, hi = float(np.percentile(dd[:, 1], 55)), float(np.percentile(dd[:, 1], 55)) * 40
+    for _ in range(24):
+        vox = (lo * hi) ** 0.5                       # geometric bisection
+        occ = len(P) / len(np.unique(np.floor(P / vox).astype(np.int64), axis=0))
+        if occ < target:
+            lo = vox
+        else:
+            hi = vox
+        if abs(occ - target) < 0.05:
+            break
     key = np.floor(P / vox).astype(np.int64)
     _, idx, inv = np.unique(key, axis=0, return_index=True, return_inverse=True)
     Pf = np.zeros((len(idx), 3)); Cf = np.zeros((len(idx), 3))
     cnt = np.bincount(inv, minlength=len(idx)).astype(float)[:, None]
     np.add.at(Pf, inv, P); np.add.at(Cf, inv, C.astype(float))
     P, C = Pf / cnt, np.clip(Cf / cnt, 0, 255).astype(np.uint8)
-    log(f"voxel fusion     {len(P):>10,}   (voxel {vox:.4f}, mean {cnt.mean():.1f} views/cell)")
+    log(f"voxel fusion     {len(P):>10,}   (voxel {vox:.4f}, {cnt.mean():.1f} pts/cell)")
     log(f"extent           {np.round(P.max(0) - P.min(0), 2)}")
 
     s = np.linalg.svd(P[::7] - P[::7].mean(0), full_matrices=False)[1]

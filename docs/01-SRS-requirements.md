@@ -153,6 +153,7 @@ Traced to PDF pp. 37–38 Key Challenges (i)–(viii). Each is restated as a tes
 | **R-C6** | Real-time / near-real-time | Satisfy R-O2; report progress | T-PERF-01/02 |
 | **R-C7** | Reconstruction of occluded surfaces | Close unobserved surfaces by bounded inference, **explicitly labelled as inferred** | T-COMP-02 |
 | **R-C8** | Metric accuracy without extensive GCPs | Achieve R-O3 using GPS/flight metadata only, **zero GCPs** | T-ACC-01 |
+| **R-C9** | **Input admissibility** | Measure whether a clip is reconstructable *before* spending inference on it, and say why when it is not: horizon in frame, sky fraction, shot continuity, burned-in overlay | T-ROB-08 |
 
 > **R-C7 scope bound (deliberate, and stated up front).** Generative completion of unseen 3D
 > surfaces is an open research problem and cannot be done reliably inside the R-O2 time budget.
@@ -175,6 +176,7 @@ Traced to PDF pp. 37–38 Key Challenges (i)–(viii). Each is restated as a tes
 | **R-NF6** | Runs offline on a single machine, no internet dependency at inference | Finale may be offline; the customer is an intelligence agency |
 | **R-NF7** | Every accuracy claim traceable to a reproducible measurement, never an estimate | Accuracy is 30% |
 | **R-NF8** | **Geospatial data at or finer than 1 m must be stored and processed in India** | Indian law — see §7.3 |
+| **R-NF9** | Every stage must save the channels a later stage needs, even ones it does not itself use | See §7.4 — a discarded confidence channel cost a full inference run |
 
 ### 7.1 R-NF5 — the licensing constraint that changes the architecture
 
@@ -232,6 +234,52 @@ DSMs are **orthometric** (geoid-referenced). Over India that difference is large
 and applying it wrongly blows the ≤1 m vertical budget by an order of magnitude on its own.
 
 ---
+
+### 7.4 The input is a requirement, not an assumption
+
+R-C9 exists because a clip that satisfies every stated input requirement — 1080p, H.264,
+drone-captured, single pass — can still be impossible to reconstruct, and nothing in the
+original spec said so.
+
+Measured on 40 s of aerial footage over Nicosia:
+
+| Property | Measured | Consequence |
+|---|---|---|
+| Sky, whole frame | 52% | Half of every view carries no recoverable geometry |
+| Horizon present | 100% of frames | Depth spans ~100 m to ~30 km within one frame. A feed-forward model emits one point map per view; it cannot represent 2.5 orders of magnitude of depth at usable precision, so the far field arrives as noise and dominates the cloud |
+| Shots in clip | 2 | A 180-frame cut. Every downstream stage assumes one trajectory; two spliced passes are fitted as one and the result is a smear |
+| Burned-in watermark | 0.1% of pixels | Static in *image* space across all views, so a matcher reads it as a zero-parallax correspondence. This corrupts pose and scale, not merely the point cloud |
+
+None of these were measured. `sky_fraction` scored only the upper 60% of the frame and so
+capped at 0.60, reporting a full horizon vista as 0.445 — which read as comfortably under
+the then-current 0.75 limit.
+
+The gate values now in force, and what they cost:
+
+| Gate | Threshold | Rationale |
+|---|---|---|
+| `horizon_present` | a sky region spanning >80% of a row, anywhere in the upper 75% | Structural, not area-based: sky glimpsed past a roof edge in a steep oblique is not a horizon, because it does not span the frame |
+| `sky_fraction` | ≤ 0.15, whole frame | Above this, most of the view is not scene |
+| `detect_shots` | HSV histogram correlation < 0.55 between consecutive analysed frames | Survives motion blur and exposure ramps, which a flow threshold does not |
+| `static_overlay_mask` | temporal σ < 3.0 **and** \|∇\| > 25 | Neither signal alone separates an overlay from a static sky (low σ, low gradient) or textured ground (high gradient, high σ) |
+
+**Consequence for the demo.** These gates reject the Nicosia clip, a castle flyover
+(19% sky, horizon in 100% of frames, 4 shots) and a temple orbit (60% sky, 8 shots).
+They accept the Kolu wildlife overpass: 11% sky, one continuous 52 s shot, a bounded
+~100 m subject with genuine occluding structure. `src/ingest/screen.py` runs the whole
+set as a pre-flight verdict.
+
+**Consequence for the finale.** The SIH dataset arrives unseen. R-C9 means the system
+reports *why* a clip is hard rather than silently producing a smear — which is a better
+answer to a judge than a confident number over bad geometry.
+
+### 7.5 What a stage must persist
+
+R-NF9 is narrow but was expensive. The GPU stage saved `points.npy` and nothing else,
+discarding MapAnything's per-point confidence channel, its validity mask and the sampled
+colours. Every one of those is needed by filtering and meshing, and none can be recovered
+without re-running inference. The rule: a stage persists what the contract's *downstream*
+stages need, not what it happens to use itself.
 
 ## 8. Assumptions and open questions
 

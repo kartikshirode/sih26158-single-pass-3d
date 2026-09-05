@@ -21,33 +21,38 @@ def rot(az_deg: float, el_deg: float) -> np.ndarray:
     return Rx @ Ry
 
 
-def shade_mesh(ax, V, F, VC, az, el, title, light=(0.35, -0.75, 0.56)):
+def shade_mesh(ax, V, F, VC, az, el, title, radius=None, light=(0.35, -0.75, 0.56)):
     Vr = V @ rot(az, el).T
     tri = Vr[F]                                            # (T, 3, 3)
     n = np.cross(tri[:, 1] - tri[:, 0], tri[:, 2] - tri[:, 0])
     n /= np.linalg.norm(n, axis=1, keepdims=True) + 1e-12
-    lam = np.clip(np.abs(n @ np.asarray(light)), 0.18, 1.0)
+    # Ambient + diffuse. Pure lambert drives back-facing geometry to black, which
+    # hides exactly the detail a reviewer needs to see.
+    lam = 0.42 + 0.58 * np.clip(np.abs(n @ np.asarray(light)), 0.0, 1.0)
     fc = np.clip(VC[F].mean(1) * lam[:, None], 0, 1)
 
     order = np.argsort(tri[:, :, 2].mean(1))               # painter's algorithm
     from matplotlib.collections import PolyCollection
     ax.add_collection(PolyCollection(tri[order][:, :, :2], facecolors=fc[order],
                                      edgecolors="none", linewidths=0))
-    _frame(ax, Vr, title)
+    _frame(ax, Vr, title, radius)
 
 
-def shade_points(ax, P, C, az, el, title, s=0.35):
+def shade_points(ax, P, C, az, el, title, radius=None, s=0.6):
     Pr = P @ rot(az, el).T
     o = np.argsort(Pr[:, 2])
     ax.scatter(Pr[o, 0], Pr[o, 1], c=np.clip(C[o] / 255.0, 0, 1), s=s,
                linewidths=0, marker=".")
-    _frame(ax, Pr, title)
+    _frame(ax, Pr, title, radius)
 
 
-def _frame(ax, Vr, title):
-    pad = 0.03 * max(np.ptp(Vr[:, 0]), np.ptp(Vr[:, 1]))
-    ax.set_xlim(Vr[:, 0].min() - pad, Vr[:, 0].max() + pad)
-    ax.set_ylim(Vr[:, 1].min() - pad, Vr[:, 1].max() + pad)
+def _frame(ax, Vr, title, radius=None):
+    # One radius for every panel, so the views are comparable at a glance and each
+    # one fills its axes. Per-panel autoscaling makes a plan view and an elevation
+    # of the same model look like different objects.
+    cx, cy = Vr[:, 0].mean(), Vr[:, 1].mean()
+    r = radius if radius is not None else 0.52 * max(np.ptp(Vr[:, 0]), np.ptp(Vr[:, 1]))
+    ax.set_xlim(cx - r, cx + r); ax.set_ylim(cy - r, cy + r)
     ax.set_aspect("equal"); ax.axis("off")
     ax.set_title(title, fontsize=11, color="#e8e8e8")
 
@@ -70,10 +75,11 @@ def main(d: str, out: str):
     rows = 2 if have_mesh else 1
     fig, ax = plt.subplots(rows, 3, figsize=(19, 6.4 * rows),
                            facecolor="#101010", squeeze=False)
+    R = 0.55 * float(np.linalg.norm(np.ptp(P, axis=0)[:2]))
     for j, (az, el, name) in enumerate(views):
-        shade_points(ax[0][j], P, C, az, el, f"fused point cloud - {name}")
+        shade_points(ax[0][j], P, C, az, el, f"fused point cloud - {name}", radius=R)
         if have_mesh:
-            shade_mesh(ax[1][j], V, F, VC, az, el, f"mesh - {name}")
+            shade_mesh(ax[1][j], V, F, VC, az, el, f"mesh - {name}", radius=R)
     for a in ax.ravel():
         a.set_facecolor("#101010")
     plt.tight_layout()
