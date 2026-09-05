@@ -210,6 +210,47 @@ than closing over unobserved space.
 | Mesh subsampled by random triangle for display | Random triangles are not a surface; shading collapsed to dark speckle. Quadric decimation instead |
 | Confidence gate reported when the channel was constant | Would have printed "dropped 30%" for a gate that never fired. Now detected and reported as skipped |
 
+### 4.8 T-ROB-09 — horizon crop on non-survey footage · RUN 2026-09-05
+
+A 57 s vertical (1080×1920) YouTube Short over a retail construction site in Arizona.
+Screener verdict on the raw clip: **REJECT** — horizon in 100% of frames, 41% sky,
+2 shots, burned-in watermark on 0.14% of pixels.
+
+That verdict is correct about the *whole frame* and wrong about the *clip*: the lower
+half is excellent near-nadir survey footage. `horizon_policy="crop"` keeps it.
+
+| | Raw | After crop |
+|---|---|---|
+| Frame | 1080 × 1920 | 1080 × 921 |
+| Crop applied | — | 46.4% top (horizon), 5.7% bottom (watermark) |
+| Median sky | 41% → 18%\* | **0.7%** |
+| Frames usable | 1% | 57% |
+
+\* The first correction is the sky mask itself — see the defect below.
+
+**Two defects this clip exposed, both silent:**
+
+| Defect | Symptom | Fix |
+|---|---|---|
+| `sky_mask` counted pale arid ground as sky | A near-nadir view with **no sky in it** scored 23%, and the gate rejected it. Graded desert fill is bright and low-saturation — exactly the sky signature | Sky must also be **connected to the top edge**. Made the Kolu numbers more accurate too (0.110 → 0.068) with no change of verdict |
+| `horizon_row` found where sky *starts* | On a ragged skyline no single row is uniformly sky, so a per-row test locks onto the top of the ragged band and under-crops | Cumulative coverage from the top edge — "how far down can I cut and still be removing mostly sky" |
+
+**Two more, from sampling and file hygiene:**
+
+- The horizon and overlay estimates used the **first 80 frames of the shot**. A drone
+  pitches in flight, so a horizon measured from the opening seconds under-crops the
+  rest (0.294 vs 0.464) — and the title card burned over those opening frames *moves*,
+  which hid a genuinely static watermark from the temporal-variance test completely.
+  Sampling across the whole shot makes both crops fire.
+- Keyframe filenames carry their source frame index, so a re-run with different
+  settings left the previous run's files behind: 45 keyframes silently became 90, and
+  the next stage would have reconstructed a mixture of two settings.
+
+**Licensing.** This clip is a third-party YouTube upload with a burned-in creator
+watermark. It is usable as a pipeline test; it is **not** usable in a submitted
+deliverable, which needs footage the team holds rights to — the same class of
+constraint as §7.1's model licence, and worth settling before the finale.
+
 ## 5. The accuracy claim we are permitted to make
 
 This is written down so nobody is tempted to overstate it under deadline pressure.
