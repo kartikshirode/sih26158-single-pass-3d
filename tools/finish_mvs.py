@@ -119,6 +119,12 @@ def main():
        "--mvs", dense)
 
     stats = {
+        "title": os.environ.get("TITLE", "Village pass - MVS"),
+        "subtitle": os.environ.get(
+            "SUBTITLE",
+            "Single-pass drone video to 3D. Geometry from per-pixel photometric MVS "
+            "at full keyframe resolution; the feed-forward model supplied only the "
+            "camera poses and metric scale."),
         "ingest": [["source", "same 42 keyframes, 1080x1250"],
                    ["poses", "MapAnything, bundle-adjusted"]],
         "funnel": [["dense points", f"{len(P):,}"]],

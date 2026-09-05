@@ -65,8 +65,13 @@ if __name__ == "__main__":
     D = pack(a.indir)
     stats = json.load(open(a.stats)) if a.stats and os.path.exists(a.stats) else {}
     tpl = open(os.path.join(HERE, "viewer_template.html"), encoding="utf-8").read()
+    # Title and subtitle come from the stats file. They used to be hard-coded to the
+    # first clip this viewer was built for, so every later reconstruction shipped
+    # under the wrong name and a description of someone else's footage.
     html = (tpl.replace("__DATA__", json.dumps(D))
-               .replace("__STATS__", json.dumps(stats)))
+               .replace("__STATS__", json.dumps(stats))
+               .replace("__TITLE__", stats.get("title", "Reconstruction"))
+               .replace("__SUBTITLE__", stats.get("subtitle", "")))
     html = "".join(c if ord(c) < 128 else f"&#{ord(c)};" for c in html)
     os.makedirs(os.path.dirname(a.out), exist_ok=True)
     open(a.out, "w", encoding="utf-8").write(html)

@@ -65,6 +65,11 @@ def main():
 
     ing = json.load(open(os.path.join(ROOT, "out", KF, "ingest.json")))["stats"]
     stats = {
+        "title": os.environ.get("TITLE", "Kolu wildlife overpass"),
+        "subtitle": os.environ.get(
+            "SUBTITLE",
+            "Single-pass drone video to 3D. Continuous flight at 1920x1080, "
+            "no ground control points, no GPS."),
         "ingest": [
             ["frames decoded", f"{ing['frames_decoded']:,}"],
             ["shots detected", str(ing["shots_detected"])],
