@@ -10,6 +10,8 @@ from __future__ import annotations
 import argparse, os
 import numpy as np
 import matplotlib
+
+MAX_TRIS = 400_000
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
@@ -78,7 +80,7 @@ def section(ax, P, C, title, frac=0.02):
     # Coloured by HEIGHT, not by photo colour. A section of real footage in shadow
     # is almost black, and a black profile on a black ground shows nothing - which
     # defeats the only view that can tell an open underpass from a filled one.
-    ax.scatter(perp[m], q[m, 1], c=q[m, 1], cmap="turbo", s=3.2,
+    ax.scatter(perp[m], q[m, 1], c=q[m, 1], cmap="turbo", s=1.6,
                linewidths=0, marker=".")
     _frame(ax, np.stack([perp[m], q[m, 1], np.zeros(m.sum())], 1), title)
 
@@ -125,6 +127,19 @@ def main(d: str, out: str):
         V = (np.load(f"{d}/mesh_v.npy") - c0) @ B.T
         F = np.load(f"{d}/mesh_f.npy")
         VC = np.load(f"{d}/mesh_c.npy") / 255.0
+        # matplotlib draws every triangle as a Python-side polygon, so a 4.8M-triangle
+        # mesh takes ~10 minutes for a figure that resolves maybe 300k of them.
+        # DECIMATE, do not subsample: dropping random triangles leaves a scatter of
+        # disconnected facets, the surface stops being a surface, and the shading
+        # collapses to dark speckle. Quadric decimation keeps it watertight.
+        if len(F) > MAX_TRIS:
+            import open3d as o3d
+            m = o3d.geometry.TriangleMesh(
+                o3d.utility.Vector3dVector(V), o3d.utility.Vector3iVector(F))
+            m.vertex_colors = o3d.utility.Vector3dVector(VC)
+            m = m.simplify_quadric_decimation(MAX_TRIS)
+            V, F = np.asarray(m.vertices), np.asarray(m.triangles)
+            VC = np.asarray(m.vertex_colors)
 
     views = [(0, 90, "plan"), (30, 55, "oblique"), (75, 25, "low angle")]
     rows = 3 if have_mesh else 2
@@ -145,7 +160,7 @@ def main(d: str, out: str):
     horiz = q[:, [0, 2]]
     axis = np.linalg.svd(horiz[::13], full_matrices=False)[2][0]
     t = horiz @ axis
-    w = 0.015 * float(np.ptp(t))
+    w = 0.06 * float(np.ptp(t))   # thin slabs held too few points to read
     # Panel 1 of the bottom row is a height-coloured plan; a photo-coloured plan
     # cannot show whether two surfaces sit at plausible relative heights.
     a0 = ax[rows - 1][0]

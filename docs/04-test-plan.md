@@ -176,6 +176,40 @@ while dividing by the full frame area, so it could never exceed 0.60 and scored 
 horizon vista at 0.445 — under the then-current 0.75 threshold. The metric did not mean
 what its name said. Now whole-frame, with the threshold at 0.15.
 
+### 4.7 T-E2E-01 — video in, mesh out · RUN 2026-09-05 · PASS
+
+The first end-to-end run on real footage, from an H.264/VP9 file to a mesh, with no
+stage simulated.
+
+| Stage | Result |
+|---|---|
+| S1 ingest | 1,562 frames → 45 keyframes, 1 shot, 356 horizon + 529 sky/flare + 787 blur rejected |
+| S3 geometry | MapAnything Apache, 45 views jointly, Cloud Run 8 vCPU — **515 s, 11.4 s/view, 45/45 camera poses** |
+| S3 filter | 6,853,140 → 4,797,198 (conf ≥ 2.533) → 4,094,279 (SOR) → **951,052** (voxel 0.0357) |
+| S5 surface | 2,413,961 vertices, **4,850,697 triangles** (Poisson depth 10, 6% density trim) |
+| Viewer | 5.9 MB self-contained WebGL page, 160k triangles + 220k points |
+
+**Visual verification.** Lane markings, the vegetated bridge deck, the noise wall and
+the embankment lines are all legible in plan. The height-coloured plan puts the deck
+above both carriageways, which is the correct topology.
+
+**The hole under the deck is correct behaviour, not a defect (R-C7).** Confidence gate
+swept at 0 / 15 / 30 / 45 %: footprint fills 47.0 / — / 43.4 / 39.7 % of bbox cells and
+the hole is the same shape at every setting, including 0. It is the underpass, which a
+drone flying above never observes, and Poisson's density trim leaves it open rather
+than closing over unobserved space.
+
+**Defects this run exposed (all fixed):**
+
+| Defect | Why it mattered |
+|---|---|
+| SOR queried k=9 against the full cloud | 7M points ≈ 1 GB of distances and indices alone; would have thrashed or crashed. Tree and threshold now come from a 400k subsample, final test runs in slices |
+| Poisson normals oriented by an SVD axis | **The sign of a principal axis is arbitrary**, so half the time the surface is built inside out — and two-sided shading in both renderers hides it completely. `cameras.npy` was already being saved and never read |
+| Voxel sized to a constant 2.5 pts/cell | Occupancy depends on how many views see a patch; 45 keyframes over 52 s is far more than the 3 that constant was tuned on, so it left unmerged copies of the surface standing. Now sized from one view's grid spacing |
+| Model frame assumed gravity-aligned | It is not — its Y is the camera's down, and this is a steep oblique. The "plan" view was not a plan. Now rotated into the terrain's principal plane, sign fixed by the cameras |
+| Mesh subsampled by random triangle for display | Random triangles are not a surface; shading collapsed to dark speckle. Quadric decimation instead |
+| Confidence gate reported when the channel was constant | Would have printed "dropped 30%" for a gate that never fired. Now detected and reported as skipped |
+
 ## 5. The accuracy claim we are permitted to make
 
 This is written down so nobody is tempted to overstate it under deadline pressure.
