@@ -232,10 +232,16 @@ def static_overlay_mask(frames_small: list, std_thr: float = 3.0,
     """
     stack = np.stack([cv2.cvtColor(f, cv2.COLOR_BGR2GRAY).astype(np.float32)
                       for f in frames_small])
-    temporal_std = stack.std(axis=0)
-    mean_img = stack.mean(axis=0)
-    grad = cv2.Laplacian(mean_img, cv2.CV_32F)
-    return (temporal_std < std_thr) & (np.abs(grad) > grad_thr)
+    # Spread measured by INTERQUARTILE RANGE, not standard deviation. A title card
+    # that covers part of the frame for a fraction of the clip inflates the std
+    # wherever it overlaps, and that is enough to hide a genuinely permanent
+    # watermark underneath it - which is exactly what happened on a clip whose
+    # opening title sat over the creator's bug. A quartile spread ignores a
+    # disturbance present in under a quarter of the frames.
+    q25, q50, q75 = np.percentile(stack, [25, 50, 75], axis=0)
+    spread = q75 - q25
+    grad = cv2.Laplacian(q50.astype(np.float32), cv2.CV_32F)
+    return (spread < std_thr) & (np.abs(grad) > grad_thr)
 
 
 def overlay_crop_box(mask: np.ndarray, max_trim: float = 0.12) -> tuple:
@@ -326,7 +332,8 @@ class IngestResult:
 def ingest_video(path: str, *, target_keyframes: int = 600,
                  blur_reject_pct: float = 25.0, max_sky: float = 0.15,
                  horizon_policy: str = "reject", single_shot: bool = True,
-                 skip_start_s: float = 0.0, analyse_scale: float = 0.25,
+                 skip_start_s: float = 0.0, end_s: float | None = None,
+                 analyse_scale: float = 0.25,
                  min_flow_px: float = 1.0, srt_path: str | None = None,
                  progress: bool = True) -> IngestResult:
     """
@@ -352,12 +359,19 @@ def ingest_video(path: str, *, target_keyframes: int = 600,
     fps = float(stream.average_rate or 30.0)
     W, H = stream.codec_context.width, stream.codec_context.height
     skip_n = int(skip_start_s * fps)
+    # Ending early is a real lever, not a convenience. Keyframe budget is fixed by
+    # the time budget, so halving the covered ground doubles the view density over
+    # what remains - which is what resolves structure standing off the ground.
+    end_n = int(end_s * fps) if end_s else None
 
     scores, skies, slates, horiz, flows, kept_idx, thumbs, hists =         [], [], [], [], [], [], [], []
     prev_small = None
     n = 0
 
     for frame in container.decode(video=0):
+        if end_n is not None and n >= end_n:
+            n += 1
+            break
         img = frame.to_ndarray(format="bgr24")
         if n >= skip_n:
             small = cv2.resize(img, (int(W * analyse_scale), int(H * analyse_scale)))
@@ -488,13 +502,14 @@ if __name__ == "__main__":
     ap.add_argument("--out", default="out/keyframes")
     ap.add_argument("--n", type=int, default=24)
     ap.add_argument("--skip", type=float, default=0.0)
+    ap.add_argument("--end", type=float, default=None)
     ap.add_argument("--max-sky", type=float, default=0.15)
     ap.add_argument("--horizon", choices=["reject", "crop"], default="reject")
     a = ap.parse_args()
 
     print(f"S1 INGEST  {a.video}")
     r = ingest_video(a.video, target_keyframes=a.n, skip_start_s=a.skip,
-                     max_sky=a.max_sky, horizon_policy=a.horizon)
+                     end_s=a.end, max_sky=a.max_sky, horizon_policy=a.horizon)
     # Clear first. Keyframe filenames carry their source frame index, so a re-run
     # with different settings leaves the previous run's files behind and the next
     # stage silently reconstructs a mixture of both.
