@@ -1,9 +1,14 @@
 __pycache__/
 *.pyc
-data/raw/
-data/cache/
-*.mp4
-*.las
-*.laz
+.venv/
+venv/
+
+# Generated pipeline outputs - regenerable with: python src/pipeline/run_demo.py out/demo
+out/
+
+# Local viewer copies (produced by the pipeline)
 viewer/model.glb
 viewer/run_manifest.json
+
+data/raw/
+data/cache/
