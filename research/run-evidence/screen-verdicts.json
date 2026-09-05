@@ -1,0 +1,94 @@
+[
+  {
+    "file": "toolse.webm",
+    "resolution": "1920x1080",
+    "fps": 25.0,
+    "duration_s": 114.3,
+    "shots_detected": 4,
+    "longest_shot_s": 40.0,
+    "longest_shot_frac": 0.35,
+    "median_sky": 0.189,
+    "horizon_frac": 1.0,
+    "median_sharpness": 1230.0,
+    "static_overlay_px_frac": 0.0,
+    "overlay_crop": [
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    "verdict": "REJECT",
+    "reasons": [
+      "horizon in 100% of frames -> unbounded depth",
+      "median sky 19% -> too much frame carries no geometry"
+    ]
+  },
+  {
+    "file": "bahai.webm",
+    "resolution": "1920x1080",
+    "fps": 29.97,
+    "duration_s": 58.0,
+    "shots_detected": 8,
+    "longest_shot_s": 14.0,
+    "longest_shot_frac": 0.24,
+    "median_sky": 0.601,
+    "horizon_frac": 0.057,
+    "median_sharpness": 3433.0,
+    "static_overlay_px_frac": 0.0,
+    "overlay_crop": [
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    "verdict": "REJECT",
+    "reasons": [
+      "median sky 60% -> too much frame carries no geometry"
+    ]
+  },
+  {
+    "file": "kolu.webm",
+    "resolution": "1920x1080",
+    "fps": 29.97,
+    "duration_s": 52.1,
+    "shots_detected": 2,
+    "longest_shot_s": 51.8,
+    "longest_shot_frac": 0.99,
+    "median_sky": 0.11,
+    "horizon_frac": 0.227,
+    "median_sharpness": 3835.0,
+    "static_overlay_px_frac": 0.0,
+    "overlay_crop": [
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    "verdict": "ACCEPT",
+    "reasons": []
+  },
+  {
+    "file": "nicosia_1080p.mp4",
+    "resolution": "1920x1080",
+    "fps": 29.97,
+    "duration_s": 40.0,
+    "shots_detected": 2,
+    "longest_shot_s": 30.3,
+    "longest_shot_frac": 0.75,
+    "median_sky": 0.518,
+    "horizon_frac": 1.0,
+    "median_sharpness": 3233.0,
+    "static_overlay_px_frac": 0.00108,
+    "overlay_crop": [
+      0.047,
+      0,
+      0,
+      0
+    ],
+    "verdict": "REJECT",
+    "reasons": [
+      "horizon in 100% of frames -> unbounded depth",
+      "median sky 52% -> too much frame carries no geometry"
+    ]
+  }
+]

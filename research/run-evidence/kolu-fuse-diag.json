@@ -1,0 +1,6 @@
+{
+ "conf_available": true,
+ "voxel": 0.03569287061691284,
+ "voxel_source": "one view's grid spacing",
+ "nn1": 0.026770510927525477
+}
