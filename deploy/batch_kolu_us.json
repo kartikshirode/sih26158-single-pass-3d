@@ -1,0 +1,29 @@
+{
+  "taskGroups": [{
+    "taskCount": 1,
+    "taskSpec": {
+      "runnables": [{
+        "container": {
+          "imageUri": "asia-south1-docker.pkg.dev/agentbillboard/sih26158/mapanything:v2"
+        },
+        "environment": { "variables": {
+          "BUCKET": "sih26158-mumbai",
+          "IN_PREFIX": "mapanything/kolu_input",
+          "OUT_PREFIX": "mapanything/kolu_out",
+          "MAX_VIEWS": "45",
+          "OMP_NUM_THREADS": "16",
+          "MKL_NUM_THREADS": "16"
+        }}
+      }],
+      "computeResource": { "cpuMilli": "16000", "memoryMib": "126000" },
+      "maxRunDuration": "5400s",
+      "maxRetryCount": 1
+    }
+  }],
+  "allocationPolicy": {
+    "instances": [{
+      "policy": { "machineType": "n2-highmem-16", "provisioningModel": "STANDARD" }
+    }]
+  },
+  "logsPolicy": { "destination": "CLOUD_LOGGING" }
+}

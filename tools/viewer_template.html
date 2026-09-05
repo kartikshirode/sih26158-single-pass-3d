@@ -1,0 +1,343 @@
+<title>Kolu Overpass Reconstruction</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+:root{
+  --ground:#0b0e10; --panel:#12161a; --panel-2:#171c21; --line:#232b31;
+  --ink:#e3e8ea; --ink-2:#a9b4ba; --muted:#78848b;
+  --amber:#e3a13c; --teal:#4fb8a0;
+  --mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+  --sans:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--ground);color:var(--ink);font-family:var(--sans);
+     height:100vh;overflow:hidden}
+#stage{position:fixed;inset:0 0 0 308px}
+canvas{display:block;width:100%;height:100%;cursor:grab;background:var(--ground)}
+canvas.drag{cursor:grabbing}
+
+.rail{position:fixed;top:0;left:0;bottom:0;width:308px;background:var(--panel);
+      border-right:1px solid var(--line);padding:22px 20px;overflow-y:auto;
+      display:flex;flex-direction:column;gap:20px;z-index:2}
+.eyebrow{font-family:var(--mono);font-size:10.5px;letter-spacing:.13em;
+         text-transform:uppercase;color:var(--muted)}
+h1{font-size:19px;line-height:1.25;margin:6px 0 0;font-weight:600;text-wrap:balance}
+.sub{font-size:12.5px;line-height:1.55;color:var(--ink-2);margin:8px 0 0}
+
+.block{border-top:1px solid var(--line);padding-top:15px}
+.block h2{font-family:var(--mono);font-size:10.5px;letter-spacing:.13em;
+          text-transform:uppercase;color:var(--muted);margin:0 0 11px;font-weight:500}
+
+.funnel{display:flex;flex-direction:column;gap:2px}
+.step{display:grid;grid-template-columns:1fr auto;align-items:baseline;gap:10px;
+      padding:5px 8px;background:var(--panel-2);position:relative;overflow:hidden}
+.step .bar{position:absolute;inset:0 auto 0 0;background:rgba(227,161,60,.14)}
+.step .k,.step .v{position:relative}
+.step .k{font-size:11.5px;color:var(--ink-2)}
+.step .v{font-family:var(--mono);font-size:11.5px;font-variant-numeric:tabular-nums;
+         color:var(--ink)}
+.step.final .v{color:var(--amber);font-weight:600}
+.step.skip .v{color:var(--muted);font-style:italic}
+
+.kv{display:grid;grid-template-columns:1fr auto;gap:5px 10px;font-size:11.5px;margin:0}
+.kv dt{color:var(--muted)}
+.kv dd{margin:0;font-family:var(--mono);font-variant-numeric:tabular-nums;
+       text-align:right;color:var(--ink-2)}
+
+.note{font-size:11.5px;line-height:1.6;color:var(--muted);border-left:2px solid var(--line);
+      padding-left:11px;margin:0}
+.note b{color:var(--ink-2);font-weight:500}
+
+.dock{position:fixed;left:328px;bottom:20px;display:flex;gap:7px;flex-wrap:wrap;
+      align-items:center;z-index:2}
+button{font-family:var(--mono);font-size:11px;letter-spacing:.04em;color:var(--ink-2);
+       background:rgba(18,22,26,.92);border:1px solid var(--line);border-radius:3px;
+       padding:7px 12px;cursor:pointer;transition:border-color .14s,color .14s}
+button:hover{border-color:#3a444b;color:var(--ink)}
+button[aria-pressed="true"]{border-color:var(--amber);color:var(--amber)}
+button:focus-visible{outline:2px solid var(--teal);outline-offset:2px}
+.sep{width:1px;height:20px;background:var(--line);margin:0 4px}
+
+.hud{position:fixed;right:20px;top:20px;font-family:var(--mono);font-size:10.5px;
+     color:var(--muted);text-align:right;line-height:1.7;
+     font-variant-numeric:tabular-nums;z-index:2}
+
+@media (max-width:900px){
+  body{overflow:auto;height:auto}
+  .rail{position:static;width:auto;height:auto;border-right:0;
+        border-bottom:1px solid var(--line)}
+  #stage{position:relative;inset:auto;height:62vh}
+  .dock{position:static;padding:14px 20px}
+  .hud{display:none}
+}
+@media (prefers-reduced-motion:reduce){button{transition:none}}
+</style>
+
+<aside class="rail">
+  <header>
+    <div class="eyebrow">SIH26158 &middot; NTRO</div>
+    <h1>Kolu wildlife overpass</h1>
+    <p class="sub">Single-pass drone video to 3D. 52 s of continuous CC0 flight at
+      1920&times;1080, no ground control points, no GPS.</p>
+  </header>
+
+  <section class="block">
+    <h2>Ingest &middot; S1</h2>
+    <dl class="kv" id="ingest"></dl>
+  </section>
+
+  <section class="block">
+    <h2>Reconstruction funnel</h2>
+    <div class="funnel" id="funnel"></div>
+  </section>
+
+  <section class="block">
+    <h2>Geometry</h2>
+    <dl class="kv" id="geom"></dl>
+  </section>
+
+  <section class="block">
+    <p class="note" id="caveat"></p>
+  </section>
+</aside>
+
+<div id="stage"><canvas id="gl"></canvas></div>
+
+<div class="dock">
+  <button id="bMesh" aria-pressed="true">mesh</button>
+  <button id="bPts" aria-pressed="false">points</button>
+  <button id="bWire" aria-pressed="false">wireframe</button>
+  <span class="sep"></span>
+  <button data-view="plan">plan</button>
+  <button data-view="oblique">oblique</button>
+  <button data-view="low">low angle</button>
+  <button data-view="along">along track</button>
+</div>
+
+<div class="hud" id="hud"></div>
+
+<script>
+const D = __DATA__, S = __STATS__;
+const un = s => { const b = atob(s), u = new Uint8Array(b.length);
+  for (let i=0;i<b.length;i++) u[i]=b.charCodeAt(i); return u; };
+
+const VP = new Int16Array(un(D.vpos).buffer), VC = un(D.vcol);
+const IX = new Uint32Array(un(D.idx).buffer);
+const PP = new Int16Array(un(D.ppos).buffer), PC = un(D.pcol);
+
+// Vertex normals by accumulating face normals. Cheaper to derive here than to ship
+// a third attribute, and the mesh is decimated to a size where it costs nothing.
+const NR = new Float32Array(VP.length);
+for (let t = 0; t < IX.length; t += 3) {
+  const i0=IX[t]*3, i1=IX[t+1]*3, i2=IX[t+2]*3;
+  const ux=VP[i1]-VP[i0], uy=VP[i1+1]-VP[i0+1], uz=VP[i1+2]-VP[i0+2];
+  const vx=VP[i2]-VP[i0], vy=VP[i2+1]-VP[i0+1], vz=VP[i2+2]-VP[i0+2];
+  const nx=uy*vz-uz*vy, ny=uz*vx-ux*vz, nz=ux*vy-uy*vx;
+  NR[i0]+=nx; NR[i0+1]+=ny; NR[i0+2]+=nz;
+  NR[i1]+=nx; NR[i1+1]+=ny; NR[i1+2]+=nz;
+  NR[i2]+=nx; NR[i2+1]+=ny; NR[i2+2]+=nz;
+}
+for (let i=0;i<NR.length;i+=3){
+  const L=Math.hypot(NR[i],NR[i+1],NR[i+2])||1;
+  NR[i]/=L; NR[i+1]/=L; NR[i+2]/=L;
+}
+
+const cv = document.getElementById('gl');
+const gl = cv.getContext('webgl2', {antialias:true, alpha:false});
+
+function prog(vs, fs){
+  const c=(t,s)=>{const o=gl.createShader(t);gl.shaderSource(o,s);gl.compileShader(o);
+    if(!gl.getShaderParameter(o,gl.COMPILE_STATUS))console.error(gl.getShaderInfoLog(o));
+    return o;};
+  const p=gl.createProgram();
+  gl.attachShader(p,c(gl.VERTEX_SHADER,vs));
+  gl.attachShader(p,c(gl.FRAGMENT_SHADER,fs));
+  gl.linkProgram(p); return p;
+}
+
+const VS_M = [
+'#version 300 es',
+'in vec3 aPos; in vec3 aCol; in vec3 aNrm;',
+'uniform mat4 uMVP;',
+'out vec3 vCol; out vec3 vN;',
+'void main(){ vCol=aCol; vN=aNrm; gl_Position=uMVP*vec4(aPos,1.0); }'
+].join('\n');
+
+const FS_M = [
+'#version 300 es',
+'precision highp float;',
+'in vec3 vCol; in vec3 vN; out vec4 o;',
+'uniform vec3 uLight; uniform float uWire;',
+'void main(){',
+// Ambient floor, then TWO-SIDED diffuse. Poisson output carries inconsistent
+// winding along trimmed borders, and one-sided lighting turns those patches black.
+'  float d = 0.40 + 0.60*abs(dot(normalize(vN), normalize(uLight)));',
+'  vec3 c = mix(vCol*d, vec3(0.89,0.63,0.24), uWire);',
+'  o = vec4(c, 1.0);',
+'}'
+].join('\n');
+
+const VS_P = [
+'#version 300 es',
+'in vec3 aPos; in vec3 aCol; uniform mat4 uMVP; uniform float uSize;',
+'out vec3 vCol;',
+'void main(){ vCol=aCol; gl_Position=uMVP*vec4(aPos,1.0); gl_PointSize=uSize; }'
+].join('\n');
+
+const FS_P = [
+'#version 300 es',
+'precision highp float; in vec3 vCol; out vec4 o;',
+'void main(){ o=vec4(vCol,1.0); }'
+].join('\n');
+
+const pM = prog(VS_M, FS_M), pP = prog(VS_P, FS_P);
+
+function buf(data, target){
+  const t = target || gl.ARRAY_BUFFER, b = gl.createBuffer();
+  gl.bindBuffer(t, b); gl.bufferData(t, data, gl.STATIC_DRAW); return b;
+}
+const bVP=buf(VP), bVC=buf(VC), bNR=buf(NR), bPP=buf(PP), bPC=buf(PC);
+const bIX=buf(IX, gl.ELEMENT_ARRAY_BUFFER);
+
+// Wireframe wants edges, not triangles. Built once, de-duplicated.
+const EDGE = (function(){
+  const seen = new Set(), out = [];
+  for (let t=0;t<IX.length;t+=3){
+    const v=[IX[t],IX[t+1],IX[t+2]];
+    for (let k=0;k<3;k++){
+      const a=v[k], b=v[(k+1)%3];
+      const key = a<b ? a+':'+b : b+':'+a;
+      if(!seen.has(key)){ seen.add(key); out.push(a,b); }
+    }
+  }
+  return new Uint32Array(out);
+})();
+const bEG = buf(EDGE, gl.ELEMENT_ARRAY_BUFFER);
+
+const vaoM = gl.createVertexArray(), vaoP = gl.createVertexArray();
+function bindVao(vao, p, pos, col, nrm){
+  gl.bindVertexArray(vao);
+  const at=(n,b,size,type,norm)=>{ const l=gl.getAttribLocation(p,n); if(l<0)return;
+    gl.bindBuffer(gl.ARRAY_BUFFER,b); gl.enableVertexAttribArray(l);
+    gl.vertexAttribPointer(l,size,type,norm,0,0); };
+  at('aPos',pos,3,gl.SHORT,true);
+  at('aCol',col,3,gl.UNSIGNED_BYTE,true);
+  if(nrm) at('aNrm',nrm,3,gl.FLOAT,false);
+  gl.bindVertexArray(null);
+}
+bindVao(vaoM,pM,bVP,bVC,bNR); bindVao(vaoP,pP,bPP,bPC,null);
+
+// ---- camera -----------------------------------------------------------------
+let az=0.55, el=0.80, dist=2.6, panx=0, pany=0;
+const PRESETS = {plan:[0,1.5605,2.30], oblique:[0.55,0.80,2.60],
+                 low:[1.25,0.26,2.50], along:[1.5705,0.50,2.40]};
+let target=null;
+
+const mul=(a,b)=>{const o=new Float32Array(16);
+  for(let i=0;i<4;i++)for(let j=0;j<4;j++){let s=0;
+    for(let k=0;k<4;k++)s+=a[k*4+j]*b[i*4+k]; o[i*4+j]=s;} return o;};
+const persp=(f,ar,n,fa)=>{const t=1/Math.tan(f/2);return new Float32Array(
+  [t/ar,0,0,0, 0,t,0,0, 0,0,(fa+n)/(n-fa),-1, 0,0,2*fa*n/(n-fa),0]);};
+const look=(e,c,u)=>{
+  const nz=v=>{const L=Math.hypot(v[0],v[1],v[2])||1;return[v[0]/L,v[1]/L,v[2]/L];};
+  const cr=(a,b)=>[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]];
+  const dt=(a,b)=>a[0]*b[0]+a[1]*b[1]+a[2]*b[2];
+  const f=nz([c[0]-e[0],c[1]-e[1],c[2]-e[2]]), r=nz(cr(f,u)), v=cr(r,f);
+  return new Float32Array([r[0],v[0],-f[0],0, r[1],v[1],-f[1],0, r[2],v[2],-f[2],0,
+    -dt(r,e),-dt(v,e),dt(f,e),1]);};
+
+let showMesh=true, showPts=false, wire=false;
+const uM = {mvp:gl.getUniformLocation(pM,'uMVP'), light:gl.getUniformLocation(pM,'uLight'),
+            wire:gl.getUniformLocation(pM,'uWire')};
+const uP = {mvp:gl.getUniformLocation(pP,'uMVP'), size:gl.getUniformLocation(pP,'uSize')};
+
+function draw(){
+  if (target){
+    az += (target[0]-az)*0.16; el += (target[1]-el)*0.16; dist += (target[2]-dist)*0.16;
+    if (Math.abs(target[0]-az)+Math.abs(target[1]-el)+Math.abs(target[2]-dist) < 2e-3)
+      target=null;
+  }
+  const dpr = Math.min(window.devicePixelRatio||1, 2);
+  const w = Math.max(1, cv.clientWidth*dpr|0), h = Math.max(1, cv.clientHeight*dpr|0);
+  if (cv.width!==w||cv.height!==h){ cv.width=w; cv.height=h; }
+  gl.viewport(0,0,w,h);
+  gl.clearColor(0.043,0.055,0.063,1);
+  gl.enable(gl.DEPTH_TEST);
+  gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
+
+  const eye=[Math.cos(el)*Math.sin(az)*dist+panx, Math.sin(el)*dist+pany,
+             Math.cos(el)*Math.cos(az)*dist];
+  const mvp = mul(persp(0.85, w/h, 0.02, 60), look(eye,[panx,pany,0],[0,1,0]));
+
+  if (showMesh){
+    gl.useProgram(pM); gl.bindVertexArray(vaoM);
+    gl.uniformMatrix4fv(uM.mvp,false,mvp);
+    gl.uniform3f(uM.light, 0.36,0.78,0.51);
+    gl.uniform1f(uM.wire, 0);
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,bIX);
+    gl.drawElements(gl.TRIANGLES, IX.length, gl.UNSIGNED_INT, 0);
+    if (wire){
+      gl.uniform1f(uM.wire, 1);
+      gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,bEG);
+      gl.drawElements(gl.LINES, EDGE.length, gl.UNSIGNED_INT, 0);
+    }
+  }
+  if (showPts){
+    gl.useProgram(pP); gl.bindVertexArray(vaoP);
+    gl.uniformMatrix4fv(uP.mvp,false,mvp);
+    gl.uniform1f(uP.size, Math.max(1.0, 1.7*dpr));
+    gl.drawArrays(gl.POINTS, 0, PP.length/3);
+  }
+  gl.bindVertexArray(null);
+
+  document.getElementById('hud').textContent =
+    'az ' + (az*57.2958).toFixed(0) + '°   el ' + (el*57.2958).toFixed(0) + '°   ' +
+    (showMesh ? D.nt.toLocaleString()+' tri' : '') +
+    (showMesh && showPts ? '  +  ' : '') +
+    (showPts ? D.np.toLocaleString()+' pts' : '');
+  requestAnimationFrame(draw);
+}
+
+// ---- interaction ------------------------------------------------------------
+let down=false, lx=0, ly=0, panning=false;
+cv.addEventListener('pointerdown',e=>{down=true;panning=e.shiftKey||e.button===2;
+  lx=e.clientX;ly=e.clientY;cv.classList.add('drag');
+  cv.setPointerCapture(e.pointerId);target=null;});
+cv.addEventListener('pointerup',()=>{down=false;cv.classList.remove('drag');});
+cv.addEventListener('pointermove',e=>{
+  if(!down)return;
+  const dx=e.clientX-lx, dy=e.clientY-ly; lx=e.clientX; ly=e.clientY;
+  if(panning){ panx-=dx*0.0022*dist; pany+=dy*0.0022*dist; }
+  else { az-=dx*0.0062; el=Math.max(-1.52,Math.min(1.52, el+dy*0.0062)); }
+});
+cv.addEventListener('contextmenu',e=>e.preventDefault());
+cv.addEventListener('wheel',e=>{e.preventDefault();
+  dist=Math.max(0.35,Math.min(9, dist*(1+Math.sign(e.deltaY)*0.09)));
+  target=null;},{passive:false});
+
+function toggle(id,fn){const b=document.getElementById(id);
+  b.onclick=()=>{const v=b.getAttribute('aria-pressed')!=='true';
+    b.setAttribute('aria-pressed',String(v));fn(v);};}
+toggle('bMesh',v=>showMesh=v); toggle('bPts',v=>showPts=v); toggle('bWire',v=>wire=v);
+document.querySelectorAll('[data-view]').forEach(b=>{
+  b.onclick=()=>{ target=PRESETS[b.dataset.view].slice(); };});
+
+// ---- rail -------------------------------------------------------------------
+const num = n => typeof n==='number' ? n.toLocaleString() : n;
+const fill = (el, rows) => el.innerHTML = (rows||[]).map(r =>
+  '<dt>'+r[0]+'</dt><dd>'+r[1]+'</dd>').join('');
+
+fill(document.getElementById('ingest'), S.ingest);
+fill(document.getElementById('geom'),   S.geom);
+
+const FN = S.funnel || [];
+const topN = FN.length ? FN[0][1] : 1;
+document.getElementById('funnel').innerHTML = FN.map((r,i)=>{
+  const w = typeof r[1]==='number' ? Math.max(2, 100*r[1]/topN) : 100;
+  return '<div class="step '+(r[2]||'')+(i===FN.length-1?' final':'')+'">'+
+    '<span class="bar" style="width:'+w+'%"></span>'+
+    '<span class="k">'+r[0]+'</span><span class="v">'+num(r[1])+'</span></div>';
+}).join('');
+document.getElementById('caveat').innerHTML = S.caveat || '';
+
+draw();
+</script>
