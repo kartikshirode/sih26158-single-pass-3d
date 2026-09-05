@@ -113,9 +113,23 @@ def is_slate(bgr_small: np.ndarray, dark_thr: float = 42.0,
 
 
 def sky_mask(bgr_small: np.ndarray) -> np.ndarray:
-    """Bright, low-saturation pixels - sky, haze, and blown-out cloud."""
+    """
+    Sky: bright, low-saturation, AND connected to the top edge of the frame.
+
+    The connectivity term is not cosmetic. Brightness-and-saturation alone calls
+    pale arid ground sky - graded desert fill has exactly the signature, high value
+    and low saturation - so a near-nadir view of a construction site in Arizona
+    scored 23% "sky" with no sky in the frame at all, and the admission gate threw
+    it out. Real sky is one region touching the top edge; bright ground below a
+    horizon is not.
+    """
     hsv = cv2.cvtColor(bgr_small, cv2.COLOR_BGR2HSV)
-    return (hsv[..., 1] < 70) & (hsv[..., 2] > 120)
+    raw = ((hsv[..., 1] < 70) & (hsv[..., 2] > 120)).astype(np.uint8)
+    if not raw[0].any():
+        return np.zeros(raw.shape, bool)
+    n, lab = cv2.connectedComponents(raw, connectivity=8)
+    top = np.unique(lab[0][raw[0] > 0])
+    return np.isin(lab, top[top > 0])
 
 
 def sky_fraction(bgr_small: np.ndarray) -> float:
@@ -159,6 +173,44 @@ def horizon_present(bgr_small: np.ndarray, min_sky: float = 0.06) -> bool:
     rows = m.mean(axis=1)
     spanning = rows > 0.80
     return bool(spanning[: int(h * 0.75)].any())
+
+
+def horizon_row(bgr_small: np.ndarray, purity: float = 0.70) -> int | None:
+    """
+    Deepest row such that everything above it is still mostly sky, or None.
+
+    Defined by CUMULATIVE coverage rather than by finding a row that is itself
+    almost entirely sky. A real skyline is ragged - mountains, buildings, trees -
+    so no single row near it is uniformly sky, and a per-row test locks onto the
+    top of the ragged band instead of the bottom. What the caller actually wants is
+    "how far down can I cut and still be removing mostly sky", which is exactly the
+    cumulative measure.
+    """
+    m = sky_mask(bgr_small)
+    h = m.shape[0]
+    cum = np.cumsum(m.mean(axis=1)) / np.arange(1, h + 1)
+    good = np.flatnonzero(cum >= purity)
+    if len(good) == 0:
+        return None
+    r = int(good[-1])
+    return r if r >= h * 0.03 else None
+
+
+def horizon_crop_fraction(frames_small: list, margin: float = 0.04) -> float:
+    """
+    Fraction of frame height to trim from the TOP, across a whole clip.
+
+    Taken as a high percentile of the per-frame horizon row rather than the mean: the
+    camera pitches during a flight, and a crop chosen at the average leaves sky in
+    every frame where the nose came up. A margin below the skyline also removes the
+    haze band, which carries texture but no usable depth.
+    """
+    rows = [horizon_row(f) for f in frames_small]
+    rows = [r for r in rows if r is not None]
+    if not rows:
+        return 0.0
+    h = frames_small[0].shape[0]
+    return float(min(np.percentile(rows, 85) / h + margin, 0.75))
 
 
 def static_overlay_mask(frames_small: list, std_thr: float = 3.0,
@@ -273,7 +325,7 @@ class IngestResult:
 
 def ingest_video(path: str, *, target_keyframes: int = 600,
                  blur_reject_pct: float = 25.0, max_sky: float = 0.15,
-                 reject_horizon: bool = True, single_shot: bool = True,
+                 horizon_policy: str = "reject", single_shot: bool = True,
                  skip_start_s: float = 0.0, analyse_scale: float = 0.25,
                  min_flow_px: float = 1.0, srt_path: str | None = None,
                  progress: bool = True) -> IngestResult:
@@ -286,7 +338,8 @@ def ingest_video(path: str, *, target_keyframes: int = 600,
 
       0. segment into shots and keep only the longest continuous one   (single_shot)
       1. locate and crop any burned-in overlay
-      2. drop frames with a horizon in view - unbounded depth          (reject_horizon)
+      2. handle the horizon: reject those frames, or CROP below the skyline
+         and keep the near field                                        (horizon_policy)
       3. drop frames that are mostly sky or blown out by flare         (max_sky)
       4. drop the blurriest `blur_reject_pct` (percentile, not a constant)
       5. require accumulated optical flow between consecutive keyframes, so each
@@ -346,13 +399,30 @@ def ingest_video(path: str, *, target_keyframes: int = 600,
 
     # 1. BURNED-IN OVERLAY - static in image space across every view, so a matcher
     #    reads it as zero-parallax geometry. Located on the retained shot only.
-    sub = [thumbs[i] for i in np.flatnonzero(in_shot)[:80]]
-    ov_small = static_overlay_mask([cv2.resize(f, (480, 270)) for f in sub])
-    crop = overlay_crop_box(ov_small)
+    # Sample ACROSS the shot, not its first 80 frames. A drone pitches during a
+    # flight, so a horizon estimated from the opening seconds under-crops the rest;
+    # and a title card burned over the opening frames moves, which hides a genuinely
+    # static watermark from the temporal-variance test.
+    _all = np.flatnonzero(in_shot)
+    idx_shot = _all[np.linspace(0, len(_all) - 1, min(90, len(_all))).astype(int)]
+    ar = H / W
+    sub = [cv2.resize(thumbs[i], (480, int(480 * ar))) for i in idx_shot]
+    crop = overlay_crop_box(static_overlay_mask(sub))
 
     ok = in_shot.copy()
-    if reject_horizon:
-        ok &= ~horiz                                   # 2. unbounded depth
+    if horizon_policy == "reject":
+        ok &= ~horiz                                   # 2a. unbounded depth
+    elif horizon_policy == "crop":
+        # 2b. keep the frames, remove the far field. Compose with any overlay crop.
+        ht = horizon_crop_fraction(sub)
+        crop = (max(crop[0], ht), crop[1], crop[2], crop[3])
+        # Re-score sky and blur on the CROPPED frame - the uncropped numbers describe
+        # an image we are no longer using, and the sky gate would reject everything.
+        for j in np.flatnonzero(in_shot):
+            c = apply_crop(cv2.resize(thumbs[j], (int(W * analyse_scale),
+                                                  int(H * analyse_scale))), crop)
+            skies[j] = sky_fraction(c)
+            scores[j] = sharpness(cv2.cvtColor(c, cv2.COLOR_BGR2GRAY))
     ok &= skies <= max_sky                             # 3. sky / flare washout
     ok &= ~slates
     blur_thr = np.percentile(scores[ok], blur_reject_pct) if ok.any() else 0.0
@@ -394,7 +464,9 @@ def ingest_video(path: str, *, target_keyframes: int = 600,
         "keyframes_selected": int(len(selected)),
         "reduction": f"{n}:{len(selected)}",
         "rejected_other_shots": int((~in_shot).sum()),
-        "rejected_horizon": int((horiz & in_shot).sum()),
+        "horizon_policy": horizon_policy,
+        "horizon_in_frame": int((horiz & in_shot).sum()),
+        "rejected_horizon": int((horiz & in_shot).sum()) if horizon_policy == "reject" else 0,
         "rejected_sky": int((skies > max_sky).sum()),
         "rejected_slate": int(slates.sum()),
         "blur_threshold_varlap": round(float(blur_thr), 1),
@@ -416,12 +488,20 @@ if __name__ == "__main__":
     ap.add_argument("--out", default="out/keyframes")
     ap.add_argument("--n", type=int, default=24)
     ap.add_argument("--skip", type=float, default=0.0)
-    ap.add_argument("--max-sky", type=float, default=0.75)
+    ap.add_argument("--max-sky", type=float, default=0.15)
+    ap.add_argument("--horizon", choices=["reject", "crop"], default="reject")
     a = ap.parse_args()
 
     print(f"S1 INGEST  {a.video}")
     r = ingest_video(a.video, target_keyframes=a.n, skip_start_s=a.skip,
-                     max_sky=a.max_sky)
+                     max_sky=a.max_sky, horizon_policy=a.horizon)
+    # Clear first. Keyframe filenames carry their source frame index, so a re-run
+    # with different settings leaves the previous run's files behind and the next
+    # stage silently reconstructs a mixture of both.
+    if os.path.isdir(a.out):
+        for f in os.listdir(a.out):
+            if f.startswith("kf_") and f.endswith(".jpg"):
+                os.remove(os.path.join(a.out, f))
     os.makedirs(a.out, exist_ok=True)
     for i, (fi, img) in enumerate(zip(r.keyframe_indices, r.frames)):
         cv2.imwrite(os.path.join(a.out, f"kf_{i:03d}_f{fi:05d}.jpg"), img,

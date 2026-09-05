@@ -11,8 +11,11 @@ import subprocess
 import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-RAW = os.path.join(ROOT, "out", "kolu_raw")
-OUT = os.path.join(ROOT, "out", "kolu3d")
+NAME = os.environ.get("RUN", "kolu")
+GCS = os.environ.get("GCS_PREFIX", "mapanything/kolu_out")
+KF = os.environ.get("KF_DIR", "kf_kolu")
+RAW = os.path.join(ROOT, "out", f"{NAME}_raw")
+OUT = os.path.join(ROOT, "out", f"{NAME}3d")
 PY311 = r"C:\Users\Mandar\AppData\Local\Programs\Python\Python311\python.exe"
 
 
@@ -31,8 +34,8 @@ def main():
     os.makedirs(RAW, exist_ok=True)
     if not os.path.exists(os.path.join(RAW, "points.npy")):
         # gsutil on Windows is a .cmd shim, so it needs a shell to resolve.
-        subprocess.run("gsutil -m cp gs://sih26158-mumbai/mapanything/kolu_out/* "
-                       + RAW, shell=True, check=True)
+        subprocess.run(f"gsutil -m cp gs://sih26158-mumbai/{GCS}/* " + RAW,
+                       shell=True, check=True)
 
     res = json.load(open(os.path.join(RAW, "mapanything_result.json")))
     print("\nmodel run:")
@@ -60,12 +63,13 @@ def main():
                 return line.split()[-1]
         return None
 
-    ing = json.load(open(os.path.join(ROOT, "out", "kf_kolu", "ingest.json")))["stats"]
+    ing = json.load(open(os.path.join(ROOT, "out", KF, "ingest.json")))["stats"]
     stats = {
         "ingest": [
             ["frames decoded", f"{ing['frames_decoded']:,}"],
             ["shots detected", str(ing["shots_detected"])],
-            ["rejected: horizon", f"{ing['rejected_horizon']:,}"],
+            (["horizon", "cropped, not rejected"] if ing.get("horizon_policy") == "crop"
+             else ["rejected: horizon", f"{ing['rejected_horizon']:,}"]),
             ["rejected: sky / flare", f"{ing['rejected_sky']:,}"],
             ["rejected: motion blur", f"{ing['rejected_blur']:,}"],
             ["keyframes", str(ing["keyframes_selected"])],
