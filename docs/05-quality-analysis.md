@@ -209,3 +209,109 @@ detail, costs a container rebuild and two Cloud Run stages).
 Reproduce: `src/analysis/spectrum2.py` (section 1), `src/analysis/spectrum3.py` (section 1a),
 `src/analysis/qual.py` (section 4),
 `src/analysis/scale2.py` (section 6).
+
+---
+
+## 8. The rebuild, measured (2026-09-05)
+
+Sections 1-7 were the diagnosis. This is what happened when the MVS stage was built
+and run on the same 42 keyframes. Same poses, same clip, same renderer - the only
+change is where the geometry comes from.
+
+Job `sih26158-mvs-g5fjx`, asia-south1, 8 vCPU, **18 min 03 s wall clock**, CPU only:
+
+| stage | seconds |
+|---|---:|
+| feature_extractor | 14.9 |
+| exhaustive_matcher (861 pairs) | 104.1 |
+| point_triangulator | 8.5 |
+| bundle_adjuster | 27.0 |
+| image_undistorter | 1.7 |
+| InterfaceCOLMAP | 0.3 |
+| **DensifyPointCloud** (full 1080x1250) | **876.6** |
+| ReconstructMesh | 38.7 |
+| TextureMesh | failed, rc=1 |
+
+### The seed was sound, and bundle adjustment mattered
+
+All **42 of 42 images registered**, 40,111 points, 244,549 observations, mean track
+length 6.10. Mean reprojection error **1.525 px after triangulation, 0.414 px after
+bundle adjustment** - a 3.7x improvement.
+
+Both halves of that matter. 1.5 px on the first pass says the intrinsics fitted from
+the point maps and the recovered crop geometry were right; had either been wrong the
+error would have been tens of pixels, or frames would have dropped. And the 3.7x
+improvement is the direct measurement of section 5 lever 3: the feed-forward poses
+really did carry error, and densifying before correcting it would have reprojected
+that error into a sharper-looking wrong surface.
+
+### The patch floor is gone
+
+Plane fitted in a ball of radius r, median |residual|:
+
+| radius | MapAnything | OpenMVS | ratio |
+|---:|---:|---:|---:|
+| 3 cm | *too sparse* | **0.187 cm** | - |
+| 6 cm | 1.288 cm | **0.353 cm** | 3.6x |
+| 12 cm | 1.944 cm | **0.624 cm** | 3.1x |
+| 25 cm | 2.344 cm | **1.121 cm** | 2.1x |
+| 50 cm | 2.634 cm | 2.031 cm | 1.3x |
+| 100 cm | 3.340 cm | 3.217 cm | 1.04x |
+
+Read the shape, not the rows. **At 1 m the two agree to 4%** - they should, MVS
+inherited MapAnything's poses, so the metre-scale shape is the same reconstruction.
+The whole difference is at small scale, which is exactly where the diagnosis said the
+information was missing.
+
+MapAnything's residual grows only 2.6x while the radius grows 16x: it flattens into a
+floor at ~1.3 cm, the signature of a surface with no structure below that scale, and
+the 3 cm ball cannot even be populated because the fused cloud is voxelised at 3.4 cm.
+OpenMVS grows a consistent **~1.8x per doubling** across the whole range and keeps
+resolving down to 1.9 mm at 3 cm. That is a self-affine surface - real structure at
+every scale - rather than an interpolant with a noise floor.
+
+### Buildings have walls now
+
+The test that noise cannot fake, since noise is isotropic and buildings are not:
+
+| | MapAnything | OpenMVS |
+|---|---:|---:|
+| relief p99 | 0.89 m | **1.36 m** |
+| relief p99.9 | 1.02 m | **2.51 m** |
+| relief max | 1.32 m | **3.01 m** |
+| above 1.0 m | 0.135% | **1.596%** |
+| above 1.5 m | **0.000%** | **0.902%** |
+| above 2.5 m | 0.000% | **0.103%** |
+
+The feed-forward result had *zero* points more than 1.5 m above local ground against
+structures visibly 3-4 m tall - buildings as paint on a sheet. MVS puts them at 3.01 m
+with 0.9% of the cloud above 1.5 m. In the render the plan view now resolves interior
+walls dividing rooms inside the large structure, and the 40% section shows a raised
+roof profile standing off the ground.
+
+### What it cost: completeness
+
+MVS is honest about what it cannot see, where the feed-forward model interpolated
+smoothly over it. Planimetric occupancy on a shared 20 cm grid:
+
+| | cells | area |
+|---|---:|---:|
+| MapAnything | 6,528 | 261.1 m^2 |
+| OpenMVS | 5,429 | 217.2 m^2 |
+
+MVS covers **69.6%** of the cells MapAnything filled and adds 887 cells of its own,
+for 83% of the occupied area. The visible black holes in the render are shadow and
+textureless dirt where photometric matching found no geometric consistency across
+three views. That is a real regression against the PS's completeness weighting (20
+marks) and it is the honest trade for the accuracy weighting (30 marks): the surface
+that remains is measured rather than interpolated. `--number-views-fuse 2` and
+`RefineMesh` are the levers to claw coverage back, neither tried yet.
+
+### Still open
+
+- `TextureMesh` fails in 0.2 s (rc=1). Non-fatal - the finish stage colours mesh
+  vertices from the nearest dense point - but the textured export is not produced.
+- Absolute accuracy remains unmeasurable on this clip: no GNSS, so the <=1 m target
+  cannot be scored, and the metre labels still rest on the model's own
+  `metric_scaling_factor` (section 2 caveat stands).
+- The gravity vector defect in section 6 is untouched.

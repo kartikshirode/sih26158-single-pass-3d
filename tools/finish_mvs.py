@@ -102,6 +102,10 @@ def main():
         np.save(f"{OUT}/mesh_v.npy", V)
         np.save(f"{OUT}/mesh_f.npy", F)
         np.save(f"{OUT}/mesh_c.npy", VC)
+        # build_viewer.py reads model.ply, so write the coloured mesh back out under
+        # the name the packer expects rather than teaching it a second layout.
+        m.vertex_colors = o3d.utility.Vector3dVector(VC.astype(np.float64) / 255.0)
+        o3d.io.write_triangle_mesh(f"{OUT}/model.ply", m)
     else:
         print("no mesh in the output - rendering the cloud only")
 
