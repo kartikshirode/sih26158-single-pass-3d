@@ -77,7 +77,7 @@ def main():
     # and meshing happen downstream, where they can be re-run without paying for
     # inference again.
     import cv2
-    pts, cols, cnf, msk, cams, shapes = [], [], [], [], [], []
+    pts, cols, cnf, msk, cams, shapes, intr, dz = [], [], [], [], [], [], [], []
     for i, p in enumerate(preds):
         if i == 0:
             print("  prediction keys:", [k for k in p])
@@ -109,6 +109,18 @@ def main():
         if "camera_poses" in p:
             cams.append(p["camera_poses"].squeeze(0).float().cpu().numpy())
 
+        # INTRINSICS and metric depth. The model emits both on every view and the
+        # first version of this script threw both away, which is what blocked the
+        # COLMAP/OpenMVS export: without a K matrix there is no way to hand these
+        # poses to a classical MVS stage, and re-deriving one by inverting the pose
+        # against the world-frame point map is fiddly and unverifiable. Keeping them
+        # costs one array each. See docs/05-quality-analysis.md section 3.
+        if "intrinsics" in p:
+            intr.append(p["intrinsics"].squeeze(0).float().cpu().numpy())
+        if "depth_z" in p:
+            dz.append(p["depth_z"].squeeze(0).reshape(-1).float().cpu().numpy()
+                      .astype(np.float32))
+
     os.makedirs("/tmp/out", exist_ok=True)
     result = {
         "n_views": len(views),
@@ -137,6 +149,13 @@ def main():
     if cams:
         np.save("/tmp/out/cameras.npy", np.stack(cams))
         result["cameras"] = len(cams)
+    if intr:
+        np.save("/tmp/out/intrinsics.npy", np.stack(intr))
+        result["intrinsics"] = len(intr)
+        print(f"  intrinsics K[0] = {np.round(intr[0], 2).tolist()}")
+    if dz:
+        np.save("/tmp/out/depth_z.npy", np.concatenate(dz, 0))
+        result["depth_z"] = int(sum(len(x) for x in dz))
 
     json.dump(result, open("/tmp/out/mapanything_result.json", "w"), indent=2)
     b = gcs()
