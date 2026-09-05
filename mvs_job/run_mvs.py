@@ -62,7 +62,7 @@ def fetch():
         if fn.lower().endswith((".jpg", ".jpeg", ".png")):
             blob.download_to_filename(f"{W}/images/{fn}")
             n += 1
-    for want in ("cameras.npy", "points.npy", "mapanything_result.json"):
+    for want in ("cameras.npy", "points.npy", "mask.npy", "mapanything_result.json"):
         b.blob(f"{MA_PREFIX}/{want}").download_to_filename(f"{W}/ma/{want}")
     print(f"  fetched {n} keyframes + MapAnything poses", flush=True)
     return n
@@ -113,11 +113,13 @@ def main():
     sys.path.insert(0, "/app")
     from colmap_export import derive_intrinsics, full_frame_camera, write_model
 
-    K, resid = derive_intrinsics(pts, cams, H, W_)
+    msk = np.load(f"{W}/ma/mask.npy") if os.path.exists(f"{W}/ma/mask.npy") else None
+    K, resid = derive_intrinsics(pts, cams, H, W_, mask=msk)
     cam = full_frame_camera(K, H, W_, h0, w0)
     print(f"\n  intrinsics fitted from the point maps:"
-          f"\n    grid {W_}x{H}  fx {K[:,0].mean():.2f}+/-{K[:,0].std():.2f}  "
-          f"fy {K[:,1].mean():.2f}+/-{K[:,1].std():.2f}"
+          f"\n    grid {W_}x{H}  fx {np.median(K[:,0]):.2f}  fy {np.median(K[:,1]):.2f}"
+          f"  (median of {len(K)} views, fx/fy "
+          f"{np.median(K[:,0])/np.median(K[:,1]):.4f})"
           f"\n    reprojection residual {resid:.4f} px (median over {len(K)} views)"
           f"\n    full frame {w0}x{h0}  f={cam['f']:.1f} cx={cam['cx']:.1f} "
           f"cy={cam['cy']:.1f}"

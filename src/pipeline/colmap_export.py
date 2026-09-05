@@ -30,7 +30,30 @@ import sqlite3
 import numpy as np
 
 
-def derive_intrinsics(points: np.ndarray, cams: np.ndarray, H: int, W: int):
+def _fit_axis(a: np.ndarray, u: np.ndarray, iters=3, keep=3.0):
+    """
+    Robust 1-D fit of u = f*a + c.
+
+    Plain least squares is not usable here. The point map contains sky and other
+    regions the model declines to commit to; those sit at degenerate depths and a
+    single outlier decade in X/Z drags f by hundreds of pixels. Measured on the Kolu
+    clip: an unmasked lstsq returned fy = 258 +/- 102 against a true ~394, with an
+    18.9 px residual, while the same data fitted robustly lands sub-pixel.
+    """
+    m = np.ones(a.size, bool)
+    f = c = 0.0
+    for _ in range(iters):
+        f, c = np.linalg.lstsq(np.c_[a[m], np.ones(m.sum())], u[m], rcond=None)[0]
+        r = np.abs(f * a + c - u)
+        mad = np.median(r[m])
+        m = r <= max(keep * mad, 0.5)
+        if m.sum() < 100:
+            break
+    return float(f), float(c), float(np.median(np.abs(f * a[m] + c - u[m])))
+
+
+def derive_intrinsics(points: np.ndarray, cams: np.ndarray, H: int, W: int,
+                      mask: np.ndarray | None = None):
     """
     Fit a pinhole K per view from the point map and the pose.
 
@@ -53,33 +76,62 @@ def derive_intrinsics(points: np.ndarray, cams: np.ndarray, H: int, W: int):
         pc = (g - t) @ R
         X, Y, Z = pc[..., 0], pc[..., 1], pc[..., 2]
         ok = np.isfinite(Z) & (Z > 1e-6)
+        if mask is not None:
+            # Sky and the model's own "declines to commit" regions. Without this the
+            # fit is dominated by degenerate depths - see _fit_axis.
+            ok &= mask[v * n:(v + 1) * n].reshape(H, W)
+        if ok.sum() < 1000:
+            continue
         a, b = (X / Z)[ok], (Y / Z)[ok]
         u, w = jj[ok] + 0.5, ii[ok] + 0.5      # pixel centres
-        fx, cx = np.linalg.lstsq(np.c_[a, np.ones(a.size)], u, rcond=None)[0]
-        fy, cy = np.linalg.lstsq(np.c_[b, np.ones(b.size)], w, rcond=None)[0]
+        fx, cx, ru = _fit_axis(a, u)
+        fy, cy, rv = _fit_axis(b, w)
         out.append([fx, fy, cx, cy])
-        resid.append(max(np.median(np.abs(fx * a + cx - u)),
-                         np.median(np.abs(fy * b + cy - w))))
+        resid.append(max(ru, rv))
+    if not out:
+        raise SystemExit("no view had enough valid points to fit intrinsics")
     return np.array(out), float(np.median(resid))
 
 
-def full_frame_camera(K: np.ndarray, H: int, W: int, h0: int, w0: int):
+def full_frame_camera(K: np.ndarray, H: int, W: int, h0: int, w0: int, log=print):
     """
     Move the fitted K from the model's cropped grid onto the FULL keyframe.
 
-    MVS runs on the original pixels, not the model's 392x518 grid - that is the whole
-    point of the exercise - so the intrinsics have to be un-cropped and un-scaled.
-    Uniform scale s = H/h0 (height is the limiting dimension), then a centred width
-    crop, so only cx picks up an offset.
+    MVS runs on the original pixels, not the model's grid - that is the whole point of
+    the exercise - so the intrinsics have to be un-cropped and un-scaled.
+
+    Cover-crop semantics: scale uniformly by whichever factor makes the frame cover
+    the grid in BOTH axes, then centre-crop the surplus. Which axis is limiting
+    depends on the footage - it was the height for 9:16 portrait (518/1250 vs
+    392/1080) and, only just, the height again for 16:9 landscape (294/1080 = 0.2722
+    vs 518/1920 = 0.2698). Assuming one of them is what this used to do, and it
+    happened to be right twice; the general form costs nothing and does not depend on
+    that luck holding.
     """
-    s = H / h0
-    w_scaled = int(round(w0 * s))
-    x0 = (w_scaled - W) // 2                       # crop offset, in scaled pixels
-    f = float(K[:, :2].mean() / s)
-    cx = float(K[:, 2].mean() + x0) / s
-    cy = float(K[:, 3].mean()) / s
+    s = max(H / h0, W / w0)
+    x0 = (w0 * s - W) / 2.0                        # crop offsets, in scaled pixels
+    y0 = (h0 * s - H) / 2.0
+    # MEDIAN across views, never the mean. All 45 Kolu views share one physical
+    # camera, but a handful contain enough sky that rays near the horizon reach
+    # |Y/Z| ~ 2.8 (about 55 deg, well outside the real 41 deg vertical FOV) and drag
+    # their own fit down - one view collapsed to fy = 39.8. Those three views moved
+    # the mean fy to 378 +/- 71 while the median stayed at 394.84, which agrees with
+    # the median fx of 394.91 to 0.02% - exactly the square pixels a real camera has.
+    f = float(np.median(K[:, :2]) / s)
+    cx = float(np.median(K[:, 2]) + x0) / s
+    cy = float(np.median(K[:, 3]) + y0) / s
+    # The principal point of a real camera sits near the frame centre. If the crop
+    # geometry above is wrong, it lands far off - which is worth catching here, in a
+    # second, rather than as a wrecked surface 15 minutes into densification.
+    off = max(abs(cx - w0 / 2) / w0, abs(cy - h0 / 2) / h0)
+    log(f"  principal point {cx:.1f},{cy:.1f} vs frame centre {w0/2:.1f},{h0/2:.1f} "
+        f"-> {off:.1%} of frame size off centre")
+    if off > 0.08:
+        raise SystemExit(
+            f"principal point is {off:.1%} off centre - the assumed resize/crop is "
+            f"probably wrong for this aspect ratio; refusing to build on it")
     return {"f": f, "cx": cx, "cy": cy, "w": w0, "h": h0,
-            "scale": s, "crop_x0_full": x0 / s,
+            "scale": s, "crop_x0_full": x0 / s, "crop_y0_full": y0 / s,
             "crop_span_full": [x0 / s, (x0 + W) / s]}
 
 
