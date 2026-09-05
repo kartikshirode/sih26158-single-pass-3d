@@ -29,6 +29,10 @@ RUN set -eux; \
     micromamba list -p /opt/conda | grep -Ei '^ *(colmap|ceres|python) '
 ENV PATH=/opt/conda/bin:$PATH
 
+# open3d for the fuse stage (dedupe + Poisson). pip, not conda-forge: the conda
+# build lags and this image already pins python 3.11, which has a manylinux wheel.
+RUN pip install --no-cache-dir "open3d==0.18.0" &&     python -c "import open3d; print('open3d', open3d.__version__)"
+
 # OpenMVS: upstream prebuilt Ubuntu x64 release. Upstream publishes the CUDA build
 # as a separate asset, so this one runs on CPU; DensifyPointCloud still takes
 # --cuda-device -2 to force it. Building from source would add ~25 min per attempt.
@@ -62,4 +66,5 @@ RUN set -eux; \
 WORKDIR /app
 COPY src/pipeline/colmap_export.py /app/colmap_export.py
 COPY mvs_job/run_mvs.py /app/run_mvs.py
+COPY mvs_job/run_mvs_sharded.py /app/run_mvs_sharded.py
 ENTRYPOINT ["python", "/app/run_mvs.py"]
