@@ -7,6 +7,14 @@ poses or still JPEGs, so stage S1 was specified but never exercised. This closes
 (The Track Record - BTS). 4K, downscaled to 1080p as the PS specifies. Chosen over a beach clip
 because it is dense urban - buildings and infrastructure, which is what the PS asks for.
 
+> **This clip IS the target case, not a substitute for one.** An earlier draft of this document
+> dismissed it as "cinematic rather than mapping footage" and implied a nadir survey grid would be
+> a fairer test. That was wrong, and it inverted the problem. The PS exists precisely because
+> *"there is often only a single opportunity to capture data over the target area"* - disaster
+> response, surveillance, reconnaissance - and Key Challenge (i) is literally **"Limited viewing
+> angles due to single flight path."** A planned survey grid is what the PS says you do NOT get.
+> A single oblique pass from a moving UAV over a city is the input this system is for.
+
 ## S1 ingest, run locally on real H.264 (`src/ingest/video_ingest.py`)
 
 | | |

@@ -28,10 +28,14 @@ a 3D point cloud.
 | Rejected as blurry | 300 (25th percentile of the clip, not a hardcoded value) |
 | Keyframes selected | 20, by optical-flow baseline budget |
 
-**Two limitations, stated before the results rather than after.** This clip has **no GPS**, so
-nothing here can be georeferenced - only metric-relative. And it is *cinematic* footage: a high
-oblique shot, roughly half sky, with distant mountains. A mapping flight it is not. So this tests
-decode &rarr; keyframe &rarr; reconstruct honestly, and cannot test georeferencing at all.
+**This is the target case, not a stand-in for one.** A single oblique pass from a moving UAV is
+exactly what the PS describes - *"there is often only a single opportunity to capture data over
+the target area"*, with Key Challenge (i) being **"Limited viewing angles due to single flight
+path."** A planned survey grid is what the PS says you do *not* get.
+
+**The one real limitation:** this clip carries **no GPS**, so nothing here can be georeferenced -
+only metric-relative. That is a missing input, not a wrong kind of footage. The PS lists GPS as
+mandatory precisely because without it the problem is unsolvable as stated.
 
 **Before running:** Accelerator **GPU T4 x2**, Internet **On**, and attach the keyframe dataset."""))
 
@@ -200,10 +204,11 @@ genuine H.264 footage, and the per-view GPU cost extrapolates to the 900 s budge
 absolute frame to place the model in and no ground truth to score against. The PS lists GPS as a
 mandatory input precisely because without it the problem is unsolvable as stated.
 
-**Also worth seeing in the plots:** the cloud is dominated by a thin ground sheet with the city on
-it, and the geometry degrades with distance. That is the honest consequence of a high-oblique
-cinematic shot - most pixels are far-field, where a monocular model has almost no parallax to work
-with. A nadir or low-oblique mapping pass would behave very differently."""))
+**Also worth seeing in the plots:** geometry degrades with distance from the camera. That is the
+problem this PS poses, not a flaw in the footage - an oblique single pass puts most pixels in the
+far field where a monocular model has little parallax. It implies the deliverable should carry
+per-point confidence and report accuracy per range band, rather than quoting one number that
+holds near the camera and fails at the horizon."""))
 
 nb = {"cells": C,
       "metadata": {"kernelspec": {"display_name": "Python 3", "language": "python",
