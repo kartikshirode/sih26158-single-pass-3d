@@ -102,9 +102,22 @@ def main():
 
         # Colour sampled at the point-map grid. Read H,W from the tensor; inferring
         # them from the flattened length shears every colour a row sideways.
+        #
+        # And match the model's OWN resize: it scales uniformly and centre-crops, it
+        # does not squash the frame to the grid. A plain resize to (W,H) therefore
+        # slides colour off geometry by the aspect difference - 14% horizontally on
+        # 9:16 footage, i.e. ~67 source pixels at the frame edges. Established two
+        # ways on real output: the fitted fx and fy agree to 0.08% (a squash would
+        # separate them by the aspect ratio), and image edges correlate with depth
+        # edges at r=0.133 under scale+crop versus r=0.090 under a squash, on every
+        # view tested. See src/pipeline/colmap_export.py.
         im = cv2.cvtColor(cv2.imread(os.path.join(WORK, pngs[i])), cv2.COLOR_BGR2RGB)
-        cols.append(cv2.resize(im, (W, H), interpolation=cv2.INTER_AREA)
-                    .reshape(-1, 3).astype(np.uint8))
+        h0, w0 = im.shape[:2]
+        sc = max(H / h0, W / w0)
+        rz = cv2.resize(im, (int(round(w0 * sc)), int(round(h0 * sc))),
+                        interpolation=cv2.INTER_AREA)
+        y0, x0 = (rz.shape[0] - H) // 2, (rz.shape[1] - W) // 2
+        cols.append(rz[y0:y0 + H, x0:x0 + W].reshape(-1, 3).astype(np.uint8))
 
         if "camera_poses" in p:
             cams.append(p["camera_poses"].squeeze(0).float().cpu().numpy())
