@@ -35,7 +35,7 @@ def fetch():
         blob.download_to_filename(os.path.join(WORK, fn))
         names.append(fn)
     print(f"  fetched {len(names)} files from gs://{BUCKET}/{IN_PREFIX}")
-    return sorted(n for n in names if n.endswith(".png"))
+    return sorted(n for n in names if n.lower().endswith((".png", ".jpg", ".jpeg")))
 
 
 def main():
@@ -45,9 +45,9 @@ def main():
     print("=" * 74)
 
     pngs = fetch()
-    meta = json.load(open(os.path.join(WORK, "meta.json")))
+    n_avail = len(pngs)
     pngs = pngs[:MAX_VIEWS]
-    print(f"  using {len(pngs)} of {len(meta['frames'])} views (MAX_VIEWS={MAX_VIEWS})")
+    print(f"  using {len(pngs)} of {n_avail} views (MAX_VIEWS={MAX_VIEWS})")
 
     from mapanything.models import MapAnything
     from mapanything.utils.image import load_images
@@ -70,17 +70,42 @@ def main():
     print(f"\n  INFERENCE {t_inf:.1f}s for {len(views)} views "
           f"({t_inf/len(views):.1f}s/view, CPU)")
 
-    pts, cams = [], []
+    # Save the FULL per-view output, not just XYZ. The previous version kept points
+    # alone and threw away the confidence channel and the colours, which is why the
+    # first reconstruction was an unfilterable smear: with no conf there is nothing
+    # to gate on, and with no colour there is nothing to look at. Filtering, fusion
+    # and meshing happen downstream, where they can be re-run without paying for
+    # inference again.
+    import cv2
+    pts, cols, cnf, msk, cams, shapes = [], [], [], [], [], []
     for i, p in enumerate(preds):
-        k = {kk: tuple(vv.shape) for kk, vv in p.items() if hasattr(vv, "shape")}
         if i == 0:
-            print("  prediction keys:", list(k)[:10])
-        if "pts3d" in p:
-            a = p["pts3d"].squeeze(0).reshape(-1, 3).float().cpu().numpy()
-            m = None
-            if "mask" in p:
-                m = p["mask"].squeeze(0).reshape(-1).cpu().numpy().astype(bool)
-            pts.append(a[m] if m is not None and m.shape[0] == a.shape[0] else a)
+            print("  prediction keys:", [k for k in p])
+        if "pts3d" not in p:
+            continue
+        t = p["pts3d"].squeeze(0)                       # (H, W, 3)
+        H, W = t.shape[:2]
+        shapes.append([int(H), int(W)])
+        pts.append(t.reshape(-1, 3).float().cpu().numpy().astype(np.float32))
+
+        cnf.append(p["conf"].squeeze(0).reshape(-1).float().cpu().numpy().astype(np.float32)
+                   if "conf" in p else np.ones(H * W, np.float32))
+
+        mk = np.ones(H * W, bool)
+        for key in ("non_ambiguous_mask", "mask"):
+            if key in p:
+                v = p[key].squeeze(0).reshape(-1).cpu().numpy().astype(bool)
+                if v.shape[0] == H * W:
+                    mk = v
+                    break
+        msk.append(mk)
+
+        # Colour sampled at the point-map grid. Read H,W from the tensor; inferring
+        # them from the flattened length shears every colour a row sideways.
+        im = cv2.cvtColor(cv2.imread(os.path.join(WORK, pngs[i])), cv2.COLOR_BGR2RGB)
+        cols.append(cv2.resize(im, (W, H), interpolation=cv2.INTER_AREA)
+                    .reshape(-1, 3).astype(np.uint8))
+
         if "camera_poses" in p:
             cams.append(p["camera_poses"].squeeze(0).float().cpu().numpy())
 
@@ -93,16 +118,22 @@ def main():
         "seconds_per_view_cpu": round(t_inf / max(len(views), 1), 2),
         "torch_threads": torch.get_num_threads(),
         "checkpoint": "facebook/map-anything-apache",
+        "view_shapes": shapes,
+        "images": pngs,
     }
     if pts:
+        np.save("/tmp/out/points.npy",  np.concatenate(pts, 0))
+        np.save("/tmp/out/colors.npy",  np.concatenate(cols, 0))
+        np.save("/tmp/out/conf.npy",    np.concatenate(cnf, 0))
+        np.save("/tmp/out/mask.npy",    np.concatenate(msk, 0))
         allp = np.concatenate(pts, 0)
-        keep = np.isfinite(allp).all(1)
-        allp = allp[keep]
-        np.save("/tmp/out/points.npy", allp.astype(np.float32))
+        fin = np.isfinite(allp).all(1)
         result["points"] = int(len(allp))
+        result["points_finite"] = int(fin.sum())
         result["bbox_extent"] = [round(float(x), 2)
-                                 for x in (allp.max(0) - allp.min(0))]
-        print(f"  point cloud: {len(allp):,} pts  extent {result['bbox_extent']}")
+                                 for x in (allp[fin].max(0) - allp[fin].min(0))]
+        print(f"  saved {len(allp):,} pts (+colour, conf, mask)  "
+              f"extent {result['bbox_extent']}")
     if cams:
         np.save("/tmp/out/cameras.npy", np.stack(cams))
         result["cameras"] = len(cams)
