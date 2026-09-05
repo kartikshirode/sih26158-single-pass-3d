@@ -150,3 +150,80 @@ curl -H "Authorization: Bearer $TOK" \
 curl -H "Authorization: Bearer $TOK" \
   "https://cloudquotas.googleapis.com/v1/projects/<P>/locations/global/services/aiplatform.googleapis.com/quotaInfos?pageSize=500"
 ```
+
+---
+
+## 7. Sharding across Cloud Run tasks — measured, and it did not work as hoped
+
+Built and ran (2026-09-05, Kolu, 45 views). **Result: 7% slower than the single task
+it was meant to beat.** Recording it in full because the diagnosis is more useful than
+the idea was.
+
+| stage | shape | wall clock |
+|---|---|---:|
+| prep (SfM + global BA) | 1 task x 8 vCPU | 452 s |
+| densify | 5 tasks x 4 vCPU | 1472 s |
+| fuse | 1 task x 8 vCPU | 174 s |
+| **total** | | **2098 s** |
+| single-task baseline | 1 task x 8 vCPU | **1963 s** |
+
+### Why 2.5x the cores bought 1.10x the speed
+
+Per-shard densification: **990, 1454, 1243, 901, 719 s**. Three compounding problems.
+
+1. **Redundancy.** Windows of 13-17 views with an overlap of 4 turn 45 views into
+   **77 view-slots — 1.71x the work.** Overlap of 1 would give 53 slots (1.18x).
+2. **Half the cores each.** 5 x 4 vCPU is 20 vCPU nominal, but OpenMVS scales well
+   inside a task, so a 4 vCPU task is roughly 1.8x slower per view than an 8 vCPU one.
+   Splitting into more, thinner tasks gives most of the nominal gain back.
+3. **Load imbalance.** 719 s to 1454 s is a 2x spread, and a parallel stage costs what
+   its *slowest* shard costs, not the average (1061 s). Equal view counts do not mean
+   equal work: scene complexity varies along the pass.
+
+### The geometry did hold, which validates the design
+
+The claim that shards concatenate because one global bundle adjustment puts every
+window in the same metric frame **is confirmed**: relief above local ground comes out
+at max 3.33 m sharded against 3.31 m single-task, and the footprint matches. The frames
+align. No stitching was needed and none was done.
+
+But precision drops, because a view at a window edge has fewer neighbours to be
+constrained against:
+
+| radius | single task | sharded | |
+|---:|---:|---:|---|
+| 6 cm | **0.756 cm** | 0.913 cm | 21% worse |
+| 12 cm | **1.487 cm** | 1.805 cm | 21% worse |
+| 25 cm | **2.787 cm** | 3.143 cm | 13% worse |
+
+So the sharded cloud is denser (4.01 M vs 3.45 M points) and *less* accurate — the extra
+points are largely duplicated overlap that the voxel dedupe, sized at the native 0.97 cm
+spacing, was too fine to merge.
+
+### What would actually help
+
+- **Fewer, fatter tasks.** 2 x 8 vCPU with overlap 2 gives 49 view-slots (1.09x) and
+  ~885 s for the stage — a realistic **1.8x**, against the 1.10x measured here.
+- **Balance by predicted cost, not view count**, or use more windows than tasks and let
+  them queue, so a slow window does not idle four workers.
+- **Dedupe at a coarser voxel** than the native spacing, or prefer the shard whose view
+  is most central rather than averaging across the seam.
+
+### The honest ceiling
+
+Even done well this does not reach the PS budget. With the full five-project fan-out —
+about 96 vCPU, so 12 tasks of 8 vCPU — a 600-view clip splits into 50-view windows at
+~35 s/view, which is **~29 minutes**. The budget is 15. Only `--resolution-level 1`
+(half resolution, ~4x faster) gets under it, and that trades away exactly the detail
+section 3 of `docs/05-quality-analysis.md` was written to recover.
+
+**Conclusion: horizontal CPU sharding is worth roughly 2x and is not a substitute for a
+GPU.** It is useful for turnaround during development. For the actual speed criterion,
+Baramati remains the answer.
+
+### Parity note
+
+The fuse stage meshes with screened Poisson (depth 11) rather than OpenMVS
+`ReconstructMesh`, because after concatenation there is a point cloud and no `.mvs`
+scene. That produced 18.9 M triangles against the single-task 1.95 M — not comparable,
+and it should be brought to parity before these meshes are compared to anything.
