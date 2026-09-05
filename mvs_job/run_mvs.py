@@ -84,12 +84,16 @@ def reproj_error(model_dir: str, label: str):
     out = sh(["colmap", "model_analyzer", "--path", model_dir],
              f"model_analyzer ({label})", fatal=False, tail=12)
     got = {}
+    # COLMAP logs through glog, so every line carries an
+    # "I20260905 14:05:09.364653 1397... model.cc:467] " prefix - a startswith test
+    # against the field name matches nothing and silently yields an empty dict.
     for line in out.splitlines():
-        for key in ("Cameras", "Images", "Registered images", "Points",
+        body = line.split("] ", 1)[-1].strip()
+        for key in ("Registered images", "Cameras", "Images", "Points",
                     "Observations", "Mean track length",
                     "Mean observations per image", "Mean reprojection error"):
-            if line.strip().startswith(key):
-                got[key] = line.split(":")[-1].strip()
+            if body.startswith(key + ":") and key not in got:
+                got[key] = body.split(":", 1)[1].strip()
     return got
 
 

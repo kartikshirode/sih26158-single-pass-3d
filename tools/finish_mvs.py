@@ -130,11 +130,23 @@ def main():
             "Single-pass drone video to 3D. Geometry from per-pixel photometric MVS "
             "at full keyframe resolution; the feed-forward model supplied only the "
             "camera poses and metric scale."),
-        "ingest": [["source", "same 42 keyframes, 1080x1250"],
+        # Read the counts off the run rather than hard-coding them. The first version
+        # carried the Short's "42 keyframes, 1080x1250" into the Kolu viewer, which
+        # actually used 45 at 1920x1080.
+        "ingest": [["keyframes", str(r.get("n_images", "?")) if os.path.exists(rp) else "?"],
+                   ["frame", "x".join(str(v) for v in r["full_frame"])
+                    if os.path.exists(rp) else "?"],
                    ["poses", "MapAnything, bundle-adjusted"]],
-        "funnel": [["dense points", f"{len(P):,}"]],
+        "funnel": [["dense points", f"{len(P):,}"],
+                   ["mesh triangles", f"{len(F):,}" if mesh else "-"]],
         "geom": [["geometry", "OpenMVS PatchMatch (per-pixel)"],
-                 ["mesh", "Delaunay + graph cut"]],
+                 ["mesh", "Delaunay + graph cut"],
+                 ["reproj, triangulated",
+                  (r.get("sparse_after_triangulation") or {}).get(
+                      "Mean reprojection error", "-") if os.path.exists(rp) else "-"],
+                 ["reproj, after BA",
+                  (r.get("sparse_after_bundle_adjustment") or {}).get(
+                      "Mean reprojection error", "-") if os.path.exists(rp) else "-"]],
         "caveat": ("Geometry is per-pixel photometric MVS at full keyframe resolution; "
                    "the feed-forward model supplied only the camera poses and metric "
                    "scale. <b>No GPS in this clip</b>, so the result is metric-relative, "
