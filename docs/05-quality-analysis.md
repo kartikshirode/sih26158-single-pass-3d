@@ -315,3 +315,71 @@ that remains is measured rather than interpolated. `--number-views-fuse 2` and
   cannot be scored, and the metre labels still rest on the model's own
   `metric_scaling_factor` (section 2 caveat stands).
 - The gravity vector defect in section 6 is untouched.
+
+## 9. Second clip: Kolu (2026-09-05)
+
+Run on the Kolu survey pass to check that section 8 was a property of the method and
+not of one clip. Job `sih26158-mvs-5cl9k`, 45 views at 1920x1080, **32 min 43 s**.
+
+Three assumptions in the bridge held only for the first clip and were fixed before
+this run (see `src/pipeline/colmap_export.py`):
+
+- the crop geometry assumed height was the limiting dimension - true for 9:16, and
+  true for this 16:9 by only 0.9% (294/1080 = 0.2722 vs 518/1920 = 0.2698), so it
+  would have passed by luck. Now cover-crop on either axis, with a principal-point
+  check that refuses a fit landing more than 8% off the frame centre.
+- the fit ignored the non-ambiguous mask and used plain least squares. Kolu has sky:
+  unmasked it returned **fy = 258 +/- 102** against a true ~394, residual 18.9 px.
+- aggregating per-view intrinsics with the MEAN. Three of 45 views still reach
+  |Y/Z| ~ 2.8 (~55 deg, outside the real 41 deg vertical FOV) and one collapsed to
+  fy = 39.8, dragging the mean to 378 +/- 71. The **median held at 394.84 against a
+  median fx of 394.91 - 0.02% apart**, which is the square pixels a real camera has.
+
+Sparse stages: **45/45 registered**, 76,918 points, reprojection error
+**1.730 -> 0.366 px** through bundle adjustment (4.7x, against 3.7x on the Short).
+Mean track length 4.34 vs the Short's 6.10 - a wider-baseline pass over more ground.
+
+### Same accuracy result
+
+| radius | MapAnything | OpenMVS | ratio |
+|---:|---:|---:|---:|
+| 3 cm | *too sparse* | **0.349 cm** | - |
+| 6 cm | 1.382 cm | **0.756 cm** | 1.8x |
+| 12 cm | 2.762 cm | **1.487 cm** | 1.9x |
+| 25 cm | 4.756 cm | **2.787 cm** | 1.7x |
+| 50 cm | 5.852 cm | 4.707 cm | 1.2x |
+| 100 cm | 7.219 cm | 7.359 cm | 0.98x |
+
+The same signature: identical at 1 m (2% apart - same poses, same large-scale shape),
+separating steadily as the scale shrinks. MapAnything's residual grows 5.2x over a
+16x radius range and flattens; OpenMVS grows a consistent ~1.6-2.2x per doubling and
+keeps resolving to 3.5 mm. The gain is smaller than the Short's 3.6x because Kolu's
+baseline was already the better reconstruction - it is a real survey pass, not a
+57 s cinematic sweep.
+
+Relief: max **2.33 -> 3.58 m**, above 2.5 m **0.000% -> 0.315%**. The feed-forward
+result had a hard ceiling at 2.33 m; MVS breaks through it. This clip's baseline
+already had genuine vertical structure (8.0% above 1 m, since a wildlife overpass
+really does have relief), so the change is less dramatic than the Short's
+paint-on-a-sheet - but the ceiling was real and it is gone.
+
+### The completeness cost was clip-specific, not inherent
+
+Section 8 reported MVS covering 69.6% of the baseline's cells and framed that as the
+trade. **On Kolu the opposite happens.** Planimetric occupancy, 20 cm cells:
+
+| | cells | area | |
+|---|---:|---:|---|
+| MapAnything | 6,033 | 241.3 m^2 | |
+| OpenMVS | 8,166 | 326.6 m^2 | **135% of baseline** |
+
+MVS covers **94.3%** of the baseline cells, adds **2,476** new ones, and leaves only
+343 baseline-only. So it wins on accuracy AND completeness here.
+
+The difference is the footage, not the method. The Short's dense window was a tight
+strip over shadowed, textureless dirt where photometric matching has nothing to lock
+onto; Kolu is a well-textured survey pass with wide overlap. **The correct statement
+is that MVS declines to invent surface where it cannot match, and how much that costs
+depends entirely on how matchable the scene is** - which is a property worth having,
+because the feed-forward alternative fills that ground with interpolation that was
+never measured.

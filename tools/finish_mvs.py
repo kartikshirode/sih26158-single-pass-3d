@@ -38,7 +38,12 @@ def sh(*a, check=True):
 def main():
     os.makedirs(RAW, exist_ok=True)
     os.makedirs(OUT, exist_ok=True)
-    if not os.path.exists(os.path.join(RAW, "scene_dense.ply")):
+    # Guard on EVERY artefact, not just the cloud. Pulling scene_dense.ply early to
+    # look at the numbers used to satisfy this check and silently skip the mesh, so
+    # the run finished "successfully" with no mesh and the viewer then died on a
+    # missing model.ply.
+    need = ("scene_dense.ply", "scene_dense_mesh.ply", "mvs_result.json")
+    if not all(os.path.exists(os.path.join(RAW, f)) for f in need):
         subprocess.run(f"gsutil -m cp gs://sih26158-mumbai/{GCS}/* " + RAW,
                        shell=True, check=True)
 
