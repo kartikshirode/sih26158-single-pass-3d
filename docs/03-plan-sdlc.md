@@ -97,6 +97,31 @@ at 1. There is no human reviewer to appeal to.
 | 3 | Colab / Kaggle free GPU | Available | Model smoke tests only — **not** for ≤1 m deliverable data (R-NF8) |
 | 4 | This laptop (Intel Arc, no CUDA) | Available | All CPU work — harness, ingestion, geo, export |
 
+**The CPU ladder has its own blocker, found the hard way on 2026-09-05.** GPU quota being 0 was
+already known; what was not, is that **CPU is capped too, and by a *global* quota that the
+per-region view does not show**:
+
+| Quota | Limit | Used | Free |
+|---|---|---|---|
+| `CPUS` (asia-south1, regional) | 32 | 0 | 32 |
+| `N2_CPUS` (asia-south1, regional) | 32 | 0 | 32 |
+| **`CPUS-ALL-REGIONS-per-project` (global)** | **12** | **9** | **3** |
+
+Nine are held by unrelated always-on services on the same project. A 32-vCPU Batch job had sat
+in `QUEUED ↔ SCHEDULED_PENDING_QUEUED` for hours, and the regional quota view — 32 free — made
+that look like zone capacity. It was not: `compute.instances.insert` was returning
+`QUOTA_EXCEEDED` on `CPUS_ALL_REGIONS` the whole time, visible only in Cloud Logging, never in
+the job's own status events. Resubmitting smaller and racing a second region both failed
+identically, which is what finally identified it as project-scoped rather than regional.
+
+**Rung 2b — Cloud Run Jobs, 8 vCPU / 32 GiB.** Cloud Run bills against a different quota
+entirely, so it is unaffected by the 12-vCPU cap, stays in `asia-south1` for R-NF8, and needs
+no VM. This is now the default CPU rung for anything that does not fit in the 3 free vCPUs.
+
+> **Lesson for the finale.** Never diagnose a stuck GCP job from the job's own status. Batch
+> reports scheduling states, not the API error underneath; read `compute.instances.insert` in
+> Cloud Logging first. Regional quota being free proves nothing about the global cap.
+
 > **R-NF8 narrows the ladder.** Indian geospatial regulation requires data at or finer than 1 m to
 > be stored and processed in India, so `asia-southeast1` (Singapore) — the nearest region where
 > Cloud Run L4 exists — is **excluded**. An India-resident GPU means Compute Engine L4 in

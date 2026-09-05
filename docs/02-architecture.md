@@ -195,9 +195,39 @@ reaches ~2000 views only at ~140 GB; our target is a single 24 GB-class GPU.
 - neighbouring chunks are stitched by a Sim(3) estimated from their shared frames' poses,
   then the whole chain is refined in a pose graph
 
-**Why overlap-stitching rather than sequential chaining:** chaining accumulates drift linearly. A
-pose graph with GPS as an absolute anchor at every node bounds drift globally — the classic
-SLAM insight, and the reason a single pass over a 3 km flight does not bend.
+**Measured, and it corrected two assumptions in this section (EXP-13).** The original text
+said chaining accumulates drift linearly and that GPS should anchor *every* node. Both are
+wrong for this problem, and the measurement says why.
+
+Simulated at full scale — 600 views, 37 windows of 24 with overlap 8, 36 hops, consumer
+GNSS at 1.5 m σ plus a correlated bias, against a 0.01 m point-noise floor:
+
+| Scheme | Absolute | Shape (aligned) | Growth first→last third |
+|---|---|---|---|
+| A · chain only | *no absolute frame* | **0.025 m** | **1.03×** |
+| B · GNSS anchor at every window | 4.932 m | — | 1.23× |
+| C · chain, then **one** GNSS anchor | **3.327 m** | — | 1.74× |
+
+**Chaining does not drift linearly here, because the correspondence between two windows that
+share a view is exact.** The model emits a point map *per view*, so for a shared view the same
+pixel is the same point in both windows' frames. There is no feature matching, hence no
+matching error — only the model's own noise. 36 hops cost 3% (1.03×), not a linear ramp.
+Windowing is therefore not an approximation of a monolithic solve; it is equivalent to one,
+at 1.48× the inference cost.
+
+**Anchoring at every node is worse than anchoring once**, by 1.48×. A 24-view window spans
+24 m of a 600 m pass, and 1.5 m of GNSS noise over 24 m cannot determine scale: the per-window
+scale estimate wanders across 0.780–1.204, and that ±20% scale error is stamped into each
+window's geometry. One fit over the whole 600 m baseline recovers scale to 1.078. Same GNSS,
+same estimator; the only difference is baseline.
+
+**The order that follows:** chain for *shape*, anchor once for *position*. Anything that adds
+absolute constraints per window has to justify itself against the scale conditioning it loses.
+
+**The ceiling is GNSS, not reconstruction.** Shape is good to 2.5 cm while the best absolute
+result is 3.33 m — and that gap does not close with more views, more windows, or a better
+estimator. Consumer GNSS cannot reach R-O3's ≤ 1 m; RTK can. S1 already reports which one the
+clip carries.
 
 Priors passed to every chunk: resolved intrinsics, GPS-derived `camera_poses` where trustworthy,
 and `is_metric_scale`. This is where R-I2–R-I7 physically enter the geometry.
@@ -337,6 +367,7 @@ licence-free and is the fallback.
 | **EXP-05** | GPS noise vs final accuracy | Inject 1/3/5 m noise on synthetic data | R-C5 robustness curve |
 | **EXP-06** | Does masking dynamics measurably help? | Ablate both layers | Justifies R-C4 cost |
 | **EXP-07** | Geoid correction correctness | Assert against known control | Prevents the §6.2 failure |
+| **EXP-13** | Does windowing cost accuracy at 600 views? | 37 windows × 24 views, 36 hops, vs ground truth | §5 — **run**: shape 0.025 m, drift 1.03×, absolute GNSS-limited at 3.33 m |
 
 Every experiment is scored by the **already-built and unit-tested** harness in `src/eval3d/`,
 so results are comparable across the whole project.
