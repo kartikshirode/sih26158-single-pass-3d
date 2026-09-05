@@ -105,7 +105,6 @@ button:focus-visible{outline:2px solid var(--teal);outline-offset:2px}
 <div class="dock">
   <button id="bMesh" aria-pressed="true">mesh</button>
   <button id="bPts" aria-pressed="false">points</button>
-  <button id="bWire" aria-pressed="false">wireframe</button>
   <span class="sep"></span>
   <button data-view="plan">plan</button>
   <button data-view="oblique">oblique</button>
@@ -166,12 +165,12 @@ const FS_M = [
 '#version 300 es',
 'precision highp float;',
 'in vec3 vCol; in vec3 vN; out vec4 o;',
-'uniform vec3 uLight; uniform float uWire;',
+'uniform vec3 uLight;',
 'void main(){',
 // Ambient floor, then TWO-SIDED diffuse. Poisson output carries inconsistent
 // winding along trimmed borders, and one-sided lighting turns those patches black.
 '  float d = 0.40 + 0.60*abs(dot(normalize(vN), normalize(uLight)));',
-'  vec3 c = mix(vCol*d, vec3(0.89,0.63,0.24), uWire);',
+'  vec3 c = vCol*d;',
 '  o = vec4(c, 1.0);',
 '}'
 ].join('\n');
@@ -197,21 +196,6 @@ function buf(data, target){
 }
 const bVP=buf(VP), bVC=buf(VC), bNR=buf(NR), bPP=buf(PP), bPC=buf(PC);
 const bIX=buf(IX, gl.ELEMENT_ARRAY_BUFFER);
-
-// Wireframe wants edges, not triangles. Built once, de-duplicated.
-const EDGE = (function(){
-  const seen = new Set(), out = [];
-  for (let t=0;t<IX.length;t+=3){
-    const v=[IX[t],IX[t+1],IX[t+2]];
-    for (let k=0;k<3;k++){
-      const a=v[k], b=v[(k+1)%3];
-      const key = a<b ? a+':'+b : b+':'+a;
-      if(!seen.has(key)){ seen.add(key); out.push(a,b); }
-    }
-  }
-  return new Uint32Array(out);
-})();
-const bEG = buf(EDGE, gl.ELEMENT_ARRAY_BUFFER);
 
 const vaoM = gl.createVertexArray(), vaoP = gl.createVertexArray();
 function bindVao(vao, p, pos, col, nrm){
@@ -245,9 +229,8 @@ const look=(e,c,u)=>{
   return new Float32Array([r[0],v[0],-f[0],0, r[1],v[1],-f[1],0, r[2],v[2],-f[2],0,
     -dt(r,e),-dt(v,e),dt(f,e),1]);};
 
-let showMesh=true, showPts=false, wire=false;
-const uM = {mvp:gl.getUniformLocation(pM,'uMVP'), light:gl.getUniformLocation(pM,'uLight'),
-            wire:gl.getUniformLocation(pM,'uWire')};
+let showMesh=true, showPts=false;
+const uM = {mvp:gl.getUniformLocation(pM,'uMVP'), light:gl.getUniformLocation(pM,'uLight')};
 const uP = {mvp:gl.getUniformLocation(pP,'uMVP'), size:gl.getUniformLocation(pP,'uSize')};
 
 function draw(){
@@ -272,14 +255,8 @@ function draw(){
     gl.useProgram(pM); gl.bindVertexArray(vaoM);
     gl.uniformMatrix4fv(uM.mvp,false,mvp);
     gl.uniform3f(uM.light, 0.36,0.78,0.51);
-    gl.uniform1f(uM.wire, 0);
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,bIX);
     gl.drawElements(gl.TRIANGLES, IX.length, gl.UNSIGNED_INT, 0);
-    if (wire){
-      gl.uniform1f(uM.wire, 1);
-      gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,bEG);
-      gl.drawElements(gl.LINES, EDGE.length, gl.UNSIGNED_INT, 0);
-    }
   }
   if (showPts){
     gl.useProgram(pP); gl.bindVertexArray(vaoP);
@@ -290,7 +267,7 @@ function draw(){
   gl.bindVertexArray(null);
 
   document.getElementById('hud').textContent =
-    'az ' + (az*57.2958).toFixed(0) + '°   el ' + (el*57.2958).toFixed(0) + '°   ' +
+    'az ' + (az*57.2958).toFixed(0) + '\u00B0   el ' + (el*57.2958).toFixed(0) + '\u00B0   ' +
     (showMesh ? D.nt.toLocaleString()+' tri' : '') +
     (showMesh && showPts ? '  +  ' : '') +
     (showPts ? D.np.toLocaleString()+' pts' : '');
@@ -317,7 +294,7 @@ cv.addEventListener('wheel',e=>{e.preventDefault();
 function toggle(id,fn){const b=document.getElementById(id);
   b.onclick=()=>{const v=b.getAttribute('aria-pressed')!=='true';
     b.setAttribute('aria-pressed',String(v));fn(v);};}
-toggle('bMesh',v=>showMesh=v); toggle('bPts',v=>showPts=v); toggle('bWire',v=>wire=v);
+toggle('bMesh',v=>showMesh=v); toggle('bPts',v=>showPts=v);
 document.querySelectorAll('[data-view]').forEach(b=>{
   b.onclick=()=>{ target=PRESETS[b.dataset.view].slice(); };});
 
