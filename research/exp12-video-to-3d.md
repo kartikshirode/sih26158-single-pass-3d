@@ -71,3 +71,27 @@ would behave very differently — and that is the flight the PS actually describ
 ## Still needed for a complete answer
 A **single-pass mapping video with per-frame GPS** (ideally RTK), plus a LiDAR or multi-pass
 reference to score against.
+
+---
+
+## The far-field falloff, measured
+
+Now that this is framed as the requirement rather than an artefact, it is worth quantifying.
+Point density per unit volume across the full 1,696,707-point cloud, binned by range from the
+camera cluster (equal point counts per band, so density is the meaningful column):
+
+| Range band (model units) | Points | Relative density |
+|---|---|---|
+| 45 – 154 | 339,342 | 94,643 |
+| 154 – 193 | 339,341 | 96,684 |
+| 193 – 252 | 339,341 | 38,421 |
+| 252 – 295 | 339,341 | 35,490 |
+| 295 – 367 | 339,341 | **14,343** |
+
+**Density falls 6.6× from the near band to the far band**, with the sharp step between bands 2
+and 3. That step is where triangulation baseline stops being sufficient for the available
+parallax — and it is the number that should drive the per-range-band accuracy reporting, the
+parallax-bounded swath, and the promotion of monocular metric depth to load-bearing.
+
+Interactive viewer with the real cloud embedded:
+https://claude.ai/code/artifact/7a80aef5-e4ef-4056-82f9-e4796da50ed3
