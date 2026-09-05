@@ -127,6 +127,34 @@ full-length job.
 
 ---
 
+## No video has been processed yet
+
+**This is the largest gap, so it is stated first.**
+
+The problem statement says *"Dataset Link: Will be provided real time"* &mdash; **NTRO has supplied
+no video.** Nothing has been released to work against.
+
+Consequently, and verifiable by `grep` across `src/`: **there is no video decode anywhere in this
+repository.** No `.mp4` is opened, no `VideoCapture`, no `av.open`, no ffmpeg invocation. What the
+two runs actually consumed:
+
+| Run | Input | Not |
+|---|---|---|
+| End-to-end pipeline | a synthetic scene with flight poses and GPS generated directly in memory | a video file |
+| MapAnything on Kaggle | 77 still JPEGs with GPS in EXIF (`odm_data_aukerman`) | a video file |
+
+So stage **S1 (demux, NVDEC decode, DJI SRT parsing, blur- and baseline-aware keyframe
+selection)** is **designed and specified but never exercised**. Everything downstream of it &mdash;
+geometry, georeferencing, meshing, export, scoring &mdash; has been run and measured; S1 has not.
+
+That matters because S1 is where the unknown-dataset risk concentrates: the drone, codec, and
+metadata schema are all unknown until the event, and the research register already lists several
+traps waiting there (DJI unit encodings that flip silently between generations, `abs_alt` being
+barometric rather than GNSS, ODM stamping `Model: "Unknown"` on extracted frames).
+
+**Closing it needs a real drone video with per-frame GPS.** Until one exists, S1 can only be
+tested against synthetic SRT/metadata fixtures, which is worth doing but is not the same thing.
+
 ## What is real, and what is not
 
 Stated plainly, because the distinction is the difference between evidence and decoration.

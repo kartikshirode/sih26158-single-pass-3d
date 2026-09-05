@@ -120,7 +120,21 @@ came out of `src/eval3d/`. No hand-computed numbers in slides.
 | EXP-01 classical cost | **Run** — `research/exp01-results.txt` |
 | EXP-05 GNSS accuracy | **Run** — `research/exp05-results.txt` |
 | EXP-08 coverage ceiling | **Run** — `research/exp08-results.txt` |
+| **S1 video ingestion** | **NOT EXERCISED &mdash; no video has ever been decoded** (see below) |
 | Everything else | Phase B |
+
+### 4.0 The untested stage
+
+`grep` across `src/` finds no video decode of any kind: no `.mp4` opened, no `VideoCapture`, no
+`av.open`, no ffmpeg call. Both runs to date consumed either an in-memory synthetic flight or
+still JPEGs with GPS EXIF. **T-ROB-02 (motion blur), T-ROB-05 (unknown metadata schema) and
+T-ROB-07 (adversarial input) have therefore never been executed**, and S1's time budget of 120 s
+is an allocation rather than a measurement.
+
+This is the single largest gap between what is specified and what is verified. It cannot be
+closed without a real drone video carrying per-frame GPS; NTRO has released none
+(*"Dataset Link: Will be provided real time"*). The interim mitigation is a synthetic
+SRT/metadata fixture suite, which tests the parsers but not the decode path or real blur.
 
 ### 4.1 Defects found by these tests so far
 
