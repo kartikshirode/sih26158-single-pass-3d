@@ -11,6 +11,7 @@ RUN rm -rf /var/lib/apt/lists/* \
       ca-certificates curl bzip2 unzip \
       libgomp1 libgl1 libglu1-mesa libxi6 libxrandr2 libxinerama1 libxcursor1 \
       libfreeimage3 libpng16-16t64 libjpeg-turbo8 libtiff6 \
+      assimp-utils \
  && rm -rf /var/lib/apt/lists/*
 
 # COLMAP from conda-forge, pinned to the explicit CPU build. The default solve can
@@ -31,7 +32,9 @@ ENV PATH=/opt/conda/bin:$PATH
 
 # open3d for the fuse stage (dedupe + Poisson). pip, not conda-forge: the conda
 # build lags and this image already pins python 3.11, which has a manylinux wheel.
-RUN pip install --no-cache-dir "open3d==0.18.0" &&     python -c "import open3d; print('open3d', open3d.__version__)"
+RUN pip install --no-cache-dir "open3d==0.18.0" trimesh laspy rasterio pygltflib && \
+    python -c "import open3d,trimesh,laspy,rasterio; print('export deps ok')" && \
+    assimp version | head -2
 
 # OpenMVS: upstream prebuilt Ubuntu x64 release. Upstream publishes the CUDA build
 # as a separate asset, so this one runs on CPU; DensifyPointCloud still takes
@@ -65,6 +68,8 @@ RUN set -eux; \
 
 WORKDIR /app
 COPY src/pipeline/colmap_export.py /app/colmap_export.py
+COPY src/pipeline/gravity.py /app/gravity.py
+COPY src/pipeline/export_formats.py /app/export_formats.py
 COPY mvs_job/run_mvs.py /app/run_mvs.py
 COPY mvs_job/run_mvs_sharded.py /app/run_mvs_sharded.py
 ENTRYPOINT ["python", "/app/run_mvs.py"]

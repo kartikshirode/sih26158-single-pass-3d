@@ -154,6 +154,12 @@ def main():
     }
     sp = os.path.join(OUT, "viewer_stats.json")
     json.dump(stats, open(sp, "w"), indent=1)
+    print("\nexports:")
+    cams_p = os.path.join(ROOT, "out", f"{NAME}_raw", "cameras.npy")
+    sh(PY311, os.path.join(ROOT, "src", "pipeline", "export_formats.py"), OUT,
+       *(["--cameras", cams_p] if os.path.exists(cams_p) else []),
+       "--out", os.path.join(OUT, "export"), check=False)
+
     print("\npack:")
     sh(PY311, os.path.join(ROOT, "tools", "build_viewer.py"), OUT,
        "--stats", sp, "--out", os.path.join(OUT, "viewer.html"))
