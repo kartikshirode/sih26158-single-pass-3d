@@ -227,3 +227,49 @@ The fuse stage meshes with screened Poisson (depth 11) rather than OpenMVS
 `ReconstructMesh`, because after concatenation there is a point cloud and no `.mvs`
 scene. That produced 18.9 M triangles against the single-task 1.95 M — not comparable,
 and it should be brought to parity before these meshes are compared to anything.
+
+### 7a. Retuned: 2 x 8 vCPU, overlap 2 — this one works
+
+Same clip, same prep (reused, not re-run: the window plan was patched in `prep.json`).
+
+| | single task | 5 x 4 vCPU, ov 4 | **2 x 8 vCPU, ov 2** |
+|---|---:|---:|---:|
+| view-slots (45 views) | 45 | 77 (1.71x) | **49 (1.09x)** |
+| densify | 1594 s | 1472 s | **1125 s** |
+| fuse | (in-job) | 174 s | 134 s |
+| prep | (in-job) | 452 s | 452 s |
+| **total** | **1963 s** | 2098 s | **1711 s** |
+| vs single task | — | 7% slower | **13% faster** |
+
+Densification alone went **1594 -> 1125 s, a 1.42x speedup**. Not the 1.8x projected,
+because per-shard times were 879.7 s and 1040.3 s and the stage costs what its slowest
+shard costs. That 18% spread is scene complexity, not window size: per-view cost was
+35.2 s on one shard and 43.3 s on the other, against 35.4 s for the single 45-view task.
+Window size is not what drives it.
+
+**Quality came back to parity — the 21% precision loss of the 5-shard run is gone:**
+
+| radius | single task | sharded 2x8 |
+|---:|---:|---:|
+| 6 cm | 0.756 cm | **0.746 cm** |
+| 12 cm | 1.487 cm | **1.414 cm** |
+| 25 cm | 2.787 cm | **2.537 cm** |
+| 50 cm | 4.707 cm | **4.298 cm** |
+| 100 cm | **7.359 cm** | 7.657 cm |
+
+Relief matches (max 3.37 m vs 3.31 m; 5.08% vs 5.03% above 1.5 m) and planimetric
+coverage is **98%** of the single-task result — 319.8 m^2 against 326.8 m^2, covering
+88.7% of its cells and adding 746 of its own. So the earlier degradation was entirely an
+artefact of over-splitting, not of sharding.
+
+### 7b. Revised projection to a full clip
+
+With per-view cost measured at **35-43 s at 8 vCPU regardless of window size**, the full
+five-project fan-out is 100 vCPU, so 12 tasks of 8. A 600-view clip gives ~54-view
+windows, and 54 x ~40 s is **~36 minutes**. Hitting the 15-minute budget would need
+windows of ~22 views, i.e. 27 tasks — 216 vCPU, more than double what the account has.
+
+So the conclusion stands and is now measured rather than projected: **horizontal CPU is
+worth about 1.4x here and cannot reach the speed criterion.** It is a real improvement
+for development turnaround and it costs nothing extra, so it is worth keeping; it is not
+a GPU substitute.

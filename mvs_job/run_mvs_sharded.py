@@ -220,7 +220,13 @@ def filter_model(src, dst, keep_names):
 def stage_densify():
     meta = json.loads(bucket().blob(f"{OUT_PREFIX}/prep.json")
                       .download_as_text())
-    plan = [tuple(w) for w in meta["windows"]]
+    # Recompute the plan from THIS job's env rather than trusting prep.json. The
+    # first version baked the windows in at prep time, so retuning the shard count
+    # meant either re-running 452 s of SfM or hand-patching a JSON in the bucket.
+    plan = windows(meta["n_views"], N_SHARDS, OVERLAP)
+    if [list(w) for w in plan] != meta.get("windows"):
+        print(f"  note: re-planned windows {plan} (prep.json had {meta.get('windows')})",
+              flush=True)
     if TASK >= len(plan):
         print(f"  task {TASK} has no window ({len(plan)} windows) - exiting clean")
         return
