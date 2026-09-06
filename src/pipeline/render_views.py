@@ -85,7 +85,29 @@ def section(ax, P, C, title, frac=0.02):
     _frame(ax, np.stack([perp[m], q[m, 1], np.zeros(m.sum())], 1), title)
 
 
-def upright_frame(P: np.ndarray, centres=None):
+def upright_frame(P: np.ndarray, centres=None, cams=None):
+    """
+    Rotate the reconstruction so its terrain plane is horizontal.
+
+    When full cam2world poses are supplied, this defers to `gravity.estimate`, which
+    checks the terrain normal against the gimbal's roll-zero constraint and reports
+    how far the two disagree. Without them it falls back to the behaviour below:
+    thin principal axis for the direction, camera centroid for the sign.
+    """
+    if cams is not None and len(cams):
+        from gravity import estimate
+        return frame_from_up(estimate(cams, P)["up"])
+    return _upright_frame_pca(P, centres)
+
+
+def frame_from_up(up):
+    a = np.asarray(up, float); a = a / np.linalg.norm(a)
+    t = np.array([1.0, 0.0, 0.0]) if abs(a[0]) < 0.9 else np.array([0.0, 1.0, 0.0])
+    e1 = np.cross(a, t); e1 /= np.linalg.norm(e1)
+    return np.stack([e1, a, np.cross(a, e1)])
+
+
+def _upright_frame_pca(P: np.ndarray, centres=None):
     """
     Rotate the reconstruction so its terrain plane is horizontal.
 

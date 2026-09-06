@@ -188,14 +188,37 @@ aerial data. Worth a bake-off once 1-3 are in place, not before.
 
 ## 6. A defect this analysis turned up
 
-**We have no reliable gravity vector.** The two independent estimates of "up" - the cloud's
-thin principal axis (what `render_views.upright_frame` ships) and the direction from the
-scene centroid to the mean camera centre - disagree by **40.7, 55.7 and 56.5 degrees** on the
-three runs. Every plan view, height colouring and relief statistic we produce inherits that.
-The camera-derived estimate is the worse of the two for an oblique forward-looking pass,
-because the cameras sit beside the scene rather than above it. The fix is telemetry: DJI SRT
-already carries gimbal pitch, and the ingest stage already parses it. Where there is no
-telemetry, this stays a stated limitation rather than a silent one.
+**CORRECTED 2026-09-06 — this section originally claimed "no reliable gravity vector" and
+that claim was wrong.**
+
+The original evidence was that the cloud's thin principal axis and the scene-centroid-to-
+camera direction disagree by 40.7, 55.7 and 56.5 degrees. That comparison was meaningless:
+those are not two estimates of the same quantity. The centroid direction is not a vertical
+at all for an oblique pass, where the drone sits *beside* the scene rather than above it,
+and `render_views.upright_frame` only ever used it to disambiguate a **sign**. The direction
+it ships - the thin principal axis - was never in question by that evidence.
+
+What was genuinely missing was a way to *check* it. There is one, independent of the point
+cloud: a gimballed drone camera holds roll near zero, so every camera's image-right axis is
+horizontal in world space. Measured across the three runs, residual roll about the recovered
+vertical is **0.21, 0.68 and 0.23 degrees median** - a real constraint, not an assumption.
+
+Roll alone is not enough. It pins gravity only to one degree of freedom, and a pass flown on
+a near-constant heading leaves that family undetermined: the camera-X singular spectrum is
+`[1, 0.0086, 0.0044]` on Kolu, so those axes span one direction rather than a plane. Taking
+the smallest singular vector there returns an arbitrary member of the family - which is how
+the first pass at this manufactured a 40 degree "disagreement" out of nothing.
+
+Using the ground plane for the direction and the roll constraint to check it,
+**the two agree to 1.66, 2.14 and 2.47 degrees** on the three runs, and all three put the
+camera plausibly above the ground (11.1 m, 11.0 m, 6.4 m). The new estimator lands
+1.7-2.4 degrees from what was already shipping.
+
+So the vertical is good to about two degrees and is now independently validated, rather than
+merely assumed. `src/pipeline/gravity.py` returns that evidence alongside the vector -
+`ground_correction_deg`, `residual_roll_deg`, `heading_degenerate` - and warns rather than
+silently proceeding when the two constraints disagree by more than 15 degrees, which is what
+a sloped or non-ground-dominated scene would look like.
 
 ## 7. Honest summary
 
