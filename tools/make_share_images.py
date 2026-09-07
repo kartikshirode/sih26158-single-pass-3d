@@ -18,8 +18,8 @@ from matplotlib.gridspec import GridSpec
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 OUT = os.path.join(ROOT, "out", "share")
-BG, FG, DIM = "#131614", "#E9ECE7", "#8B948C"
-BASE, MVS = "#E08B57", "#66B4DD"          # baseline / rebuild, consistent everywhere
+BG, FG, DIM = "#FAFAF8", "#1A1A1A", "#5A5A5A"
+BASE, MVS = "#C2612C", "#1F6FA8"          # baseline / rebuild, consistent everywhere
 
 SHORT_B = [(6, 1.288), (12, 1.944), (25, 2.344), (50, 2.634), (100, 3.340)]
 SHORT_M = [(3, 0.187), (6, 0.353), (12, 0.624), (25, 1.121), (50, 2.031), (100, 3.217)]
@@ -33,8 +33,8 @@ def cell(path, row, col, w=1000):
     H, W = im.shape[:2]
     ch, cw = H // 3, W // 3
     c = im[row * ch + int(ch * 0.06):(row + 1) * ch, col * cw:(col + 1) * cw]
-    g = cv2.cvtColor(c, cv2.COLOR_RGB2GRAY)
-    ys, xs = np.where(g > 18)
+    bg = np.median(np.concatenate([c[:4].reshape(-1, 3), c[-4:].reshape(-1, 3)]), 0)
+    ys, xs = np.where(np.abs(c.astype(np.int16) - bg).max(2) > 22)
     if len(xs):
         c = c[max(ys.min() - 8, 0):ys.max() + 8, max(xs.min() - 8, 0):xs.max() + 8]
     s = w / c.shape[1]
@@ -44,16 +44,16 @@ def cell(path, row, col, w=1000):
 def ab(name, base_png, mvs_png, title, sub, lines):
     a, b = cell(base_png, 1, 1), cell(mvs_png, 1, 1)
     h = max(a.shape[0], b.shape[0])
-    a = cv2.copyMakeBorder(a, 0, h - a.shape[0], 0, 0, cv2.BORDER_CONSTANT, value=(19, 22, 20))
-    b = cv2.copyMakeBorder(b, 0, h - b.shape[0], 0, 0, cv2.BORDER_CONSTANT, value=(19, 22, 20))
+    a = cv2.copyMakeBorder(a, 0, h - a.shape[0], 0, 0, cv2.BORDER_CONSTANT, value=(241, 241, 236))
+    b = cv2.copyMakeBorder(b, 0, h - b.shape[0], 0, 0, cv2.BORDER_CONSTANT, value=(241, 241, 236))
 
     fig = plt.figure(figsize=(16, 9.6), facecolor=BG)
-    gs = GridSpec(3, 2, height_ratios=[0.9, 5.4, 1.5], hspace=0.06, wspace=0.03,
+    gs = GridSpec(3, 2, height_ratios=[1.25, 5.4, 1.5], hspace=0.10, wspace=0.03,
                   left=0.035, right=0.965, top=0.97, bottom=0.03)
     ax = fig.add_subplot(gs[0, :]); ax.axis("off")
-    ax.text(0, .62, title, color=FG, fontsize=27, fontweight="bold", va="center")
-    ax.text(0, .05, sub, color=DIM, fontsize=14, va="center")
-    ax.text(1, .62, "SIH26158 · NTRO", color=DIM, fontsize=12,
+    ax.text(0, .74, title, color=FG, fontsize=27, fontweight="bold", va="center")
+    ax.text(0, .30, sub, color=DIM, fontsize=14, va="center")
+    ax.text(1, .74, "SIH26158 · NTRO", color=DIM, fontsize=12,
             va="center", ha="right", family="monospace")
 
     for i, (img, lab, colr) in enumerate(((a, "BEFORE  ·  feed-forward point maps", BASE),
@@ -89,10 +89,10 @@ def chart():
              "3.6x tighter at 6 cm; identical at 1 m"),
             ("Kolu — 45 views", KOLU_B, KOLU_M,
              "1.8x tighter at 6 cm; identical at 1 m"))):
-        ax.set_facecolor("#1B201D")
+        ax.set_facecolor("#F1F1EC")
         for s in ax.spines.values():
-            s.set_color("#3C443E")
-        ax.grid(True, which="both", color="#2C332E", lw=.8)
+            s.set_color("#D8D8D2")
+        ax.grid(True, which="both", color="#E2E2DC", lw=.8)
         ax.set_axisbelow(True)
         ax.plot(*zip(*bs), "-o", color=BASE, lw=2.4, ms=7,
                 label="MapAnything — feed-forward")
@@ -109,8 +109,8 @@ def chart():
         ax.set_title(t, color=FG, fontsize=17, fontweight="bold", pad=10, loc="left")
         ax.text(.03, .04, note, transform=ax.transAxes, color=DIM, fontsize=11.5,
                 family="monospace")
-        lg = ax.legend(loc="upper left", fontsize=12, facecolor="#1B201D",
-                       edgecolor="#3C443E", labelcolor=FG)
+        lg = ax.legend(loc="upper left", fontsize=12, facecolor="#F1F1EC",
+                       edgecolor="#D8D8D2", labelcolor=FG)
         lg.get_frame().set_linewidth(.8)
     p = f"{OUT}/03_resolution_vs_scale.png"
     fig.savefig(p, dpi=125, facecolor=BG)
@@ -168,7 +168,7 @@ def summary():
              color=DIM, fontsize=12.5, va="top", linespacing=1.75)
     fig.text(.055, .045, "No GNSS in either clip — absolute accuracy is not yet "
              "measurable; metre labels come from the model's own metric scale.",
-             color="#6b736c", fontsize=11.5, family="monospace")
+             color="#7A7A74", fontsize=11.5, family="monospace")
     p = f"{OUT}/00_summary.png"
     fig.savefig(p, dpi=125, facecolor=BG)
     plt.close(fig)

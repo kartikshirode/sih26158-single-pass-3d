@@ -15,6 +15,22 @@ MAX_TRIS = 400_000
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
+# Light by default: these renders end up in the report, the viewer and the SIH deck,
+# all of which are white, and a dark panel dropped on a white page reads as a hole.
+# The dark theme is kept because it is still the better one on a screen at night.
+# `heat` is the ground for the height-coloured diagnostics and stays dark in both
+# themes. Every perceptually-uniform colormap is built to end pale so that it reads on
+# black; turbo's yellow band simply disappears on paper, and those three panels are the
+# ones that answer whether an underpass is open. Photo-coloured views get the light
+# ground; height-coded ones keep the dark one.
+THEMES = {
+    "light": dict(fig="#FAFAF8", panel="#F1F1EC", ink="#1A1A1A", ambient=0.58,
+                  heat="#16191B", heat_ink="#1A1A1A"),
+    "dark":  dict(fig="#101010", panel="#101010", ink="#E8E8E8", ambient=0.42,
+                  heat="#101010", heat_ink="#E8E8E8"),
+}
+T = THEMES["light"]
+
 
 def rot(az_deg: float, el_deg: float) -> np.ndarray:
     a, e = np.radians(az_deg), np.radians(el_deg)
@@ -29,8 +45,10 @@ def shade_mesh(ax, V, F, VC, az, el, title, radius=None, light=(0.35, -0.75, 0.5
     n = np.cross(tri[:, 1] - tri[:, 0], tri[:, 2] - tri[:, 0])
     n /= np.linalg.norm(n, axis=1, keepdims=True) + 1e-12
     # Ambient + diffuse. Pure lambert drives back-facing geometry to black, which
-    # hides exactly the detail a reviewer needs to see.
-    lam = 0.42 + 0.58 * np.clip(np.abs(n @ np.asarray(light)), 0.0, 1.0)
+    # hides exactly the detail a reviewer needs to see; on a light ground the ambient
+    # has to sit higher still, or the surface reads as a silhouette.
+    amb = T["ambient"]
+    lam = amb + (1.0 - amb) * np.clip(np.abs(n @ np.asarray(light)), 0.0, 1.0)
     fc = np.clip(VC[F].mean(1) * lam[:, None], 0, 1)
 
     order = np.argsort(tri[:, :, 2].mean(1))               # painter's algorithm
@@ -48,15 +66,21 @@ def shade_points(ax, P, C, az, el, title, radius=None, s=0.6):
     _frame(ax, Pr, title, radius)
 
 
-def _frame(ax, Vr, title, radius=None):
+def _frame(ax, Vr, title, radius=None, ink=None):
     # One radius for every panel, so the views are comparable at a glance and each
     # one fills its axes. Per-panel autoscaling makes a plan view and an elevation
     # of the same model look like different objects.
     cx, cy = Vr[:, 0].mean(), Vr[:, 1].mean()
     r = radius if radius is not None else 0.52 * max(np.ptp(Vr[:, 0]), np.ptp(Vr[:, 1]))
     ax.set_xlim(cx - r, cx + r); ax.set_ylim(cy - r, cy + r)
-    ax.set_aspect("equal"); ax.axis("off")
-    ax.set_title(title, fontsize=11, color="#e8e8e8")
+    ax.set_aspect("equal")
+    # NOT ax.axis("off"): that clears `axison`, and matplotlib then skips drawing the
+    # axes patch entirely - so set_facecolor silently does nothing and every panel
+    # inherits the figure colour. Hide the ticks and spines instead.
+    ax.set_xticks([]); ax.set_yticks([])
+    for sp in ax.spines.values():
+        sp.set_visible(False)
+    ax.set_title(title, fontsize=11, color=ink or T["ink"])
 
 
 def section(ax, P, C, title, frac=0.02):
@@ -80,9 +104,11 @@ def section(ax, P, C, title, frac=0.02):
     # Coloured by HEIGHT, not by photo colour. A section of real footage in shadow
     # is almost black, and a black profile on a black ground shows nothing - which
     # defeats the only view that can tell an open underpass from a filled one.
-    ax.scatter(perp[m], q[m, 1], c=q[m, 1], cmap="turbo", s=1.6,
+    ax.scatter(perp[m], q[m, 1], c=q[m, 1], cmap="turbo", s=2.6,
                linewidths=0, marker=".")
-    _frame(ax, np.stack([perp[m], q[m, 1], np.zeros(m.sum())], 1), title)
+    ax.set_facecolor(T["heat"])
+    _frame(ax, np.stack([perp[m], q[m, 1], np.zeros(m.sum())], 1), title,
+           ink=T["heat_ink"])
 
 
 def upright_frame(P: np.ndarray, centres=None, cams=None):
@@ -166,9 +192,9 @@ def main(d: str, out: str):
     views = [(0, 90, "plan"), (30, 55, "oblique"), (75, 25, "low angle")]
     rows = 3 if have_mesh else 2
     fig, ax = plt.subplots(rows, 3, figsize=(19, 5.6 * rows),
-                           facecolor="#101010", squeeze=False)
+                           facecolor=T["fig"], squeeze=False)
     # One radius for the rendered views, sized to the footprint rather than the
-    # diagonal, so the model fills the frame instead of floating in black.
+    # diagonal, so the model fills the frame instead of floating in the background.
     R = 0.52 * float(max(np.ptp(P[:, 0]), np.ptp(P[:, 2])))
     for j, (az, el, name) in enumerate(views):
         shade_points(ax[0][j], P, C, az, el, f"fused point cloud - {name}", radius=R)
@@ -187,18 +213,21 @@ def main(d: str, out: str):
     # cannot show whether two surfaces sit at plausible relative heights.
     a0 = ax[rows - 1][0]
     sub = np.random.default_rng(0).choice(len(P), min(200_000, len(P)), replace=False)
-    a0.scatter(P[sub, 0], P[sub, 2], c=P[sub, 1], cmap="turbo", s=0.8,
+    a0.scatter(P[sub, 0], P[sub, 2], c=P[sub, 1], cmap="turbo", s=1.1,
                linewidths=0, marker=".")
-    _frame(a0, P[sub][:, [0, 2, 1]], "plan, coloured by height", radius=R)
+    _frame(a0, P[sub][:, [0, 2, 1]], "plan, coloured by height", radius=R,
+           ink=T["heat_ink"])
     for j, pct in enumerate((40, 60)):
         c = float(np.percentile(t, pct))
         m = np.abs(t - c) <= w
         section(ax[rows - 1][j + 1], P[m], C[m], f"section - {pct}% along track")
 
     for a in ax.ravel():
-        a.set_facecolor("#101010")
+        a.set_facecolor(T["panel"])
+    for a in ax[rows - 1]:            # the height-coded row keeps its dark ground
+        a.set_facecolor(T["heat"])
     plt.tight_layout()
-    plt.savefig(out, dpi=110, facecolor="#101010")
+    plt.savefig(out, dpi=110, facecolor=T["fig"])
     print("wrote", out, f"| {len(P):,} points" +
           (f", {len(F):,} triangles" if have_mesh else ""))
 
@@ -206,5 +235,7 @@ def main(d: str, out: str):
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("indir"); ap.add_argument("--out", default="out/kolu3d/render.png")
+    ap.add_argument("--theme", choices=sorted(THEMES), default="light")
     a = ap.parse_args()
+    T = THEMES[a.theme]
     main(a.indir, a.out)
