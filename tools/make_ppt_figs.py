@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import os
 
-import cv2
 import matplotlib
 import numpy as np
 
@@ -37,35 +36,96 @@ def series(clip):
     return grab("baseline"), grab("mvs")
 
 
-def cell(path, row, col, w=1000):
-    """One panel out of a 3x3 render sheet, trimmed to its content."""
-    im = cv2.cvtColor(cv2.imread(path), cv2.COLOR_BGR2RGB)
-    H, W = im.shape[:2]
-    ch, cw = H // 3, W // 3
-    c = im[row * ch + int(ch * 0.06):(row + 1) * ch, col * cw:(col + 1) * cw]
-    g = cv2.cvtColor(c, cv2.COLOR_RGB2GRAY)
-    ys, xs = np.where(g > 18)
-    if len(xs):
-        c = c[max(ys.min() - 8, 0):ys.max() + 8, max(xs.min() - 8, 0):xs.max() + 8]
-    s = w / c.shape[1]
-    return cv2.resize(c, (w, int(c.shape[0] * s)), interpolation=cv2.INTER_AREA)
+MAX_TRIS = 400_000
+# width / height of one before-after panel, used to size the view window
+PANEL_ASPECT = 4.45 / 3.35
+LIGHT_DIR = np.array([0.35, -0.75, 0.56])
 
 
-def before_after():
-    """The evidence panel: same clip, same poses, only the geometry stage changed."""
-    a = cell(f"{ROOT}/out/kolu3d/render.png", 1, 1)
-    b = cell(f"{ROOT}/out/kolumvs3d/render.png", 1, 1)
-    h = max(a.shape[0], b.shape[0])
-    pad = lambda im: cv2.copyMakeBorder(im, 0, h - im.shape[0], 0, 0,
-                                        cv2.BORDER_CONSTANT, value=(255, 255, 255))
-    fig, ax = plt.subplots(1, 2, figsize=(9.2, 4.5), facecolor="white")
-    for axi, img, lab, c in ((ax[0], pad(a), "BEFORE  ·  feed-forward point maps", BASE),
-                             (ax[1], pad(b), "AFTER  ·  full-res photometric MVS", MVS)):
-        axi.imshow(img); axi.axis("off")
+def _mesh_in_frame(d, B, c0):
+    """Mesh vertices, faces and colours, rotated into a shared upright frame."""
+    V = (np.load(f"{ROOT}/out/{d}/mesh_v.npy") - c0) @ B.T
+    F = np.load(f"{ROOT}/out/{d}/mesh_f.npy")
+    C = np.load(f"{ROOT}/out/{d}/mesh_c.npy") / 255.0
+    if len(F) > MAX_TRIS:
+        # Decimate, never subsample: dropping random triangles turns the surface into
+        # disconnected facets and the shading collapses to speckle.
+        import open3d as o3d
+        m = o3d.geometry.TriangleMesh(o3d.utility.Vector3dVector(V),
+                                      o3d.utility.Vector3iVector(F))
+        m.vertex_colors = o3d.utility.Vector3dVector(C)
+        m = m.simplify_quadric_decimation(MAX_TRIS)
+        V, F, C = (np.asarray(m.vertices), np.asarray(m.triangles),
+                   np.asarray(m.vertex_colors))
+    return V, F, C
+
+
+def _shade(ax, V, F, C, az, el, radius, centre):
+    """
+    Flat-shaded triangles on a light ground, painter's-algorithm depth sort.
+
+    Ambient is lifted well above the dark-theme renderer's 0.42: on white, a surface
+    lit for a black background reads as a silhouette, and the detail this whole deck
+    is arguing about disappears.
+    """
+    import sys
+    sys.path.insert(0, os.path.join(ROOT, "src", "pipeline"))
+    from render_views import rot
+    from matplotlib.collections import PolyCollection
+
+    Vr = V @ rot(az, el).T
+    tri = Vr[F]
+    n = np.cross(tri[:, 1] - tri[:, 0], tri[:, 2] - tri[:, 0])
+    n /= np.linalg.norm(n, axis=1, keepdims=True) + 1e-12
+    lam = 0.58 + 0.42 * np.clip(np.abs(n @ LIGHT_DIR), 0.0, 1.0)
+    fc = np.clip(C[F].mean(1) * lam[:, None], 0, 1)
+    order = np.argsort(tri[:, :, 2].mean(1))
+    ax.add_collection(PolyCollection(tri[order][:, :, :2], facecolors=fc[order],
+                                     edgecolors="none", linewidths=0))
+    # One camera for both panels. Centring each on its own centroid made the smaller,
+    # holier reconstruction look merely zoomed out, which hides the actual finding.
+    # `radius` is the half-height; the width follows the panel's aspect so the model
+    # fills the frame instead of floating in a square window inside a wide axes.
+    cx, cy = centre
+    ax.set_xlim(cx - radius * PANEL_ASPECT, cx + radius * PANEL_ASPECT)
+    ax.set_ylim(cy - radius, cy + radius)
+    ax.set_aspect("equal"); ax.axis("off")
+
+
+def before_after(az=30, el=55):
+    """
+    The evidence panel, rendered fresh on white rather than cropped out of the
+    dark-theme contact sheet.
+
+    Both panels use the BASELINE's upright frame, centre and radius. MVS inherits
+    MapAnything's frame, so the two really are in one coordinate system, and sharing
+    the framing is what makes this a comparison rather than two pictures.
+    """
+    import sys
+    sys.path.insert(0, os.path.join(ROOT, "src", "pipeline"))
+    from render_views import rot, upright_frame
+
+    base, mvs = "kolu3d", "kolumvs3d"
+    P = np.load(f"{ROOT}/out/{base}/points_fused.npy").astype(np.float64)
+    cen = np.load(f"{ROOT}/out/{base}/cam_centres.npy")
+    B, c0 = upright_frame(P, cen), P.mean(0)
+
+    # Framing taken from BOTH clouds together, in the view's own screen plane, so the
+    # wider reconstruction is not cropped and the narrower one is not re-centred.
+    R = rot(az, el)
+    scr = np.vstack([((np.load(f"{ROOT}/out/{d}/points_fused.npy").astype(np.float64)
+                       - c0) @ B.T @ R.T)[::37, :2] for d in (base, mvs)])
+    centre = (float((scr[:, 0].min() + scr[:, 0].max()) / 2),
+              float((scr[:, 1].min() + scr[:, 1].max()) / 2))
+    radius = 0.52 * float(max(np.ptp(scr[:, 1]), np.ptp(scr[:, 0]) / PANEL_ASPECT))
+
+    fig, ax = plt.subplots(1, 2, figsize=(9.2, 3.9), facecolor="white")
+    for axi, d, lab, c in ((ax[0], base, "BEFORE  ·  feed-forward point maps", BASE),
+                           (ax[1], mvs, "AFTER  ·  full-res photometric MVS", MVS)):
+        _shade(axi, *_mesh_in_frame(d, B, c0), az, el, radius, centre)
         axi.set_title(lab, color=c, fontsize=11.5, fontweight="bold", pad=7)
-        for s in ("top", "bottom", "left", "right"):
-            axi.spines[s].set_visible(False)
-    fig.subplots_adjust(left=.01, right=.99, top=.90, bottom=.01, wspace=.03)
+        axi.set_facecolor("white")
+    fig.subplots_adjust(left=.01, right=.99, top=.88, bottom=.02, wspace=.03)
     p = f"{OUT}/fig_beforeafter.png"
     fig.savefig(p, dpi=190, facecolor="white"); plt.close(fig)
     print("wrote", p)

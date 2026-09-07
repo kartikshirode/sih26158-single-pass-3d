@@ -380,7 +380,7 @@ def build():
 
     s2.shapes.add_picture(f"{FIG}/fig_beforeafter.png", Inches(6.95), Inches(1.52),
                           width=Inches(5.93))
-    textbox(s2, 6.95, 4.44, 5.93, 0.32, [
+    textbox(s2, 6.95, 4.12, 5.93, 0.32, [
         {"text": "Same clip, same 45 keyframes, same camera poses. Only the geometry "
                  "stage changed.", "size": 8.6, "colour": GREY,
          "align": PP_ALIGN.CENTER}])
