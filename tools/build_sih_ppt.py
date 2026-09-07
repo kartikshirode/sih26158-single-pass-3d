@@ -236,6 +236,63 @@ def fetch_template():
 
 
 # ----------------------------------------------------------------------------- build
+# ------------------------------------------------------------- visual-first helpers
+GREEN = RGBColor(0x2E, 0x7D, 0x32)
+PAPER = RGBColor(0xFF, 0xFF, 0xFF)
+WARM = RGBColor(0xFD, 0xF3, 0xEB)
+
+
+def dot(slide, cx, cy, d, colour, glyph="", gcol=PAPER):
+    """A filled status disc. Colour carries the meaning; the glyph repeats it, because
+    a reader who prints this in greyscale still has to be able to score the row."""
+    s = slide.shapes.add_shape(MSO_SHAPE.OVAL, Inches(cx - d / 2), Inches(cy - d / 2),
+                               Inches(d), Inches(d))
+    s.fill.solid(); s.fill.fore_color.rgb = colour
+    s.line.fill.background(); s.shadow.inherit = False
+    write(s.text_frame, [{"text": glyph, "size": 9.5, "bold": True, "colour": gcol,
+                          "align": PP_ALIGN.CENTER}])
+    s.text_frame.margin_top = s.text_frame.margin_bottom = 0
+    return s
+
+
+def pill(slide, x, y, w, h, text, colour=BLUE, fill=None, size=8.6):
+    s = slide.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE,
+                               Inches(x), Inches(y), Inches(w), Inches(h))
+    s.adjustments[0] = 0.42
+    s.fill.solid(); s.fill.fore_color.rgb = fill or LIGHT
+    s.line.color.rgb = colour; s.line.width = Pt(0.75)
+    s.shadow.inherit = False
+    write(s.text_frame, [{"text": text, "size": size, "bold": True, "colour": colour,
+                          "align": PP_ALIGN.CENTER}], line=0.9)
+    s.text_frame.margin_left = s.text_frame.margin_right = Emu(18000)
+    s.text_frame.margin_top = s.text_frame.margin_bottom = 0
+    return s
+
+
+def rule(slide, x, y, w, colour=RULE):
+    s = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(x), Inches(y),
+                               Inches(w), Inches(0.008))
+    s.fill.solid(); s.fill.fore_color.rgb = colour
+    s.line.fill.background(); s.shadow.inherit = False
+    return s
+
+
+MARKS = {"y": (GREEN, "✓"), "n": (RGBColor(0xC0, 0x39, 0x2B), "✗"),
+         "p": (RGBColor(0xC9, 0x93, 0x1F), "~")}
+
+
+def mark(slide, cx, cy, kind, note="", w=1.8):
+    """One cell of the comparison matrix: a coloured mark, plus three or four words
+    saying why. The mark is what gets read; the words are for whoever leans in."""
+    colour, glyph = MARKS[kind]
+    dot(slide, cx, cy, 0.24, colour, glyph)
+    if note:
+        textbox(slide, cx - w / 2, cy + 0.15, w, 0.44,
+                [{"text": note, "size": 7.4, "colour": GREY,
+                  "align": PP_ALIGN.CENTER}], line=0.88)
+
+
+# ----------------------------------------------------------------------------- build
 def build():
     fetch_template()
     m = measurements()
@@ -264,9 +321,6 @@ def build():
         {"text": [{"text": "Team Name (Registered on portal) – ", "size": 15},
                   {"text": TEAM_NAME, "size": 15, "bold": True}], "space": 8},
     ], line=1.05)
-    # The template ships "TITLE PAGE" in this subtitle placeholder. Slide 2's equivalent
-    # placeholder gets our idea title, so this one does too; the same value goes in the
-    # portal's own Idea Title field.
     sub = shape(s1, "Subtitle 3")
     # The placeholder ships overlapping the SIH title block, which is fine for the two
     # words "TITLE PAGE" and not for a real title. Drop it clear of the descenders.
@@ -283,422 +337,394 @@ def build():
             "colour": INK, "align": PP_ALIGN.CENTER}])
     shape(s2, "TextBox 8")._element.getparent().remove(shape(s2, "TextBox 8")._element)
 
-    textbox(s2, 0.42, 1.32, 6.35, 0.55, [
-        {"text": "Proposed Solution", "size": 15, "bold": True, "colour": BLUE},
-        {"text": "One drone pass in — a georeferenceable, metrically scaled, textured "
-                 "3D mesh and point cloud out, in all six required formats.",
-         "size": 11.5, "space": 3}])
-    textbox(s2, 0.42, 2.42, 6.35, 1.5, [
-        {"text": "How it addresses the problem", "size": 13, "bold": True,
-         "colour": BLUE},
-        {"text": "•  No repeat passes, no flight planning, no Ground Control Point "
-                 "survey — the AI recovers pose and metric scale from the single pass "
-                 "itself.", "size": 10.5, "space": 4},
-        {"text": "•  Reconstructs terrain and structures, facades and rooftops, roads, "
-                 "vegetation and obstacles as textured mesh or point cloud.",
-         "size": 10.5, "space": 3},
-        {"text": "•  Output is measurable — distance, area and height — not just "
-                 "viewable.", "size": 10.5, "space": 3}], line=0.98)
+    textbox(s2, 0.45, 1.16, 12.4, 0.34, [
+        {"text": [{"text": "One drone pass in — a metrically scaled, textured 3D mesh "
+                           "and dense point cloud out, in all six required formats, "
+                           "measurable in the browser.",
+                   "size": 12.5, "bold": True, "colour": INK}]}])
 
-    band(s2, 0.42, 4.05, 6.35, 2.18, fill=LIGHT)
-    textbox(s2, 0.60, 4.14, 6.0, 2.05, [
-        {"text": "Innovation and uniqueness", "size": 13, "bold": True,
-         "colour": ORANGE},
-        {"text": [{"text": "We found why single-pass AI 3D looks right from far and "
-                           "falls apart up close.", "size": 10.5, "bold": True}],
-         "space": 5},
-        {"text": "The feed-forward model samples at 2.2 cm but only carries "
-                 "information at 30–50 cm — a ceiling set by its patch-14 vision "
-                 "backbone and its interpolating depth head, not by tuning. We proved "
-                 "it three ways and tested the competing explanation, which failed.",
-         "size": 10, "space": 3},
-        {"text": [{"text": "The fix: use the AI only for what one pass uniquely needs "
-                           "— pose and metric scale — and take the geometry from "
-                           "full-resolution photometric multi-view stereo.",
-                   "size": 10.5, "bold": True}], "space": 5},
-        {"text": f"Measured on two real clips: {m['gain_lo']:.1f}–{m['gain_hi']:.1f}× "
-                 f"finer detail, resolving to {m['finest_mm']:.1f} mm; buildings gain "
-                 f"real walls (height ceiling {m['relief_base']:.2f} m → "
-                 f"{m['relief_mvs']:.2f} m); coverage {m['coverage']:.0%} of the "
-                 f"AI-only baseline on the survey clip.",
-         "size": 10, "space": 3},
-    ], line=0.98)
+    # The idea, as a picture. Everything the AI is good at is kept; the one thing it is
+    # bad at is thrown away and replaced. That is the whole submission in one row.
+    band(s2, 0.45, 1.58, 6.32, 1.92, fill=PAPER, edge=RULE)
+    pill(s2, 0.58, 1.86, 1.05, 0.46, "ONE\nDRONE PASS", INK, PAPER, size=8.2)
+    arrow(s2, 1.68, 2.00)
+    pill(s2, 1.93, 1.86, 1.15, 0.46, "FEED-\nFORWARD AI", INK, PAPER, size=8.2)
+    arrow(s2, 3.13, 1.75); arrow(s2, 3.13, 2.29)
+    pill(s2, 3.38, 1.64, 3.24, 0.42, "✓  KEEP   camera pose + metric scale",
+         GREEN, RGBColor(0xEE, 0xF6, 0xEE), size=9)
+    pill(s2, 3.38, 2.18, 3.24, 0.42, "✗  DROP   its geometry",
+         RGBColor(0xC0, 0x39, 0x2B), RGBColor(0xFC, 0xEF, 0xEE), size=9)
+    textbox(s2, 3.38, 2.60, 3.24, 0.26, [
+        {"text": "sampled at 2.2 cm, but only carries 30–50 cm",
+         "size": 7.6, "colour": GREY, "align": PP_ALIGN.CENTER}])
+    # Second row: what the kept half actually drives. Kept on its own line because the
+    # first draft interleaved it with the fork and the reading order became ambiguous.
+    textbox(s2, 0.58, 2.70, 6.1, 0.24, [
+        {"text": "the kept pose and scale then drive:", "size": 8, "bold": True,
+         "colour": GREY}])
+    pill(s2, 0.58, 2.96, 1.72, 0.40, "global bundle adjustment", BLUE, LIGHT, size=8.2)
+    arrow(s2, 2.35, 3.06)
+    pill(s2, 2.60, 2.96, 2.20, 0.40, "full-resolution photometric MVS",
+         BLUE, LIGHT, size=8.2)
+    arrow(s2, 4.85, 3.06)
+    pill(s2, 5.10, 2.96, 1.52, 0.40, "MEASURED 3D", GREEN,
+         RGBColor(0xEE, 0xF6, 0xEE), size=8.6)
 
-    textbox(s2, 0.42, 6.32, 6.35, 0.55, [
-        {"text": [{"text": "Prototype status today:  ", "size": 10, "bold": True,
+    textbox(s2, 0.45, 3.62, 6.32, 0.3, [
+        {"text": "Reconstructs, per the problem statement", "size": 9.5,
+         "bold": True, "colour": BLUE}])
+    for i, t in enumerate(("terrain +\nstructures", "building facades\n+ rooftops",
+                           "roads +\ninfrastructure", "vegetation\n+ obstacles",
+                           "textured mesh\nor point cloud")):
+        pill(s2, 0.45 + i * 1.28, 3.94, 1.20, 0.50, t, BLUE, LIGHT, size=7.6)
+
+    s2.shapes.add_picture(f"{FIG}/fig_beforeafter.png", Inches(6.95), Inches(1.52),
+                          width=Inches(5.93))
+    textbox(s2, 6.95, 4.44, 5.93, 0.32, [
+        {"text": "Same clip, same 45 keyframes, same camera poses. Only the geometry "
+                 "stage changed.", "size": 8.6, "colour": GREY,
+         "align": PP_ALIGN.CENTER}])
+
+    for i, (h, sub_t) in enumerate((
+            (m["registered"], "keyframes registered"),
+            (f'{m["reproj_ba"]:.2f} px', "reprojection error"),
+            (f'{m["dense_points"]/1e6:.2f} M', "measured dense points"),
+            (f'{m["finest_mm"]:.1f} mm', "finest detail resolved"),
+            (f'{m["gain_lo"]:.1f}–{m["gain_hi"]:.1f}×', "finer than the AI alone"),
+            (f'{m["formats_have"]} / {m["formats_need"]}', "export formats"))):
+        chip(s2, 0.45 + i * 2.09, 4.86, 1.98, 0.98, h, sub_t)
+
+    textbox(s2, 0.45, 6.00, 12.4, 0.5, [
+        {"text": [{"text": "Prototype status:  ", "size": 9.6, "bold": True,
                    "colour": ORANGE},
-                  {"text": "the whole pipeline is containerised and running, with a "
-                           "browser viewer for measurement. Four of the six "
-                           "desired-output targets are met and measured; the two that "
-                           "are not are named on the feasibility slide.",
-                   "size": 10, "colour": INK}]}], line=0.95)
-    for i, (h, sub) in enumerate((
-            (m["registered"], f'keyframes registered\n{m["frame"]}, single pass'),
-            (f'{m["reproj_ba"]:.2f} px', "mean reprojection error\nafter bundle "
-                                        "adjustment"),
-            (f'{m["dense_points"]/1e6:.2f} M', "dense points measured\nnot "
-                                               "interpolated"),
-            (f'{m["formats_have"]}  /  {m["formats_need"]}',
-             "required export formats\nOBJ PLY LAS GeoTIFF glB FBX"))):
-        chip(s2, 6.95 + i * 1.52, 5.00, 1.42, 1.15, h, sub)
+                  {"text": "the pipeline is containerised and running end to end on two "
+                           "real clips. Four of the PS's six desired-output targets are "
+                           "met and measured; the other two are on the feasibility "
+                           "slide with the work that closes them.",
+                   "size": 9.6, "colour": INK}]}], line=0.95)
 
-    s2.shapes.add_picture(f"{FIG}/fig_beforeafter.png", Inches(6.95), Inches(1.45),
-                          width=Inches(6.0))
-    textbox(s2, 6.95, 4.42, 6.0, 0.4, [
-        {"text": "Same clip, same 45 keyframes, same camera poses — the only change is "
-                 "where the geometry comes from.", "size": 9, "colour": GREY,
-         "align": PP_ALIGN.CENTER}], line=0.95)
     # -------------------------------------------------------- 3 · technical approach
     shape(s3, "TextBox 8")._element.getparent().remove(shape(s3, "TextBox 8")._element)
-    textbox(s3, 0.45, 1.20, 12.4, 0.35, [
+    textbox(s3, 0.45, 1.14, 12.4, 0.32, [
         {"text": "Methodology — five stages, all of them already running end to end",
-         "size": 13, "bold": True, "colour": BLUE}])
+         "size": 12.5, "bold": True, "colour": BLUE}])
 
     stages = [
-        ("INGEST", "Video 1080p/4K + GPS + flight metadata. Adaptive keyframing rejects "
-                   "motion blur, compression artefacts and duplicates. Auto-detects "
-                   "SRT / CSV / EXIF / flight-log schema; self-calibrates when "
-                   "intrinsics are absent."),
-        ("POSE + METRIC SCALE", "MapAnything feed-forward point maps → intrinsics by "
-                                f"robust masked fit ({m['intrinsics_px']:.2f} px "
-                                "residual) → COLMAP triangulation and global bundle "
-                                f"adjustment. {m['reproj_tri']:.2f} → "
-                                f"{m['reproj_ba']:.2f} px."),
-        ("DENSE GEOMETRY", "OpenMVS PatchMatch at full keyframe resolution with "
-                           "geometric-consistency depth filtering — which also rejects "
-                           "vehicles, people and animals, since a moving object cannot "
-                           "be consistent across three views. Breaks the patch "
-                           "ceiling."),
-        ("SURFACE + FRAME", "Delaunay + graph-cut mesh, per-vertex colour. Vertical "
-                            "recovered from the ground plane and cross-checked against "
-                            "the gimbal roll-zero constraint; the two agree within 0.6 degrees."),
-        ("EXPORT + VIEW", "OBJ · PLY · LAS 1.4 · GeoTIFF DSM · glB/glTF · FBX, one "
-                          "shared ENU frame, plus a browser viewer for measurement."),
+        ("INGEST", "1080p/4K video + GPS + flight metadata.\nAdaptive keyframing drops "
+                   "motion blur, compression artefacts and duplicates.\nAuto-detects "
+                   "SRT / CSV / EXIF / flight log."),
+        ("POSE + METRIC SCALE", "MapAnything point maps → intrinsics by robust masked "
+                                f"fit ({m['intrinsics_px']:.2f} px) → COLMAP "
+                                "triangulation + global bundle adjustment."),
+        ("DENSE GEOMETRY", "OpenMVS PatchMatch at full keyframe resolution.\nGeometric-"
+                           "consistency filtering across ≥ 3 views also rejects moving "
+                           "vehicles, people and animals."),
+        ("SURFACE + FRAME", "Delaunay + graph-cut mesh, per-vertex colour.\nVertical "
+                            "from the ground plane, cross-checked against the gimbal's "
+                            "roll-zero constraint."),
+        ("EXPORT + VIEW", "OBJ · PLY · LAS 1.4 · GeoTIFF DSM · glB/glTF · FBX, in one "
+                          "shared ENU frame.\nBrowser viewer for measurement."),
     ]
     x = 0.45
     for i, (t, b) in enumerate(stages):
-        flow_box(s3, x, 1.58, 2.29, 1.52, i + 1, t, b)
+        flow_box(s3, x, 1.50, 2.29, 1.66, i + 1, t, b)
         if i < 4:
-            arrow(s3, x + 2.33, 2.24)
+            arrow(s3, x + 2.33, 2.23)
         x += 2.53
+    for i, (lab, side) in enumerate((("IN", 0.45), ("OUT", 12.18))):
+        textbox(s3, side - 0.02, 3.19, 0.7, 0.24,
+                [{"text": lab, "size": 7.5, "bold": True, "colour": GREY}])
 
-    band(s3, 0.45, 3.30, 6.15, 3.15)
-    textbox(s3, 0.62, 3.38, 5.85, 3.3, [
-        {"text": "Technologies", "size": 12.5, "bold": True, "colour": BLUE},
-        {"text": [{"text": "Vision / 3D:  ", "size": 10, "bold": True},
-                  {"text": "MapAnything (Apache-2.0), COLMAP, OpenMVS, Open3D, OpenCV, "
-                           "PyTorch", "size": 10}], "space": 5},
-        {"text": [{"text": "Export:  ", "size": 10, "bold": True},
-                  {"text": "trimesh, laspy, rasterio, pygltflib, assimp (BSD-3)",
-                   "size": 10}], "space": 4},
-        {"text": [{"text": "Serving:  ", "size": 10, "bold": True},
-                  {"text": "Python 3.11, Docker, Google Cloud Run jobs in asia-south1, "
-                           "GCS, three.js viewer", "size": 10}], "space": 4},
-        {"text": [{"text": "Why this stack, specifically:", "size": 10, "bold": True,
-                   "colour": ORANGE}], "space": 8},
-        {"text": "•  VGGT is the better-known feed-forward model and we rejected it: "
-                 "its acceptable-use terms bar military and espionage use, which is "
-                 "exactly what this problem statement names. MapAnything's Apache-2.0 "
-                 "checkpoint carries no such bar.", "size": 9.5, "space": 4},
-        {"text": "•  Processing is pinned to asia-south1 because India's geospatial "
-                 "guidelines require data finer than 1 m to be processed within India — "
-                 "and this PS targets ≤ 1 m.", "size": 9.5, "space": 4},
-        {"text": "•  Every component is permissively licensed and runs on CPU, so the "
-                 "system has a working floor with no GPU at all. GPU is a speed "
-                 "upgrade, never a dependency for producing a result.",
-         "size": 9.5, "space": 4},
-    ], line=0.97)
+    textbox(s3, 0.45, 3.56, 7.55, 0.3, [
+        {"text": "Technology stack", "size": 12, "bold": True, "colour": BLUE}])
+    groups = [
+        ("Vision / 3D", ("PyTorch", "MapAnything", "COLMAP", "OpenMVS", "Open3D",
+                         "OpenCV")),
+        ("Export", ("trimesh", "laspy", "rasterio", "pygltflib", "assimp")),
+        ("Serve", ("Python 3.11", "Docker", "Cloud Run · asia-south1", "GCS",
+                   "three.js")),
+    ]
+    y = 3.90
+    for lab, items in groups:
+        textbox(s3, 0.45, y + 0.04, 1.05, 0.3,
+                [{"text": lab, "size": 8.6, "bold": True, "colour": GREY}])
+        gx = 1.52
+        for it in items:
+            w = 0.20 + 0.072 * len(it)
+            pill(s3, gx, y, w, 0.30, it, BLUE, LIGHT, size=8)
+            gx += w + 0.09
+        y += 0.44
 
-    band(s3, 6.75, 3.30, 6.12, 3.15)
-    textbox(s3, 6.92, 3.38, 5.82, 3.3, [
-        {"text": "Why the two-model split is the whole idea", "size": 12.5,
-         "bold": True, "colour": BLUE},
-        {"text": "A single pass gives weak geometry but strong context. Classical "
-                 "structure-from-motion alone struggles to fix scale and can fail to "
-                 "register a thin, low-overlap strip; the feed-forward model solves "
-                 "exactly that, and nothing else well.",
-         "size": 10, "space": 5},
-        {"text": "So it is used as a pose-and-scale prior, then discarded. Every "
-                 "surface point in the delivered model is triangulated from real pixels "
-                 "across at least three views.", "size": 10, "space": 4},
-        {"text": [{"text": "Evidence that the split is load-bearing:", "size": 10,
-                   "bold": True, "colour": ORANGE}], "space": 7},
-        {"text": "•  Reprojection error falls 1.73 → 0.37 px through bundle "
-                 "adjustment — the AI poses did carry error, and densifying before "
-                 "correcting it would have sharpened a wrong surface.",
-         "size": 9.5, "space": 4},
-        {"text": "•  At 1 m window size the two agree to within 2–4%. The entire "
-                 "difference is at small scale — precisely where the diagnosis said "
-                 "the information was missing.", "size": 9.5, "space": 4},
-        {"text": f"•  Vertical relief above local ground rises from a hard "
-                 f"{m['relief_base']:.2f} m ceiling to {m['relief_mvs']:.2f} m. Noise "
-                 f"cannot fake that: noise is isotropic, and buildings are not.",
-         "size": 9.5, "space": 4},
-        {"text": f"•  Variable illumination is the one challenge we can point at a "
-                 f"measurement for: on the shadowed, textureless clip MVS declined to "
-                 f"invent ground and coverage fell, while on the well-lit survey pass "
-                 f"it reached {m['coverage']:.0%} of the baseline's footprint. The "
-                 f"failure mode is measured, not assumed away.",
-         "size": 9.5, "space": 4},
-    ], line=0.97)
+    band(s3, 8.22, 3.56, 4.63, 3.20, fill=WARM, edge=ORANGE)
+    textbox(s3, 8.40, 3.64, 4.3, 3.05, [
+        {"text": "Four choices we can defend", "size": 11.5, "bold": True,
+         "colour": ORANGE},
+        {"text": [{"text": "Licence, not leaderboard.  ", "size": 9.2, "bold": True},
+                  {"text": "VGGT is the better-known model. Its acceptable-use policy "
+                           "bars military and espionage use — which this PS names. "
+                           "MapAnything's Apache-2.0 checkpoint does not.",
+                   "size": 9.2}], "space": 7},
+        {"text": [{"text": "Sovereign by construction.  ", "size": 9.2, "bold": True},
+                  {"text": "All processing pinned to asia-south1: India's geospatial "
+                           "guidelines require finer-than-1 m data to be processed "
+                           "within India, and this PS targets ≤ 1 m.", "size": 9.2}],
+         "space": 6},
+        {"text": [{"text": "No GPU floor.  ", "size": 9.2, "bold": True},
+                  {"text": "Every component is permissive and runs on CPU. GPU is a "
+                           "speed upgrade, never a dependency for getting a result.",
+                   "size": 9.2}], "space": 6},
+        {"text": [{"text": "Honest by construction.  ", "size": 9.2, "bold": True},
+                  {"text": "With no GNSS in a clip the DEM ships with a real "
+                           "geotransform in metres and no CRS at all, rather than a "
+                           "plausible-looking wrong one that downstream GIS would "
+                           "silently reproject.", "size": 9.2}], "space": 6},
+    ], line=0.96)
+
+    s3.shapes.add_picture(f"{FIG}/fig_timing.png", Inches(0.45), Inches(5.28),
+                          width=Inches(7.50))
 
     # ------------------------------------------------------ 4 · feasibility, risks
     shape(s4, "TextBox 8")._element.getparent().remove(shape(s4, "TextBox 8")._element)
-    textbox(s4, 0.45, 1.18, 12.4, 0.35, [
-        {"text": [{"text": "Feasibility — this is a measurement, not a plan.  ",
-                   "size": 13, "bold": True, "colour": BLUE},
-                  {"text": "Both clips ran end to end on commodity CPU; no GPU was "
-                           "available and none was needed to produce these numbers.",
+    textbox(s4, 0.45, 1.10, 12.4, 0.32, [
+        {"text": [{"text": "Scored against the PS's own six desired outputs.  ",
+                   "size": 12.5, "bold": True, "colour": BLUE},
+                  {"text": "Four met and measured, two open and named.",
                    "size": 11, "colour": INK}]}])
-    for i, (h, sub) in enumerate((
-            ("2 clips", f'run end to end\n{m["n_views_short"]} and {m["n_views"]} '
-                        f'keyframes'),
-            (hms(m["seconds"]), "wall clock, 8 vCPU\nCPU only, no GPU"),
-            (f'{m["triangles"]/1e6:.2f} M', "mesh triangles\nDelaunay + graph cut"),
-            (f'{m["resid_6cm"]:.2f} cm', f'detail at 6 cm scale\nwas '
-                                         f'{m["resid_6cm_base"]:.2f} cm'),
-            (f'{m["coverage"]:.0%}', "coverage vs baseline\non the survey clip"),
-            ("1.42×", "measured CPU fan-out\n2 tasks × 8 vCPU"))):
-        chip(s4, 0.45 + i * 2.09, 1.62, 1.98, 1.10, h, sub)
 
-    textbox(s4, 0.45, 2.92, 7.35, 0.3, [
-        {"text": "Potential challenges and risks — and how we close them",
-         "size": 12.5, "bold": True, "colour": ORANGE}])
-    risks = [
-        ("Processing time < 15 min for a 10-min video",
-         f"NOT MET YET. {m['n_views']} views take {hms(m['seconds'])} on 8 vCPU. CPU "
-         f"fan-out is measured at only 1.42×, and honest extrapolation puts a 600-view "
-         f"clip at ~29 min.",
-         "GPU PatchMatch on the Baramati Blackwell cluster (the same stage is 10–20× "
-         "faster on GPU) + keyframe budgeting to the scene, not the clock. CPU sharding "
-         "stays as the no-GPU fallback."),
-        ("Spatial accuracy ≤ 1 m, georeferenced",
-         "UNVALIDATED. Neither test clip carries GNSS, so the output is metric-relative "
-         "and the DEM is written with a real geotransform and deliberately NO CRS "
-         "rather than a plausible-looking wrong one.",
-         "Validate on an RTK/PPK-tagged public dataset with surveyed check points. The "
-         "georeferencing hooks are already in the exporter — only the CRS and origin "
-         "change when GNSS arrives."),
-        ("Facades from a nadir single pass",
-         "A straight-down pass physically cannot observe a vertical wall. We state this "
-         "rather than gloss it.",
-         "Handle oblique passes natively; bound the inference for genuinely unobserved "
-         "surface and mark it as inferred in the output, never as measured."),
-        ("Dataset schema unknown until the event",
-         "The PS says the dataset link will be provided in real time, so codec, drone "
-         "and metadata format are all unknown in advance.",
-         "Auto-detecting ingest across SRT / CSV / EXIF / flight log, and self-"
-         "calibration when camera intrinsics are absent. Already exercised on two "
-         "unrelated clips with different aspect ratios."),
-        ("OpenMVS is AGPL-3.0",
-         "A licence question for any onward government deployment, not a technical one.",
-         "Invoked as a separate unmodified process, so our code is not a derived work; "
-         "a BSD-licensed GPU replacement for this one stage is the clean long-term "
-         "answer."),
+    targets = [
+        ("y", "3D mesh or point cloud",
+         f'{m["triangles"]/1e6:.2f} M triangles · {m["dense_points"]/1e6:.2f} M points',
+         "every point triangulated from real pixels"),
+        ("y", "Six output formats",
+         "OBJ · PLY · LAS 1.4 · GeoTIFF · glB/glTF · FBX",
+         "all written and read back in one shared frame"),
+        ("y", "Coverage of the visible scene",
+         f'{m["coverage"]:.0%} of the AI-only baseline',
+         "on the survey clip; it declines to invent unmatched ground"),
+        ("y", "Web or desktop visualisation",
+         "browser viewer, with measurement",
+         "runs straight off the exported model"),
+        ("n", "Processing < 15 min for a 10-min video",
+         f'{hms(m["seconds"])} for {m["n_views"]} views on 8 vCPU',
+         "GPU PatchMatch + keyframe budgeting; CPU fan-out already measured at 1.42×"),
+        ("n", "Spatial accuracy ≤ 1 m, georeferenced",
+         "unvalidated — no GNSS in either test clip",
+         "RTK/PPK dataset with surveyed check points; CRS left empty, never faked"),
     ]
-    y = 3.28
-    for head, state, fix in risks:
-        textbox(s4, 0.45, y, 7.35, 0.62, [
-            {"text": [{"text": "▸ " + head + "  ", "size": 9.8, "bold": True,
-                       "colour": INK},
-                      {"text": state, "size": 9, "colour": GREY}]},
-            {"text": [{"text": "→ ", "size": 9, "bold": True, "colour": BLUE},
-                      {"text": fix, "size": 9, "colour": BLUE}], "space": 1}],
-            line=0.92)
-        y += 0.70
+    y = 1.52
+    for i, (st, target, measured, note) in enumerate(targets):
+        met = st == "y"
+        band(s4, 0.45, y, 12.4, 0.40,
+             fill=PAPER if met else WARM, edge=RULE if met else ORANGE)
+        dot(s4, 0.75, y + 0.20, 0.22, GREEN if met else ORANGE, "✓" if met else "!")
+        textbox(s4, 0.98, y + 0.07, 3.35, 0.3,
+                [{"text": target, "size": 9.6, "bold": True, "colour": INK}])
+        textbox(s4, 4.40, y + 0.07, 3.55, 0.3,
+                [{"text": measured, "size": 9.4,
+                  "colour": GREEN if met else ORANGE, "bold": True}])
+        textbox(s4, 8.05, y + 0.08, 4.72, 0.3,
+                [{"text": note, "size": 8.6, "colour": GREY}])
+        y += 0.46
 
-    s4.shapes.add_picture(f"{FIG}/fig_accuracy.png", Inches(7.95), Inches(3.05),
-                          width=Inches(4.95))
-    textbox(s4, 7.95, 5.20, 4.95, 1.5, [
-        {"text": "Why we trust the accuracy claim", "size": 11, "bold": True,
-         "colour": BLUE},
-        {"text": "A plane fitted in a shrinking window. The feed-forward curve flattens "
-                 "into a floor — the signature of an interpolant with nothing below it. "
-                 "The rebuilt curve holds a constant slope all the way down, which is "
-                 "what a real self-affine surface does. Both meet at 1 m, as they must: "
-                 "same poses, same large-scale shape.",
-         "size": 9, "colour": GREY, "space": 3}], line=0.95)
+    # Caption above the chart, not below: the chart is 2.4:1, and anything underneath it
+    # lands in the footer bar.
+    textbox(s4, 0.45, 4.34, 5.85, 0.30, [
+        {"text": [{"text": "Why the accuracy claim holds.  ", "size": 9.4,
+                   "bold": True, "colour": ORANGE},
+                  {"text": "The old curve flattens into a floor; the rebuilt one keeps "
+                           "a constant slope. Both meet at 1 m, as they must.",
+                   "size": 8.8, "colour": GREY}]}], line=0.93)
+    s4.shapes.add_picture(f"{FIG}/fig_accuracy.png", Inches(0.45), Inches(4.64),
+                          width=Inches(5.40))
+
+    textbox(s4, 6.62, 4.42, 6.23, 0.3, [
+        {"text": "Other risks, and the strategy for each", "size": 11.5, "bold": True,
+         "colour": ORANGE}])
+    others = [
+        ("Facades from a nadir pass", "physically unobservable straight down",
+         "handle oblique passes natively; bound the inference and mark inferred "
+         "surface as inferred, never as measured"),
+        ("Dataset schema unknown until the event",
+         "the PS says the link is provided in real time",
+         "auto-detecting ingest across SRT / CSV / EXIF / flight log, and self-"
+         "calibration when intrinsics are absent — already exercised on two clips"),
+        ("OpenMVS is AGPL-3.0", "a deployment licence question, not a technical one",
+         "invoked as a separate unmodified process, so our code is not a derived work; "
+         "a BSD GPU replacement for that one stage is the clean answer"),
+        ("Moving vehicles, people, animals", "they corrupt a naive reconstruction",
+         "geometric-consistency filtering across ≥ 3 views rejects them by "
+         "construction — nothing extra to build"),
+    ]
+    y = 4.78
+    for head, state, fix in others:
+        textbox(s4, 6.62, y, 6.23, 0.5, [
+            {"text": [{"text": "▸ " + head + "  ", "size": 9.2, "bold": True,
+                       "colour": INK},
+                      {"text": state, "size": 8.6, "colour": GREY}]},
+            {"text": [{"text": "→ ", "size": 8.6, "bold": True, "colour": BLUE},
+                      {"text": fix, "size": 8.6, "colour": BLUE}], "space": 1}],
+            line=0.92)
+        y += 0.52
 
     # ------------------------------------------------------- 5 · impact and benefits
     shape(s5, "TextBox 8")._element.getparent().remove(shape(s5, "TextBox 8")._element)
-    textbox(s5, 0.45, 1.18, 12.4, 0.32, [
-        {"text": "Potential impact on the target audience", "size": 13, "bold": True,
+    textbox(s5, 0.45, 1.10, 6.32, 0.32, [
+        {"text": "What changes for the operator", "size": 12.5, "bold": True,
          "colour": BLUE}])
-    band(s5, 0.45, 1.58, 6.15, 2.35)
-    textbox(s5, 0.62, 1.66, 5.85, 2.2, [
-        {"text": "Operational — the audience that wrote this PS", "size": 11.5,
-         "bold": True, "colour": ORANGE},
-        {"text": "•  Border and strategic area mapping, and military reconnaissance "
-                 "and mission planning, where a second pass over the target may not be "
-                 "available at all.", "size": 10, "space": 5},
-        {"text": "•  Disaster damage assessment, where the aircraft is scarce and the "
-                 "first hours decide the response.", "size": 10, "space": 4},
-        {"text": "•  Infrastructure inspection, construction monitoring, urban planning "
-                 "and digital-twin generation on the same single-pass capture.",
-         "size": 10, "space": 4},
-        {"text": "The mission cost of a 3D model drops from a planned grid survey with "
-                 "ground control to one flight line.", "size": 10, "bold": True,
-         "space": 6}], line=0.97)
+    s5.shapes.add_picture(f"{FIG}/fig_missions.png", Inches(0.45), Inches(1.42),
+                          width=Inches(6.32))
+    textbox(s5, 0.45, 3.78, 6.32, 0.32, [
+        {"text": "A 3D model stops costing a planned survey and starts costing one "
+                 "flight line.", "size": 9.4, "bold": True, "colour": INK,
+         "align": PP_ALIGN.CENTER}])
 
-    band(s5, 6.75, 1.58, 6.12, 2.35)
-    textbox(s5, 6.92, 1.66, 5.82, 2.2, [
-        {"text": "Benefits", "size": 11.5, "bold": True, "colour": ORANGE},
-        {"text": [{"text": "Economic:  ", "size": 10, "bold": True},
-                  {"text": "the entire stack is permissively licensed open source on "
-                           "commodity cloud CPU — no per-seat photogrammetry licence, "
-                           "no proprietary SDK, no GPU floor to get a first result.",
-                   "size": 10}], "space": 5},
-        {"text": [{"text": "Strategic:  ", "size": 10, "bold": True},
-                  {"text": "processing stays inside India by construction, and the "
-                           "model choice was made against acceptable-use terms rather "
-                           "than benchmark scores.", "size": 10}], "space": 4},
-        {"text": [{"text": "Operational:  ", "size": 10, "bold": True},
-                  {"text": "less operator effort and less air time per target; the "
-                           "output feeds existing GIS and 3D tooling directly through "
-                           "the six mandated formats.", "size": 10}], "space": 4},
-        {"text": [{"text": "Environmental:  ", "size": 10, "bold": True},
-                  {"text": "fewer sorties per surveyed area.", "size": 10}], "space": 4},
-    ], line=0.97)
-
-    textbox(s5, 0.45, 4.05, 12.4, 0.32, [
-        {"text": "Measured benefit, on the two clips we have run", "size": 13,
+    textbox(s5, 7.02, 1.10, 5.83, 0.32, [
+        {"text": "Where it is used — the PS's own applications", "size": 12.5,
          "bold": True, "colour": BLUE}])
-    for i, (h, sub) in enumerate((
+    apps = ("Border + strategic\narea mapping", "Military reconnaissance\n+ mission "
+            "planning", "Disaster damage\nassessment", "Infrastructure\ninspection",
+            "Urban planning\n+ smart cities", "Construction\nprogress monitoring",
+            "Archaeological\ndocumentation", "Digital twin\ngeneration")
+    for i, t in enumerate(apps):
+        gx = 7.02 + (i % 4) * 1.48
+        gy = 1.46 + (i // 4) * 0.66
+        pill(s5, gx, gy, 1.40, 0.58, t, BLUE,
+             WARM if i < 3 else LIGHT, size=7.4)
+    textbox(s5, 7.02, 2.82, 5.83, 0.3, [
+        {"text": "shaded: the three NTRO named first", "size": 7.6, "colour": GREY}])
+
+    textbox(s5, 7.02, 3.14, 5.83, 0.3, [
+        {"text": "Benefits", "size": 12, "bold": True, "colour": BLUE}])
+    for i, (lab, txt) in enumerate((
+            ("Economic", "permissive open source on commodity cloud CPU — no per-seat "
+                         "photogrammetry licence, no proprietary SDK"),
+            ("Strategic", "processing stays in India by construction; the model was "
+                          "chosen against acceptable-use terms, not benchmarks"),
+            ("Operational", "less air time and less operator effort per target; output "
+                            "feeds existing GIS and 3D tooling directly"))):
+        textbox(s5, 7.02, 3.46 + i * 0.44, 5.83, 0.42, [
+            {"text": [{"text": lab + ":  ", "size": 9.2, "bold": True,
+                       "colour": ORANGE},
+                      {"text": txt, "size": 9.2, "colour": INK}]}], line=0.93)
+
+    rule(s5, 0.45, 4.86, 12.4)
+    textbox(s5, 0.45, 4.96, 12.4, 0.3, [
+        {"text": "Measured benefit, on the two clips we have run", "size": 12,
+         "bold": True, "colour": BLUE}])
+    for i, (h, sub_t) in enumerate((
             (f'{m["gain_lo"]:.1f}–{m["gain_hi"]:.1f}×',
-             "finer detail resolved at 6 cm scale,\non two unrelated clips"),
+             "finer detail at 6 cm scale,\non two unrelated clips"),
             (f'{m["relief_base"]:.2f} → {m["relief_mvs"]:.2f} m',
              "vertical structure ceiling;\nbuildings stop being paint"),
             (f'{m["coverage"]:.0%}',
-             "of the AI-only baseline's ground\ncoverage on the survey clip"),
+             "of the AI-only baseline's\nground coverage"),
             (f'{m["reproj_gain"]:.1f}×',
-             "reprojection error improvement\nthrough bundle adjustment"))):
-        chip(s5, 0.45 + i * 3.15, 4.45, 3.02, 1.25, h, sub)
+             "reprojection error improved\nby bundle adjustment"))):
+        chip(s5, 0.45 + i * 3.13, 5.30, 3.00, 1.10, h, sub_t)
 
-    textbox(s5, 0.45, 5.90, 12.4, 0.85, [
-        {"text": "What we are not claiming yet", "size": 11, "bold": True,
-         "colour": ORANGE},
-        {"text": f"Absolute ≤ 1 m accuracy is unproven on our clips because neither has "
-                 f"GNSS, and the < 15 minute budget is not met on CPU. Both gaps are "
-                 f"named on the previous slide with the work that closes them. We would "
-                 f"rather bring NTRO a measured {int(m['seconds'] // 60)} minutes than "
-                 f"a claimed 12.",
-         "size": 10, "colour": GREY, "space": 3}], line=0.97)
+    textbox(s5, 0.45, 6.48, 12.4, 0.35, [
+        {"text": [{"text": "Not claimed:  ", "size": 9.2, "bold": True,
+                   "colour": ORANGE},
+                  {"text": f"≤ 1 m absolute accuracy is unproven on our clips (no "
+                           f"GNSS), and the 15-minute budget is not met on CPU. We "
+                           f"would rather bring NTRO a measured "
+                           f"{int(m['seconds'] // 60)} minutes than a claimed 12.",
+                   "size": 9.2, "colour": GREY}]}], line=0.93)
 
     # -------------------------------------------------- 6 · research and references
     shape(s6, "TextBox 8")._element.getparent().remove(shape(s6, "TextBox 8")._element)
-    textbox(s6, 0.45, 1.18, 6.15, 0.32, [
-        {"text": "Methods and models", "size": 12.5, "bold": True, "colour": BLUE}])
-    textbox(s6, 0.45, 1.55, 6.15, 4.9, [
-        {"text": [{"text": "MapAnything", "size": 10, "bold": True},
-                  {"text": " — Meta AI, 2025. Feed-forward metric point maps from "
-                           "uncalibrated images; supplies our pose and scale prior. "
-                           "Apache-2.0 checkpoint.\ngithub.com/facebookresearch/"
-                           "map-anything", "size": 9.5}], "space": 4},
-        {"text": [{"text": "VGGT", "size": 10, "bold": True},
-                  {"text": " — Wang et al., CVPR 2025. Evaluated and deliberately not "
-                           "used: its acceptable-use policy bars military and espionage "
-                           "applications, which this PS explicitly lists.",
-                   "size": 9.5}], "space": 7},
-        {"text": [{"text": "COLMAP", "size": 10, "bold": True},
-                  {"text": " — Schönberger & Frahm, CVPR 2016. Feature matching, "
-                           "triangulation and global bundle adjustment. BSD.",
-                   "size": 9.5}], "space": 7},
-        {"text": [{"text": "OpenMVS 2.4.0", "size": 10, "bold": True},
-                  {"text": " — PatchMatch multi-view stereo with geometric-consistency "
-                           "filtering, and Delaunay + graph-cut meshing. AGPL-3.0, used "
-                           "as an unmodified separate process.", "size": 9.5}],
-         "space": 7},
-        {"text": [{"text": "DINOv2", "size": 10, "bold": True},
-                  {"text": " — Oquab et al., TMLR 2024. The patch-14 vision backbone "
-                           "whose patch grid is the resolution ceiling we measured and "
-                           "then designed around.", "size": 9.5}], "space": 7},
-        {"text": [{"text": "PatchMatch Stereo", "size": 10, "bold": True},
-                  {"text": " — Bleyer et al., BMVC 2011; and Schönberger et al., "
-                           "ECCV 2016 for the pixelwise view-selection variant we rely "
-                           "on.", "size": 9.5}], "space": 7},
-    ], line=0.97)
+    textbox(s6, 0.45, 1.08, 12.4, 0.32, [
+        {"text": [{"text": "Existing approaches, scored against what this PS actually "
+                           "needs.  ", "size": 12.5, "bold": True, "colour": BLUE},
+                  {"text": "This is why the two-model split exists.",
+                   "size": 11, "colour": INK}]}])
 
-    textbox(s6, 6.90, 1.18, 5.95, 0.32, [
-        {"text": "Standards, policy and our own record", "size": 12.5, "bold": True,
-         "colour": BLUE}])
-    textbox(s6, 6.90, 1.55, 5.95, 4.9, [
-        {"text": [{"text": "Guidelines for acquiring and producing Geospatial Data, "
-                           "DST, 2021", "size": 10, "bold": True},
-                  {"text": " and the National Geospatial Policy 2022 — the basis for "
-                           "pinning all processing to an Indian region for finer-than-"
-                           "1 m data.", "size": 9.5}], "space": 4},
-        {"text": [{"text": "ASPRS LAS 1.4", "size": 10, "bold": True},
-                  {"text": " point format 3, and the Khronos glTF 2.0 specification — "
-                           "the two export formats with real conformance rules; both "
-                           "are validated on write.", "size": 9.5}], "space": 7},
-        {"text": [{"text": "Our engineering record", "size": 10, "bold": True,
-                   "colour": ORANGE},
-                  {"text": " — six documents written before and during this work and "
-                           "traceable to the runs: SRS baselined line-by-line against "
-                           "the PS PDF, architecture, SDLC plan, test plan, a quality "
-                           "analysis that diagnoses the resolution ceiling with "
-                           "controls, and a deployment study. Available to the "
-                           "evaluators on request.", "size": 9.5}], "space": 7},
-        {"text": [{"text": "Reproducibility", "size": 10, "bold": True},
-                  {"text": " — both charts and every headline figure on these slides "
-                           "are read at build time straight out of the JSON the runs "
-                           "wrote, not retyped; the build fails rather than fall back "
-                           "to a stale constant. The few numbers that are not machine-"
-                           "readable are cited to the analysis documents above.",
-                   "size": 9.5}], "space": 7},
-        {"text": [{"text": "A note on the portal text.", "size": 10, "bold": True,
-                   "colour": ORANGE},
-                  {"text": " The sih.gov.in listing for SIH26158 still contains the "
-                           "editorial placeholder “Add 'Desired Output' and "
-                           "'Evaluation Criteria' table here”. The binding targets "
-                           "— mesh or point cloud, < 15 min for a 10-min video, ≤ 1 m "
-                           "accuracy, full-scene coverage, six export formats, a web or "
-                           "desktop viewer — exist only in the linked PDF, which we "
-                           "read as images and traced requirement by requirement.",
-                   "size": 9.5}], "space": 7},
-    ], line=0.97)
-
-    # Existing-solutions analysis. It belongs on the references slide because it is the
-    # part of the research that justifies the design, and because a reviewer scoring
-    # novelty needs to see that we know what already exists.
-    textbox(s6, 0.45, 4.72, 12.4, 0.32, [
-        {"text": "Existing approaches we studied — and why none of them answers this "
-                 "problem statement on its own", "size": 12.5, "bold": True,
-         "colour": ORANGE}])
-    prior = [
-        ("Classical SfM + MVS", "COLMAP, OpenMVS on their own",
-         "The accuracy standard, and what we build on. But a thin single-pass strip "
-         "gives it little overlap to work with, and it recovers no metric scale at all "
-         "without GCPs or RTK."),
+    cols = ("pose from a\nsingle pass", "metric scale\nwithout GCPs",
+            "detail below\n10 cm", "GIS-ready\nexports", "licence clear\nfor NTRO")
+    x0, cw, roww = 0.45, 1.86, 3.10
+    for j, c in enumerate(cols):
+        textbox(s6, x0 + roww + j * cw, 1.44, cw, 0.42,
+                [{"text": c, "size": 8.4, "bold": True, "colour": GREY,
+                  "align": PP_ALIGN.CENTER}], line=0.9)
+    rows = [
+        ("Classical SfM + MVS", "COLMAP, OpenMVS alone",
+         [("p", "thin strip, low overlap"), ("n", "needs GCPs or RTK"),
+          ("y", "the accuracy standard"), ("y", ""), ("y", "BSD / AGPL")]),
         ("Commercial photogrammetry", "Pix4D, Metashape, RealityCapture",
-         "Mature and trusted, but designed around a planned multi-pass grid with 70–80% "
-         "overlap. Per-seat licensing and closed pipelines also make it a poor fit for "
-         "sovereign deployment."),
+         [("p", "assumes 70–80% overlap"), ("p", "needs GCPs or RTK"),
+          ("y", ""), ("y", ""), ("n", "per-seat, closed")]),
         ("Feed-forward 3D", "DUSt3R, VGGT, MapAnything",
-         "Genuinely solves the single-pass problem of pose and metric scale. Its "
-         "geometry, however, is bounded by the patch grid — the ceiling this deck "
-         "measures. VGGT is additionally licence-barred here."),
-        ("NeRF / 3D Gaussian Splatting", "radiance-field reconstruction",
-         "Outstanding novel-view rendering, but it optimises appearance rather than a "
-         "measurable surface, and does not yield the LAS or GeoTIFF products a mapping "
-         "organisation actually consumes."),
-        ("This submission", "the split, and why it is new",
-         "Feed-forward AI for pose and scale only; classical per-pixel MVS for every "
-         "delivered surface point. Each is used strictly where it is strongest, and the "
-         "handover point was chosen from a measurement, not a guess."),
+         [("y", "this is what it solves"), ("y", "metric, from one pass"),
+          ("n", "patch-limited ceiling"), ("p", "no LAS / GeoTIFF"),
+          ("p", "VGGT barred by AUP")]),
+        ("NeRF / 3D Gaussian splatting", "radiance-field reconstruction",
+         [("n", "needs poses given"), ("n", ""), ("p", "appearance, not surface"),
+          ("n", "renders, not products"), ("y", "")]),
+        ("This submission", "AI for pose and scale, MVS for every surface point",
+         [("y", ""), ("y", ""), ("y", f'{m["finest_mm"]:.1f} mm measured'),
+          ("y", "all six formats"), ("y", "Apache-2.0 / BSD")]),
     ]
-    for i, (head, sub, body) in enumerate(prior):
-        x = 0.45 + i * 2.51
-        last = i == len(prior) - 1
-        band(s6, x, 5.08, 2.38, 1.72,
-             fill=RGBColor(0xFD, 0xF3, 0xEB) if last else RGBColor(0xFF, 0xFF, 0xFF),
+    y = 1.94
+    for i, (name, sub_t, marks) in enumerate(rows):
+        last = i == len(rows) - 1
+        band(s6, x0, y, roww + 5 * cw, 0.62, fill=WARM if last else PAPER,
              edge=ORANGE if last else RULE)
-        textbox(s6, x + 0.10, 5.14, 2.18, 0.5, [
-            {"text": head, "size": 9.5, "bold": True,
-             "colour": ORANGE if last else BLUE},
-            {"text": sub, "size": 8, "colour": GREY}], line=0.92)
-        textbox(s6, x + 0.10, 5.66, 2.18, 1.08,
-                [{"text": body, "size": 8.2, "colour": INK}], line=0.92)
+        textbox(s6, x0 + 0.12, y + 0.06, roww - 0.2, 0.5, [
+            {"text": name, "size": 9.4, "bold": True,
+             "colour": ORANGE if last else INK},
+            {"text": sub_t, "size": 7.4, "colour": GREY}], line=0.9)
+        for j, (kind, note) in enumerate(marks):
+            mark(s6, x0 + roww + j * cw + cw / 2, y + 0.17, kind, note, w=cw - 0.1)
+        y += 0.68
+
+    textbox(s6, 0.45, 5.46, 6.15, 0.3, [
+        {"text": "Methods and models", "size": 11.5, "bold": True, "colour": BLUE}])
+    textbox(s6, 0.45, 5.76, 6.15, 1.15, [
+        {"text": [{"text": "MapAnything", "size": 8.8, "bold": True},
+                  {"text": " — Meta AI, 2025 · Apache-2.0.  ", "size": 8.6},
+                  {"text": "COLMAP", "size": 8.8, "bold": True},
+                  {"text": " — Schönberger & Frahm, CVPR 2016.  ", "size": 8.6},
+                  {"text": "OpenMVS 2.4.0", "size": 8.8, "bold": True},
+                  {"text": " — PatchMatch MVS + Delaunay/graph-cut meshing.  ",
+                   "size": 8.6},
+                  {"text": "DINOv2", "size": 8.8, "bold": True},
+                  {"text": " — Oquab et al., TMLR 2024; the patch-14 backbone whose "
+                           "grid is the ceiling we measured.  ", "size": 8.6},
+                  {"text": "PatchMatch Stereo", "size": 8.8, "bold": True},
+                  {"text": " — Bleyer et al., BMVC 2011; Schönberger et al., ECCV 2016.  ",
+                   "size": 8.6},
+                  {"text": "VGGT", "size": 8.8, "bold": True},
+                  {"text": " — Wang et al., CVPR 2025; evaluated, rejected on licence.",
+                   "size": 8.6}]}], line=0.95)
+
+    textbox(s6, 6.90, 5.46, 5.95, 0.3, [
+        {"text": "Standards, policy, and our own record", "size": 11.5, "bold": True,
+         "colour": BLUE}])
+    textbox(s6, 6.90, 5.76, 5.95, 1.15, [
+        {"text": [{"text": "Geospatial Data Guidelines, DST 2021", "size": 8.8,
+                   "bold": True},
+                  {"text": " and the National Geospatial Policy 2022 — why processing "
+                           "is pinned to an Indian region.  ", "size": 8.6},
+                  {"text": "ASPRS LAS 1.4", "size": 8.8, "bold": True},
+                  {"text": " pf3 and ", "size": 8.6},
+                  {"text": "Khronos glTF 2.0", "size": 8.8, "bold": True},
+                  {"text": " — both validated on write.", "size": 8.6}]},
+        {"text": [{"text": "Our record: ", "size": 8.8, "bold": True,
+                   "colour": ORANGE},
+                  {"text": "an SRS baselined line-by-line against the PS PDF, plus "
+                           "architecture, test plan, a quality analysis that diagnoses "
+                           "the resolution ceiling with controls, and a deployment "
+                           "study. Both charts and every headline number here are read "
+                           "at build time from the JSON the runs wrote — the build "
+                           "fails rather than print a stale figure.", "size": 8.6}],
+         "space": 4},
+        {"text": [{"text": "Note: ", "size": 8.8, "bold": True, "colour": ORANGE},
+                  {"text": "the portal listing for SIH26158 still carries the editorial "
+                           "placeholder “Add 'Desired Output' and 'Evaluation Criteria' "
+                           "table here”. The binding targets exist only in the linked "
+                           "PDF, which we read as images and traced one by one.",
+                   "size": 8.6}], "space": 4},
+    ], line=0.95)
 
     drop_slide(prs, 6)          # the template's own Important Instructions slide
     prs.save(OUT_PPTX)

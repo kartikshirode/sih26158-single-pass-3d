@@ -117,7 +117,103 @@ def accuracy():
     print("wrote", p)
 
 
+def missions():
+    """
+    The value proposition as a picture rather than a sentence.
+
+    Two flight plans over the same ground. Nobody needs to read a bullet explaining
+    that one line is cheaper than eight lines plus surveyed markers.
+    """
+    fig, axes = plt.subplots(1, 2, figsize=(9.4, 3.5), facecolor="white")
+    for ax, single in zip(axes, (False, True)):
+        ax.add_patch(plt.Rectangle((0, 0), 10, 6, fc="#F2F0EA", ec="#DAD5C8", lw=1))
+        for x, y in ((1.4, 1.1), (8.4, 1.4), (5.0, 3.1), (1.9, 4.8), (8.0, 4.7)):
+            ax.add_patch(plt.Rectangle((x, y), 1.2, 0.75, fc="#CFC8B6", ec="none"))
+        col = MVS if single else BASE
+        if single:
+            ax.annotate("", xy=(9.6, 3.0), xytext=(0.4, 3.0),
+                        arrowprops=dict(arrowstyle="-|>", color=col, lw=2.6))
+            for x in np.linspace(1.2, 8.8, 6):          # camera stations along the pass
+                ax.plot([x], [3.0], "o", color=col, ms=6, zorder=3)
+            stats = [("flight legs", "1"), ("ground control points", "0"),
+                     ("passes over target", "1")]
+        else:
+            ys = np.linspace(0.7, 5.3, 7)
+            path = []
+            for i, y in enumerate(ys):
+                path += [(0.5, y), (9.5, y)] if i % 2 == 0 else [(9.5, y), (0.5, y)]
+            ax.plot([p[0] for p in path], [p[1] for p in path], "-", color=col, lw=1.9)
+            for gx, gy in ((1.0, 0.9), (9.0, 0.9), (5.0, 3.0), (1.0, 5.1), (9.0, 5.1)):
+                ax.plot([gx], [gy], "^", color="#2E7D32", ms=9, zorder=4)
+            stats = [("flight legs", "7+"), ("ground control points", "5+"),
+                     ("passes over target", "3+")]
+        ax.set_xlim(-0.3, 10.3); ax.set_ylim(-2.6, 7.2)
+        ax.set_aspect("equal"); ax.axis("off")
+        ax.text(5, 6.55, "ONE PASS  ·  this system" if single
+                else "CONVENTIONAL  ·  planned grid survey",
+                ha="center", fontsize=11.5, fontweight="bold", color=col)
+        for i, (lab, val) in enumerate(stats):
+            ax.text(1.0 + i * 4.0, -0.95, val, fontsize=15, fontweight="bold",
+                    color=col, ha="center")
+            ax.text(1.0 + i * 4.0, -1.95, lab, fontsize=8, color=DIM, ha="center")
+    # Legend sits above the panel, not in the stats row, where it collided with "3+".
+    axes[0].plot([0.45], [6.18], "^", color="#2E7D32", ms=8, clip_on=False)
+    axes[0].text(0.85, 6.05, "surveyed ground control marker", fontsize=7.5, color=DIM)
+    fig.subplots_adjust(left=.01, right=.99, top=.97, bottom=.02, wspace=.05)
+    p = f"{OUT}/fig_missions.png"
+    fig.savefig(p, dpi=190, facecolor="white"); plt.close(fig)
+    print("wrote", p)
+
+
+def timing():
+    """
+    Where the wall clock actually goes, straight from the run's own stage timings.
+
+    This is the honest version of the speed story: one stage is three quarters of the
+    budget, and it is the stage a GPU changes. A reader gets that from the picture
+    without being told, and it makes the 15-minute gap on the next slide legible
+    rather than alarming.
+    """
+    import json
+    r = json.load(open(f"{ROOT}/out/kolu_mvs/mvs_result.json"))
+    t = {s["stage"]: s["seconds"] for s in r["stages"]}
+    groups = [
+        ("features + matching", t["feature_extractor"] + t["exhaustive_matcher"], "#9AA7B0"),
+        ("pose + bundle adjustment", t["point_triangulator"] + t["bundle_adjuster"], "#7C8B96"),
+        ("dense geometry (PatchMatch MVS)", t["DensifyPointCloud"], BASE),
+        ("mesh", t["ReconstructMesh"], "#5E6B75"),
+    ]
+    total = r["total_seconds"]
+    fig, ax = plt.subplots(figsize=(7.5, 1.42), facecolor="white")
+    left = 0.0
+    for name, sec, c in groups:
+        ax.barh([0], [sec], left=left, height=0.42, color=c,
+                edgecolor="white", linewidth=1.2)
+        if sec / total > 0.06:
+            ax.text(left + sec / 2, 0, f"{sec/60:.0f}m", ha="center", va="center",
+                    color="white", fontsize=9.5, fontweight="bold")
+        left += sec
+    ax.set_xlim(0, total); ax.set_ylim(-1.35, 0.85); ax.axis("off")
+    ax.text(0, 0.62, f"Where the {int(total)//60}m {int(total)%60:02d}s goes",
+            fontsize=10.5, fontweight="bold", color=INK)
+    x = 0.0
+    for name, sec, c in groups:
+        if sec / total > 0.06:
+            ax.text(x + sec / 2, -0.34, name, ha="center", va="top",
+                    fontsize=7.8, color=DIM)
+        x += sec
+    ax.annotate(f"{groups[2][1]/total:.0%} of the run — and the one stage a GPU changes",
+                xy=(groups[0][1] + groups[1][1] + groups[2][1] / 2, -0.84),
+                ha="center", fontsize=8.6, color=BASE, fontweight="bold")
+    fig.subplots_adjust(left=.005, right=.995, top=.98, bottom=.02)
+    p = f"{OUT}/fig_timing.png"
+    fig.savefig(p, dpi=190, facecolor="white"); plt.close(fig)
+    print("wrote", p)
+
+
 if __name__ == "__main__":
     os.makedirs(OUT, exist_ok=True)
     before_after()
     accuracy()
+    missions()
+    timing()
