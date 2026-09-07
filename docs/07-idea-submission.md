@@ -155,6 +155,30 @@ lists, so we use MapAnything's Apache-2.0 checkpoint. All processing is pinned t
 Indian region, as India's geospatial guidelines require for data finer than 1 m.
 ```
 
+### Field 9, short variant (~850 characters)
+
+The portal's character limit for this field is not documented anywhere we could find.
+Paste the long version first; if it is rejected, use this rather than editing prose inside
+a web form at the deadline.
+
+```
+We turn one monocular drone pass - video, GPS and flight metadata - into a metrically
+scaled, textured 3D mesh and dense point cloud, exported as OBJ, PLY, LAS, GeoTIFF,
+glB/glTF and FBX with a browser viewer for measurement.
+
+The idea comes from a measurement. Feed-forward 3D models make a single pass tractable
+because they recover camera pose and metric scale where classical structure-from-motion
+lacks the overlap to. But their geometry is capped by a patch grid: we measured one
+sampling at 2.2 cm while carrying information only at 30-50 cm. So we use the model
+strictly as a pose and scale prior, refine it with global bundle adjustment, and take
+every delivered surface point from full-resolution per-pixel photometric multi-view
+stereo. Across two real clips: reprojection error 1.73 to 0.37 px, detail 1.8-3.6x
+finer, vertical structure ceiling 2.33 m to 3.58 m.
+
+Two of the six targets are open and stated: 15-minute processing is not met on CPU, and
+absolute accuracy is unvalidated because neither test clip has GNSS.
+```
+
 ---
 
 ## 5. Fields the team must fill — do not let these be invented
@@ -177,10 +201,37 @@ python tools/make_ppt_figs.py      # figures, from the run outputs
 python tools/build_sih_ppt.py      # deck + PDF, on the official template
 ```
 
-Outputs land in `out/ppt/`: `SIH26158_IdeaSubmission.pptx` (editable) and
-`SIH26158_IdeaSubmission.pdf` (**the file that gets uploaded**). PDF export goes through
-PowerPoint COM, because python-pptx cannot write PDF and the portal accepts nothing else.
+Outputs land in `out/ppt/`. While `TEAM_NAME` / `TEAM_ID` are still placeholders the PDF
+is named `SIH26158_IdeaSubmission_DRAFT.pdf` **on purpose** — a file named for submission
+that says «TEAM NAME» six times is an accident waiting to happen. Set the two constants
+and rebuild; the draft suffix disappears and the file is uploadable. PDF export goes
+through PowerPoint COM, because python-pptx cannot write PDF and the portal accepts
+nothing else.
 
-Every number on the slides is regenerated from `mvs_result.json`,
-`export_manifest.json`, `docs/05-quality-analysis.md` and `docs/06-gcp-deployment.md`.
-None is typed in by hand, so a re-run cannot silently leave a stale figure on a slide.
+The charts and every headline number are read at build time from `mvs_result.json`,
+`export_manifest.json` and `out/ppt/measure_*.json`, and the build **fails** if those are
+missing rather than falling back to a stale constant. Regenerate the measurement files
+with:
+
+```bash
+python src/analysis/compare_mvs.py --baseline out/kolu3d/points_fused.npy \
+    --mvs out/kolu_mvs/scene_dense.ply --json out/ppt/measure_kolu.json
+python src/analysis/compare_mvs.py --baseline out/ytd3d/points_fused.npy \
+    --mvs out/ytd_mvs/scene_dense.ply --json out/ppt/measure_short.json
+```
+
+### Two things worth knowing about the numbers on the slides
+
+**Wall clock reads 34m 38s, not the 32m 43s in `docs/05`.** The deck uses
+`total_seconds` from the run's own `mvs_result.json` (2078.7 s, and its stage timings sum
+to 2061.8 s). The 1963 s figure in `docs/05` §9 and `docs/06` is on a different basis and
+the two have not been reconciled. The deck takes the slower, self-consistent one — it is
+measured by the same run that produced every other number on the slides, and it errs in
+the conservative direction. Neither figure is anywhere near the 15-minute budget, so no
+conclusion moves.
+
+**FBX now actually exists, so the format count is a verified 6 of 6.** It had been 5 of 6
+locally, with FBX only claimed for the container. `write_fbx` now falls back to Blender
+when the assimp CLI is absent; both clips have a real `model.fbx` with a `Kaydara FBX
+Binary` header. Counting is against the PS's own six-item list, where glB and glTF are one
+line item — counting them separately would have flattered a 5/6 into a 6/7.

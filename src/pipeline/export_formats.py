@@ -62,23 +62,55 @@ def write_mesh_formats(out, V, F, C, log=print):
     log(f"  model.glb / model.gltf  {os.path.getsize(out+'/model.glb')/1e6:.1f} MB")
 
 
+BLENDER_HINTS = (
+    r"C:\Program Files\Blender Foundation\Blender 4.5\blender.exe",
+    "/usr/bin/blender",
+)
+
+
+def _blender():
+    return shutil.which("blender") or next(
+        (p for p in BLENDER_HINTS if os.path.exists(p)), None)
+
+
 def write_fbx(out, log=print):
-    """FBX via the assimp CLI (BSD-3). No SDK, no licence question.
+    """
+    FBX through whichever converter is on the machine: assimp (BSD-3) in the container,
+    Blender otherwise. Both are invoked as separate unmodified processes, so neither
+    licence reaches our code.
 
     Deliberately not a hand-rolled FBX writer: the ASCII flavour is easy to emit and
     Blender will not read it, so it would be a format we can claim and nobody can open.
     """
+    dst = f"{out}/model.fbx"
     exe = shutil.which("assimp")
+    if exe:
+        r = subprocess.run([exe, "export", f"{out}/model.ply", dst, "-ffbx"],
+                           capture_output=True, text=True)
+        if not r.returncode and os.path.exists(dst):
+            log(f"  model.fbx  {os.path.getsize(dst)/1e6:.1f} MB  (assimp)")
+            return True
+        log(f"  model.fbx  assimp failed rc={r.returncode}; trying Blender")
+
+    exe = _blender()
     if not exe:
-        log("  model.fbx  SKIPPED - assimp CLI not on PATH "
+        log("  model.fbx  SKIPPED - no assimp and no Blender on this machine "
             "(apt install assimp-utils; it is in the container)")
         return False
-    r = subprocess.run([exe, "export", f"{out}/model.ply", f"{out}/model.fbx", "-ffbx"],
+    # read_factory_settings(use_empty=True) matters: the default scene ships a cube,
+    # and exporting it alongside the model would put a stray box in the deliverable.
+    script = (
+        "import bpy;"
+        "bpy.ops.wm.read_factory_settings(use_empty=True);"
+        f"bpy.ops.wm.ply_import(filepath=r'{out}/model.ply');"
+        f"bpy.ops.export_scene.fbx(filepath=r'{dst}', use_selection=False)"
+    )
+    r = subprocess.run([exe, "--background", "--factory-startup", "--python-expr", script],
                        capture_output=True, text=True)
-    if r.returncode or not os.path.exists(f"{out}/model.fbx"):
-        log(f"  model.fbx  FAILED rc={r.returncode} {(r.stderr or r.stdout)[:160]}")
+    if r.returncode or not os.path.exists(dst):
+        log(f"  model.fbx  FAILED rc={r.returncode} {(r.stderr or r.stdout)[-200:]}")
         return False
-    log(f"  model.fbx  {os.path.getsize(out+'/model.fbx')/1e6:.1f} MB")
+    log(f"  model.fbx  {os.path.getsize(dst)/1e6:.1f} MB  (Blender)")
     return True
 
 

@@ -20,12 +20,21 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 OUT = os.path.join(ROOT, "out", "ppt")
 BASE, MVS, INK, DIM = "#C2612C", "#1F6FA8", "#1A1A1A", "#6B6B6B"
 
-# docs/05-quality-analysis.md sections 8 and 9. Plane fitted in a ball of radius r,
-# median |residual|, in cm.
-KOLU_B = [(6, 1.382), (12, 2.762), (25, 4.756), (50, 5.852), (100, 7.219)]
-KOLU_M = [(3, 0.349), (6, 0.756), (12, 1.487), (25, 2.787), (50, 4.707), (100, 7.359)]
-SHORT_B = [(6, 1.288), (12, 1.944), (25, 2.344), (50, 2.634), (100, 3.340)]
-SHORT_M = [(3, 0.187), (6, 0.353), (12, 0.624), (25, 1.121), (50, 2.031), (100, 3.217)]
+def series(clip):
+    """
+    Plane residual vs window radius, straight out of the measurement.
+
+    Read rather than transcribed, on purpose: a chart with hand-typed numbers goes stale
+    the first time a run changes and nobody notices. Regenerate the inputs with
+      python src/analysis/compare_mvs.py --baseline ... --mvs ... --json out/ppt/measure_<clip>.json
+    """
+    import json
+    p = f"{ROOT}/out/ppt/measure_{clip}.json"
+    if not os.path.exists(p):
+        raise SystemExit(f"missing {p} - run src/analysis/compare_mvs.py --json first")
+    d = json.load(open(p))
+    grab = lambda k: [(r, v) for r, v, _ in d[k]["roughness_cm"]]
+    return grab("baseline"), grab("mvs")
 
 
 def cell(path, row, col, w=1000):
@@ -69,9 +78,10 @@ def accuracy():
     """
     from matplotlib.ticker import FixedLocator, FuncFormatter
     fmt = FuncFormatter(lambda v, _: ("%g" % v))
+    (kb, km), (sb, sm) = series("kolu"), series("short")
     fig, axes = plt.subplots(1, 2, figsize=(9.6, 4.0), facecolor="white")
-    for ax, (bl, mv, name) in zip(axes, ((KOLU_B, KOLU_M, "Kolu survey pass  ·  45 views"),
-                                         (SHORT_B, SHORT_M, "Village pass  ·  42 views"))):
+    for ax, (bl, mv, name) in zip(axes, ((kb, km, "Kolu survey pass  ·  45 views"),
+                                         (sb, sm, "Village pass  ·  42 views"))):
         for data, c, lab, m in ((bl, BASE, "feed-forward point maps", "o"),
                                 (mv, MVS, "full-resolution photometric MVS", "s")):
             x = [d[0] for d in data]; y = [d[1] for d in data]
@@ -92,13 +102,15 @@ def accuracy():
     axes[0].legend(fontsize=8.8, frameon=False, loc="upper left")
     # The two annotations are the whole point: where the old curve stops, and how far
     # past it the new one goes.
-    axes[0].annotate("stalls at a 1.4 cm floor\n(no structure below it)",
-                     xy=(6, 1.382), xytext=(9.5, 0.52), fontsize=8.4, color=BASE,
-                     arrowprops=dict(arrowstyle="->", color=BASE, lw=1.1))
-    axes[0].annotate("3.5 mm", xy=(3, 0.349), xytext=(3.55, 0.315), fontsize=9,
-                     color=MVS, fontweight="bold")
-    axes[1].annotate("1.9 mm", xy=(3, 0.187), xytext=(3.55, 0.170), fontsize=9,
-                     color=MVS, fontweight="bold")
+    # Anchored on the measured end points, not on typed-in coordinates, so the labels
+    # follow the data if a re-run moves it.
+    bx, by = kb[0]
+    axes[0].annotate(f"stalls at a {by:.1f} cm floor\n(no structure below it)",
+                     xy=(bx, by), xytext=(bx * 1.6, by * 0.38), fontsize=8.4,
+                     color=BASE, arrowprops=dict(arrowstyle="->", color=BASE, lw=1.1))
+    for ax, (mx, my) in ((axes[0], km[0]), (axes[1], sm[0])):
+        ax.annotate(f"{my * 10:.1f} mm", xy=(mx, my), xytext=(mx * 1.18, my * 0.90),
+                    fontsize=9, color=MVS, fontweight="bold")
     fig.subplots_adjust(left=.115, right=.985, top=.86, bottom=.155, wspace=.16)
     p = f"{OUT}/fig_accuracy.png"
     fig.savefig(p, dpi=190, facecolor="white"); plt.close(fig)

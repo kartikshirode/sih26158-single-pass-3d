@@ -51,6 +51,77 @@ RULE = RGBColor(0xC8, 0xD6, 0xE2)
 TEAM_NAME = "«TEAM NAME»"          # filled by the team on the portal; never invented
 TEAM_ID = "«TEAM ID»"
 
+IDEA_TITLE = "Measured, not interpolated: accurate 3D from a single drone pass"
+
+# The six formats the problem statement asks for. glb and gltf are one line item there,
+# so they are counted as one here too - counting them separately would quietly turn a
+# 5/6 into a 6/7 and flatter us.
+REQUIRED_FORMATS = ("obj", "ply", "las", "geotiff", "glb+gltf", "fbx")
+
+
+def _json(path):
+    import json
+    full = os.path.join(ROOT, path)
+    if not os.path.exists(full):
+        raise SystemExit(f"missing {path}. Run the pipeline and "
+                         "src/analysis/compare_mvs.py --json before building the deck.")
+    return json.load(open(full))
+
+
+def measurements():
+    """
+    Every figure that appears on a slide, read from the run that produced it.
+
+    Nothing here is typed by hand. The deck claims on slide 6 that its numbers are
+    regenerated from the run outputs; this function is what makes that claim true, and
+    it fails loudly rather than silently falling back to a stale constant.
+    """
+    run = _json("out/kolu_mvs/mvs_result.json")           # the survey clip
+    short = _json("out/ytd_mvs/mvs_result.json")
+    ex = _json("out/kolumvs3d/export/export_manifest.json")["formats"]
+    mk, ms = _json("out/ppt/measure_kolu.json"), _json("out/ppt/measure_short.json")
+
+    tri = run["sparse_after_triangulation"]
+    ba = run["sparse_after_bundle_adjustment"]
+    px = lambda v: float(str(v).replace("px", ""))
+    have = {"glb+gltf": ex["glb"] and ex["gltf"], **{k: ex[k] for k in
+            ("obj", "ply", "las", "geotiff", "fbx")}}
+    at = lambda d, r: dict((x[0], x[1]) for x in d["roughness_cm"])[r]
+    gain = lambda d: at(d["baseline"], 6.0) / at(d["mvs"], 6.0)
+
+    import numpy as np
+    tris = len(np.load(os.path.join(ROOT, "out/kolumvs3d/mesh_f.npy"), mmap_mode="r"))
+
+    return {
+        "triangles": tris,
+        "coverage": mk["coverage"]["mvs_over_baseline"],
+        "coverage_kept": mk["coverage"]["baseline_cells_kept"],
+        "intrinsics_px": run["intrinsics_fit_residual_px"],
+        "registered": f'{ba["Registered images"]} / {run["n_images"]}',
+        "reproj_tri": px(tri["Mean reprojection error"]),
+        "reproj_ba": px(ba["Mean reprojection error"]),
+        "reproj_gain": px(tri["Mean reprojection error"]) / px(ba["Mean reprojection error"]),
+        "frame": "×".join(str(v) for v in run["full_frame"]),
+        "n_views": run["n_images"],
+        "n_views_short": short["n_images"],
+        "dense_points": mk["mvs"]["points"],
+        "seconds": run["total_seconds"],
+        "seconds_short": short["total_seconds"],
+        "formats_have": sum(bool(have[k]) for k in REQUIRED_FORMATS),
+        "formats_need": len(REQUIRED_FORMATS),
+        "resid_6cm": at(mk["mvs"], 6.0),
+        "resid_6cm_base": at(mk["baseline"], 6.0),
+        "finest_mm": min(at(mk["mvs"], 3.0), at(ms["mvs"], 3.0)) * 10,
+        "gain_lo": min(gain(mk), gain(ms)),
+        "gain_hi": max(gain(mk), gain(ms)),
+        "relief_base": mk["baseline"]["relief_m"]["max"],
+        "relief_mvs": mk["mvs"]["relief_m"]["max"],
+    }
+
+
+def hms(sec):
+    return f"{int(sec) // 60}m {int(sec) % 60:02d}s"
+
 
 # --------------------------------------------------------------------------- helpers
 def shape(slide, name):
@@ -167,6 +238,7 @@ def fetch_template():
 # ----------------------------------------------------------------------------- build
 def build():
     fetch_template()
+    m = measurements()
     prs = Presentation(TEMPLATE)
     s1, s2, s3, s4, s5, s6 = [prs.slides[i] for i in range(6)]
 
@@ -192,6 +264,15 @@ def build():
         {"text": [{"text": "Team Name (Registered on portal) – ", "size": 15},
                   {"text": TEAM_NAME, "size": 15, "bold": True}], "space": 8},
     ], line=1.05)
+    # The template ships "TITLE PAGE" in this subtitle placeholder. Slide 2's equivalent
+    # placeholder gets our idea title, so this one does too; the same value goes in the
+    # portal's own Idea Title field.
+    sub = shape(s1, "Subtitle 3")
+    # The placeholder ships overlapping the SIH title block, which is fine for the two
+    # words "TITLE PAGE" and not for a real title. Drop it clear of the descenders.
+    sub.top, sub.left, sub.width = Inches(1.30), Inches(0.36), Inches(10.6)
+    write(sub.text_frame, [{"text": IDEA_TITLE, "size": 21, "bold": True,
+                            "colour": INK, "align": PP_ALIGN.CENTER}])
     textbox(s1, 0.36, 6.35, 6.6, 0.5, [
         {"text": "National Technical Research Organisation (NTRO)",
          "size": 12, "bold": True, "colour": BLUE}])
@@ -235,9 +316,11 @@ def build():
                            "— pose and metric scale — and take the geometry from "
                            "full-resolution photometric multi-view stereo.",
                    "size": 10.5, "bold": True}], "space": 5},
-        {"text": "Measured on two real clips: 1.8–3.6× finer detail, resolving to "
-                 "1.9 mm; buildings gain real walls (height ceiling 2.33 m → 3.58 m); "
-                 "coverage 135% of the AI-only baseline on the survey clip.",
+        {"text": f"Measured on two real clips: {m['gain_lo']:.1f}–{m['gain_hi']:.1f}× "
+                 f"finer detail, resolving to {m['finest_mm']:.1f} mm; buildings gain "
+                 f"real walls (height ceiling {m['relief_base']:.2f} m → "
+                 f"{m['relief_mvs']:.2f} m); coverage {m['coverage']:.0%} of the "
+                 f"AI-only baseline on the survey clip.",
          "size": 10, "space": 3},
     ], line=0.98)
 
@@ -249,6 +332,15 @@ def build():
                            "desired-output targets are met and measured; the two that "
                            "are not are named on the feasibility slide.",
                    "size": 10, "colour": INK}]}], line=0.95)
+    for i, (h, sub) in enumerate((
+            (m["registered"], f'keyframes registered\n{m["frame"]}, single pass'),
+            (f'{m["reproj_ba"]:.2f} px', "mean reprojection error\nafter bundle "
+                                        "adjustment"),
+            (f'{m["dense_points"]/1e6:.2f} M', "dense points measured\nnot "
+                                               "interpolated"),
+            (f'{m["formats_have"]}  /  {m["formats_need"]}',
+             "required export formats\nOBJ PLY LAS GeoTIFF glB FBX"))):
+        chip(s2, 6.95 + i * 1.52, 5.00, 1.42, 1.15, h, sub)
 
     s2.shapes.add_picture(f"{FIG}/fig_beforeafter.png", Inches(6.95), Inches(1.45),
                           width=Inches(6.0))
@@ -256,13 +348,6 @@ def build():
         {"text": "Same clip, same 45 keyframes, same camera poses — the only change is "
                  "where the geometry comes from.", "size": 9, "colour": GREY,
          "align": PP_ALIGN.CENTER}], line=0.95)
-    for i, (h, sub) in enumerate((
-            ("45 / 45", "keyframes registered\n1920×1080, single pass"),
-            ("0.37 px", "mean reprojection error\nafter bundle adjustment"),
-            ("3.45 M", "dense points measured\nnot interpolated"),
-            ("6 / 6", "required export formats\nOBJ PLY LAS GeoTIFF glB FBX"))):
-        chip(s2, 6.95 + i * 1.52, 5.00, 1.42, 1.15, h, sub)
-
     # -------------------------------------------------------- 3 · technical approach
     shape(s3, "TextBox 8")._element.getparent().remove(shape(s3, "TextBox 8")._element)
     textbox(s3, 0.45, 1.20, 12.4, 0.35, [
@@ -270,16 +355,20 @@ def build():
          "size": 13, "bold": True, "colour": BLUE}])
 
     stages = [
-        ("INGEST", "Video 1080p/4K + GPS + flight metadata. Adaptive keyframing, blur "
-                   "and duplicate rejection. Auto-detects SRT / CSV / EXIF / flight-log "
-                   "schema; self-calibrates when intrinsics are absent."),
+        ("INGEST", "Video 1080p/4K + GPS + flight metadata. Adaptive keyframing rejects "
+                   "motion blur, compression artefacts and duplicates. Auto-detects "
+                   "SRT / CSV / EXIF / flight-log schema; self-calibrates when "
+                   "intrinsics are absent."),
         ("POSE + METRIC SCALE", "MapAnything feed-forward point maps → intrinsics by "
-                                "robust masked fit (0.22 px residual) → COLMAP "
-                                "triangulation and global bundle adjustment. "
-                                "1.73 → 0.37 px."),
+                                f"robust masked fit ({m['intrinsics_px']:.2f} px "
+                                "residual) → COLMAP triangulation and global bundle "
+                                f"adjustment. {m['reproj_tri']:.2f} → "
+                                f"{m['reproj_ba']:.2f} px."),
         ("DENSE GEOMETRY", "OpenMVS PatchMatch at full keyframe resolution with "
-                           "geometric-consistency depth filtering. This is the stage "
-                           "that breaks the patch ceiling."),
+                           "geometric-consistency depth filtering — which also rejects "
+                           "vehicles, people and animals, since a moving object cannot "
+                           "be consistent across three views. Breaks the patch "
+                           "ceiling."),
         ("SURFACE + FRAME", "Delaunay + graph-cut mesh, per-vertex colour. Vertical "
                             "recovered from the ground plane and cross-checked against "
                             "the gimbal roll-zero constraint; the two agree within 0.6 degrees."),
@@ -341,12 +430,15 @@ def build():
         {"text": "•  At 1 m window size the two agree to within 2–4%. The entire "
                  "difference is at small scale — precisely where the diagnosis said "
                  "the information was missing.", "size": 9.5, "space": 4},
-        {"text": "•  Vertical relief above local ground rises from a hard 2.33 m "
-                 "ceiling to 3.58 m. Noise cannot fake that: noise is isotropic, and "
-                 "buildings are not.", "size": 9.5, "space": 4},
-        {"text": "•  The rebuilt surface declines to invent ground it could not match, "
-                 "and still covers 135% of the baseline's footprint on the survey clip "
-                 "— accuracy and completeness moved together, not against each other.",
+        {"text": f"•  Vertical relief above local ground rises from a hard "
+                 f"{m['relief_base']:.2f} m ceiling to {m['relief_mvs']:.2f} m. Noise "
+                 f"cannot fake that: noise is isotropic, and buildings are not.",
+         "size": 9.5, "space": 4},
+        {"text": f"•  Variable illumination is the one challenge we can point at a "
+                 f"measurement for: on the shadowed, textureless clip MVS declined to "
+                 f"invent ground and coverage fell, while on the well-lit survey pass "
+                 f"it reached {m['coverage']:.0%} of the baseline's footprint. The "
+                 f"failure mode is measured, not assumed away.",
          "size": 9.5, "space": 4},
     ], line=0.97)
 
@@ -359,11 +451,13 @@ def build():
                            "available and none was needed to produce these numbers.",
                    "size": 11, "colour": INK}]}])
     for i, (h, sub) in enumerate((
-            ("2 clips", "run end to end\n42 and 45 keyframes"),
-            ("32m 43s", "wall clock, 8 vCPU\nCPU only, no GPU"),
-            ("1.95 M", "mesh triangles\nDelaunay + graph cut"),
-            ("0.76 cm", "detail at 6 cm scale\nwas 1.38 cm"),
-            ("135%", "coverage vs baseline\non the survey clip"),
+            ("2 clips", f'run end to end\n{m["n_views_short"]} and {m["n_views"]} '
+                        f'keyframes'),
+            (hms(m["seconds"]), "wall clock, 8 vCPU\nCPU only, no GPU"),
+            (f'{m["triangles"]/1e6:.2f} M', "mesh triangles\nDelaunay + graph cut"),
+            (f'{m["resid_6cm"]:.2f} cm', f'detail at 6 cm scale\nwas '
+                                         f'{m["resid_6cm_base"]:.2f} cm'),
+            (f'{m["coverage"]:.0%}', "coverage vs baseline\non the survey clip"),
             ("1.42×", "measured CPU fan-out\n2 tasks × 8 vCPU"))):
         chip(s4, 0.45 + i * 2.09, 1.62, 1.98, 1.10, h, sub)
 
@@ -372,8 +466,9 @@ def build():
          "size": 12.5, "bold": True, "colour": ORANGE}])
     risks = [
         ("Processing time < 15 min for a 10-min video",
-         "NOT MET YET. 45 views take 33 min on 8 vCPU. CPU fan-out is measured at only "
-         "1.42×, and honest extrapolation puts a 600-view clip at ~29 min.",
+         f"NOT MET YET. {m['n_views']} views take {hms(m['seconds'])} on 8 vCPU. CPU "
+         f"fan-out is measured at only 1.42×, and honest extrapolation puts a 600-view "
+         f"clip at ~29 min.",
          "GPU PatchMatch on the Baramati Blackwell cluster (the same stage is 10–20× "
          "faster on GPU) + keyframe budgeting to the scene, not the clock. CPU sharding "
          "stays as the no-GPU fallback."),
@@ -469,19 +564,24 @@ def build():
         {"text": "Measured benefit, on the two clips we have run", "size": 13,
          "bold": True, "colour": BLUE}])
     for i, (h, sub) in enumerate((
-            ("1.8–3.6×", "finer detail resolved at 6 cm scale,\non two unrelated clips"),
-            ("2.33 → 3.58 m", "vertical structure ceiling;\nbuildings stop being paint"),
-            ("135%", "of the AI-only baseline's ground\ncoverage on the survey clip"),
-            ("4.7×", "reprojection error improvement\nthrough bundle adjustment"))):
+            (f'{m["gain_lo"]:.1f}–{m["gain_hi"]:.1f}×',
+             "finer detail resolved at 6 cm scale,\non two unrelated clips"),
+            (f'{m["relief_base"]:.2f} → {m["relief_mvs"]:.2f} m',
+             "vertical structure ceiling;\nbuildings stop being paint"),
+            (f'{m["coverage"]:.0%}',
+             "of the AI-only baseline's ground\ncoverage on the survey clip"),
+            (f'{m["reproj_gain"]:.1f}×',
+             "reprojection error improvement\nthrough bundle adjustment"))):
         chip(s5, 0.45 + i * 3.15, 4.45, 3.02, 1.25, h, sub)
 
     textbox(s5, 0.45, 5.90, 12.4, 0.85, [
         {"text": "What we are not claiming yet", "size": 11, "bold": True,
          "colour": ORANGE},
-        {"text": "Absolute ≤ 1 m accuracy is unproven on our clips because neither has "
-                 "GNSS, and the < 15 minute budget is not met on CPU. Both gaps are "
-                 "named on the previous slide with the work that closes them. We would "
-                 "rather bring NTRO a measured 33 minutes than a claimed 12.",
+        {"text": f"Absolute ≤ 1 m accuracy is unproven on our clips because neither has "
+                 f"GNSS, and the < 15 minute budget is not met on CPU. Both gaps are "
+                 f"named on the previous slide with the work that closes them. We would "
+                 f"rather bring NTRO a measured {int(m['seconds'] // 60)} minutes than "
+                 f"a claimed 12.",
          "size": 10, "colour": GREY, "space": 3}], line=0.97)
 
     # -------------------------------------------------- 6 · research and references
@@ -540,9 +640,12 @@ def build():
                            "controls, and a deployment study. Available to the "
                            "evaluators on request.", "size": 9.5}], "space": 7},
         {"text": [{"text": "Reproducibility", "size": 10, "bold": True},
-                  {"text": " — every figure and number on these slides is regenerated "
-                           "by a script in the repository from the run outputs; none "
-                           "is transcribed by hand.", "size": 9.5}], "space": 7},
+                  {"text": " — both charts and every headline figure on these slides "
+                           "are read at build time straight out of the JSON the runs "
+                           "wrote, not retyped; the build fails rather than fall back "
+                           "to a stale constant. The few numbers that are not machine-"
+                           "readable are cited to the analysis documents above.",
+                   "size": 9.5}], "space": 7},
         {"text": [{"text": "A note on the portal text.", "size": 10, "bold": True,
                    "colour": ORANGE},
                   {"text": " The sih.gov.in listing for SIH26158 still contains the "
@@ -605,17 +708,25 @@ def build():
 
 def to_pdf(pptx_path):
     """PowerPoint COM. python-pptx cannot write PDF and the portal takes PDF only."""
+    # A file called SIH26158_IdeaSubmission.pdf invites being uploaded. While the team
+    # fields are still placeholders it must not carry that name, or someone will submit
+    # a deck that says «TEAM NAME» six times.
+    draft = TEAM_NAME.startswith("«") or TEAM_ID.startswith("«")
+    dest = OUT_PDF.replace(".pdf", "_DRAFT.pdf") if draft else OUT_PDF
     ps = (
         "$p = New-Object -ComObject PowerPoint.Application;"
         f"$d = $p.Presentations.Open('{pptx_path}', $true, $false, $false);"
-        f"$d.SaveAs('{OUT_PDF}', 32);"
+        f"$d.SaveAs('{dest}', 32);"
         "$d.Close(); $p.Quit();"
     )
     r = subprocess.run(["powershell", "-NoProfile", "-Command", ps],
                        capture_output=True, text=True)
-    if r.returncode or not os.path.exists(OUT_PDF):
+    if r.returncode or not os.path.exists(dest):
         sys.exit(f"PDF export failed:\n{r.stdout}\n{r.stderr}")
-    print("wrote", OUT_PDF, f"{os.path.getsize(OUT_PDF)/1e6:.2f} MB")
+    print("wrote", dest, f"{os.path.getsize(dest)/1e6:.2f} MB")
+    if draft:
+        print("\n  DRAFT - not uploadable yet. Set TEAM_NAME and TEAM_ID at the top of\n"
+              "  this file and rebuild; the output is then named for submission.")
 
 
 if __name__ == "__main__":
