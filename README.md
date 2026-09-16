@@ -10,12 +10,18 @@ for a 10-minute video.
 
 ## Start here
 
+**The full engineering suite (18 documents) is indexed in [`docs/README.md`](docs/README.md).**
+
 | Document | What it is |
 |---|---|
+| [`docs/README.md`](docs/README.md) | Suite index and reading paths |
+| [`docs/08-measurement-validation.md`](docs/08-measurement-validation.md) | **Read first:** the metric scale audit — Kolu is 5.3–5.8× too small |
 | [`docs/01-SRS-requirements.md`](docs/01-SRS-requirements.md) | Requirements, fully traced to the official PDF |
-| [`docs/02-architecture.md`](docs/02-architecture.md) | Architecture and the 900-second budget |
-| [`docs/03-plan-sdlc.md`](docs/03-plan-sdlc.md) | Build plan against the real SIH calendar |
-| [`docs/04-test-plan.md`](docs/04-test-plan.md) | Test register + defect log |
+| [`docs/13-target-architecture.md`](docs/13-target-architecture.md) | Target architecture v2 (extends [`02`](docs/02-architecture.md)) |
+| [`docs/12-research-program.md`](docs/12-research-program.md) | Research tracks and pre-registered experiments |
+| [`docs/18-roadmap.md`](docs/18-roadmap.md) | Milestones, roles, backlog, risks |
+| [`docs/14-quality-gates.md`](docs/14-quality-gates.md) | Gates, benchmark protocol, claims ledger |
+| [`docs/15-engineering-handbook.md`](docs/15-engineering-handbook.md) | Setup, commands, conventions, traps |
 | [`docs/report.html`](docs/report.html) | Published findings report |
 
 **The targets are not on the sih.gov.in portal.** Its listing contains the literal placeholder
@@ -127,7 +133,16 @@ full-length job.
 
 ---
 
-## No video has been processed yet
+## No video has been processed yet — CORRECTED
+
+> **CORRECTED 2026-09-16.** This section was true on 2026-09-04 and is not any more. S1 now
+> decodes real video with PyAV (`src/ingest/video_ingest.py`), and real clips have gone
+> end to end: Nicosia (EXP-12), Kolu and Village, through MapAnything, bundle adjustment,
+> OpenMVS and all seven export files (`docs/04` §4.7, `docs/05` §8–9). **What is still
+> true:** NTRO has supplied no video, and no clip with **per-frame GNSS** has been
+> processed, so SRT alignment and georeferencing (S5) remain unexercised on real data
+> (`docs/12` EXP-21). And the metric scale of the processed clips was found to be wrong
+> by ~5.5× on Kolu (`docs/08`). The original text follows, for the record.
 
 **This is the largest gap, so it is stated first.**
 
@@ -186,11 +201,17 @@ These change what may legitimately be claimed:
 ## Layout
 
 ```
-docs/        SRS, architecture, SDLC plan, test plan, published report
-src/eval3d/  evaluation harness + GNSS model (CPU-only, unit-tested)
-src/simscene/ synthetic scene, flight, visibility, CPU rasteriser
-src/pipeline/ end-to-end demo
-src/experiments/ EXP-01, 05, 08, 09
-research/    verified findings + recorded experiment output
-viewer/      three.js viewer with measurement
+docs/            the engineering suite, 01-18 — index in docs/README.md
+src/ingest/      S0 screening, S1 video ingest (PyAV), SRT fixtures
+src/pipeline/    COLMAP bridge, gravity, fusion, windowing, renders, exports, synthetic E2E
+src/eval3d/      evaluation harness + GNSS model (CPU-only, unit-tested)
+src/simscene/    synthetic scene, flight, visibility, CPU rasteriser
+src/analysis/    MVS-vs-baseline measurements and the patch-floor analysis
+src/experiments/ EXP-01, 05, 08, 09, 13, 14
+mapanything_job/ S3 container;  mvs_job/  BA + MVS + export container
+tools/           run finishing, demo/gallery/Q&A/deck builders, design and wiring audits
+demo/            the deployed replay (tesseract-demo.vercel.app)
+research/        verified findings + recorded experiment output
 ```
+
+Full detail: `docs/15-engineering-handbook.md` §2.
