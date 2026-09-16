@@ -87,8 +87,9 @@ textured mesh or point cloud, facades and rooftops, vegetation and obstacles*, a
 all six required export formats.
 
 **Show completion honestly, and show it as a number.** Teams that stated a level of
-completion did well. Ours is on slide 2: four of the six desired-output targets met and
-measured, two named as open.
+completion did well. Ours is on slide 4, against both of NTRO's own tables: four of the
+six desired outputs met and two open, and a measured standing on each of the six
+weighted evaluation criteria.
 
 **A flowchart is expected.** Several accounts single out the missing architecture diagram
 as a rejection cause. Slide 3 is built around one.
@@ -138,11 +139,11 @@ with global bundle adjustment, and take every delivered surface point from
 full-resolution per-pixel photometric multi-view stereo. Measured across two unrelated
 real clips: reprojection error 1.73 to 0.37 px, surface detail 1.8-3.6x finer and
 resolving to 1.9 mm, vertical structure ceiling lifted from 2.33 m to 3.58 m, and
-135% of the baseline's ground coverage on the survey clip. The whole pipeline is
+136% of the baseline's ground coverage on the survey clip. The whole pipeline is
 containerised and runs on commodity CPU with no GPU dependency.
 
 Two of the six desired-output targets are not yet met and we say so. Processing takes
-33 minutes for 45 keyframes on 8 vCPU against a 15-minute budget; GPU multi-view stereo
+34 minutes for 45 keyframes on 8 vCPU against a 15-minute budget; GPU multi-view stereo
 and keyframe budgeting close that, and CPU fan-out is already measured at 1.42x as the
 fallback. Absolute accuracy against the 1 m target is unvalidated because neither test
 clip carries GNSS, so the digital surface model is written with a real geotransform in
@@ -201,6 +202,11 @@ python tools/make_ppt_figs.py      # figures, from the run outputs
 python tools/build_sih_ppt.py      # deck + PDF, on the official template
 ```
 
+Both read `tools/deck_theme.py`, which holds the entire visual system — palette, type
+scale, the 12-column grid and each figure's placed size. It exists because the slides
+and the charts had drifted into two different greys, two different blues and two
+different typefaces, so every chart read as pasted in from another document.
+
 Outputs land in `out/ppt/`. While `TEAM_NAME` / `TEAM_ID` are still placeholders the PDF
 is named `SIH26158_IdeaSubmission_DRAFT.pdf` **on purpose** — a file named for submission
 that says «TEAM NAME» six times is an accident waiting to happen. Set the two constants
@@ -230,8 +236,120 @@ measured by the same run that produced every other number on the slides, and it 
 the conservative direction. Neither figure is anywhere near the 15-minute budget, so no
 conclusion moves.
 
+**Two of the six PS targets are stated as unmet, on purpose.** See §3 — the deck says
+34m 38s against a 15-minute budget, and unvalidated absolute accuracy, each beside the
+work that closes it.
+
 **FBX now actually exists, so the format count is a verified 6 of 6.** It had been 5 of 6
 locally, with FBX only claimed for the container. `write_fbx` now falls back to Blender
 when the assimp CLI is absent; both clips have a real `model.fbx` with a `Kaydara FBX
 Binary` header. Counting is against the PS's own six-item list, where glB and glTF are one
 line item — counting them separately would have flattered a 5/6 into a 6/7.
+
+---
+
+## 7. How the deck is designed, and why
+
+Nobody scores typography (§3), so the design brief here is narrow: make a dense
+technical argument legible in the seconds a screening reader gives it, and make it look
+like it belongs to the mandated template rather than sitting on top of it.
+
+**The navy is not ours.** `#1F497D` is the official template's own theme colour `dk2` —
+what its title and every prescribed section heading are already set in. Adopting it as
+our accent makes our content native to the chrome.
+
+**Two hues, and no third.** Navy is ours: our pipeline, our result, a target met. Rust
+is the other thing: the feed-forward baseline, a target still open, the cost not yet
+paid down. Those are the same axis, so no green tick and no amber warning exist
+anywhere in the deck. Everything else is grey.
+
+**Rules and whitespace, not boxes.** The previous version put every group in a rounded
+rectangle with a hairline border. When everything is a card, nothing is emphasis. Rows
+are separated by hairlines, status by a short keyline, and grouping mostly by space.
+
+**Measured numbers are set in Consolas.** They are instrument output, not marketing
+figures, and monospaced digits line up down a column where a proportional face will
+not.
+
+**Figures are authored at the size they are placed at.** `fig_beforeafter` used to be
+drawn 9.2 in wide and placed at 5.9, so every label in it was silently scaled to 64%
+and the chart read as imported from somewhere else. `deck_theme.FIG` now fixes each
+figure's size and both modules read it.
+
+**The template's own content pointers are kept, not deleted.** Each slide carries its
+prescribed pointers verbatim, set small at the top right, so an evaluator reads the
+question and our answer to it on one line. "Clarity and details in the prescribed
+format" is a scored criterion, and this is that argument made typographically.
+
+Two things were tried and removed, both recorded in the code: a drawn stem-and-branch
+tree on slide 2, which at that size read as stray marks at the margin (the grammar now
+does the job), and filled rust discs for a "no" in the slide 6 matrix, which read as
+emphatically *present* next to the filled navy "yes". Ink density there now falls
+monotonically — solid navy, pale navy, empty rust ring — so the matrix survives the
+greyscale printout a screening table works from.
+
+Fonts are Segoe UI, Segoe UI Semibold and Consolas, all embedded by the PowerPoint COM
+export. **The PDF is the canonical artifact.** Any Google Slides copy substitutes those
+faces and will drift.
+
+> **Keep Field 9 and the deck in step.** The deck reads its numbers from the run
+> outputs; the Field 9 text above is hand-written. Two had already drifted apart —
+> coverage (135 vs 136%) and wall clock (33 vs 34 min) — and are now reconciled to the
+> measured values. Re-check them after any re-run: an evaluator reads both.
+
+---
+
+## 8. The rebuild against the problem statement itself
+
+The first version of this deck was designed well and grounded badly. Re-reading the PS
+line by line, and the linked PDF as rendered images, turned up four things.
+
+**The PDF carries a weighted scoring function, and the deck never mentioned it.**
+
+| Criterion | Weight |
+|---|---|
+| Reconstruction Accuracy | **30%** |
+| Model Completeness | **20%** |
+| Processing Speed | **20%** |
+| Innovation | 15% |
+| Scalability | 10% |
+| User Interface | 5% |
+
+Verified against the page-38 image, not just the SRS transcription of it; the six rows
+sum to 100. Accuracy + Completeness + Speed is 70% and all three are objectively
+measurable. Slide 4 now reports a measured standing on every row, including the two we
+miss, and says that 70% figure out loud.
+
+**The PS names eight key challenges, and the SRS already traced all eight as testable
+requirements (R-C1–R-C8) — but the deck listed four generic "other risks".** Slide 4's
+left column is now those eight, by roman numeral, in the PS's own words, each with the
+strategy that answers it. Two are marked open in rust: (vi) near-real-time processing
+and (viii) metric accuracy without GCPs.
+
+**Slide 2 inverted the template.** The shipped file makes "Proposed Solution (Describe
+your Idea/Solution/Prototype)" the dominant element and its three pointers the skeleton
+of the answer. The deck had a tagline in the IDEA TITLE slot and both the heading and
+the pointers shrunk to 6.8 pt grey corner text — which is precisely "changing the idea
+detail pointers". The full idea title is now in the title slot, the section heading is
+visible in navy, and each of the three pointers is a block heading with our answer under
+it. `retext()` gained a size override because the master sets that placeholder for the
+two words "IDEA TITLE" and a real 63-character title climbed off the top of the slide.
+
+**A factual error, now removed.** Slide 5 shaded three applications as "the three NTRO
+named first" and picked the wrong three: the PS order is (i) Border and strategic area
+mapping, (ii) Disaster damage assessment, (iii) Urban planning and smart cities, and
+Military reconnaissance is **(viii), last**. All eight are now listed in the PS's own
+order with its own numbering, and the claim is gone rather than corrected — position in
+a list is not priority.
+
+Smaller corrections in the same pass: slide 3's ingest stage now names the PS's
+mandatory and optional input lists verbatim; the statement lines quote the PS's own
+deliverable phrase (*visualisation, measurement and analysis*) and its own four benefits;
+and slide 5 states plainly that **near real-time situational awareness** is the PS's
+fifth benefit and the one we cannot claim yet.
+
+On illumination, challenge (iii): the deck claims only what exists — keyframe scoring
+that survives exposure ramps, and per-vertex colour, so there is no texture atlas and no
+seams. It does not claim shadow-invariant matching. Photometric MVS is genuinely
+illumination-sensitive, and the credibility of the two OPEN rows depends on not
+overclaiming anywhere else.

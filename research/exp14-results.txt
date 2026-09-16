@@ -1,0 +1,42 @@
+====================================================================================
+EXP-14  Metric scale audit against objects of published size  (Kolu, MVS export)
+====================================================================================
+points 3,445,735   extent e/n/u = 19.11 x 24.10 x 6.42 model m
+frame: export ENU (gravity up, centroid origin) - the frame of every shipped file
+
+--- 1. Lane width (road marking profile) ---
+road direction -24.6 deg (maximises grass-strip contrast)
+paint peaks across the road (model m, paint fraction):
+   -3.27(0.22)  -1.21(0.24)  -0.73(0.65)  -0.09(0.17)  +0.57(0.28)  +1.85(0.40)  +2.43(0.42)  +2.87(0.36)  +4.15(0.18)
+solid -0.73 | dashed -0.09 (fill 0.17, lowest) | solid +0.57
+lane widths 0.64 and 0.66 model m  ->  lane = 0.650 model m
+real lane 3.5-3.75 m  ->  scale factor 5.38 - 5.77
+
+--- 2. Ecoduct waist (barrier crest to barrier crest, along the road) ---
+19 deck slices with both crests clear of the deck
+   v-2.9:6.10  v-2.6:5.90  v-1.9:4.75  v-1.6:4.70  v-1.4:4.50  v-0.6:3.70  v-0.4:4.00  v+0.1:3.95  v+0.4:3.95  v+0.6:4.05  v+0.9:3.85  v+1.1:3.75  v+1.4:4.40  v+1.9:4.15  v+3.1:4.40  v+3.6:4.80  v+5.1:6.20  v+5.4:6.30  v+5.9:6.80
+narrowest 3.70 model m; waist plateau (slices within 10% of it) median 3.95 model m
+real waist 21-22 m  ->  scale factor 5.32 - 5.57
+
+--- 3. What the factor implies (sanity, not evidence) ---
+deck surface above road      1.40 model m  ->  7.4-8.1 m   (a highway overpass needs >= ~5 m clearance plus the deck)
+camera above ground          10.59 model m  ->  56-61 m
+scene extent                 19.1 x 24.1 model m  ->  106 x 133 m at the central factor
+DSM cell (declared 0.10 m)   ->  actually 0.53-0.58 m on the ground
+
+------------------------------------------------------------------------------------
+CONCLUSION (EXP-14)
+------------------------------------------------------------------------------------
+  Two independent rulers agree: the Kolu model is 5.3-5.8x TOO SMALL
+  (central 5.5x). Every absolute length it reports is short by that factor.
+
+  1. The plausibility band that accepted this scale (6.4-11.4 m altitude) was the
+     defect. A 10.6 m camera height with a 67 deg lens sees ~14 m of ground; the
+     keyframes show a four-lane highway, an ecoduct and its verges. The band
+     checked internal consistency, not reality, and passed a ~5.5x error.
+  2. Scale-free results are untouched: the 14x sampling/information ratio, the
+     1.8-3.6x MVS gain, reprojection error in px, every percentage.
+  3. A single global correction constant is wrong in principle. The factor is a
+     per-run model output; each clip needs its own ruler or its own GNSS.
+  4. A 2x correction would leave Kolu measurements 2.7-2.9x short.
+====================================================================================

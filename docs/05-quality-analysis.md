@@ -89,6 +89,15 @@ information) is solid because it is scale-free; the absolute "30-50 cm" is only 
 the model's asserted scale, and that stays unvalidated until a clip with GNSS or a known
 control length is processed.
 
+> **CORRECTED 2026-09-16 — the scale was wrong, and the band did not catch it.** A known
+> control length has now been processed (`docs/08`, EXP-14). On Kolu, lane width and the
+> ecoduct's published waist both put the model **5.3–5.8× too small**, so every absolute
+> length in this document is in **model units**, not metres. The Kolu patch is ~2.7–3.0 m
+> on the ground, not 51.2 cm, and the Kolu MVS surface resolves ~2 cm, not 3.5 mm. The
+> Short/Village figures have no ruler yet and stay unvalidated. **Every ratio here stands**:
+> the 14× sampling-to-information gap, growth per doubling, and the MVS gain are scale-free.
+> The plausibility band above passed a ~450% error; it is retired as a validation method.
+
 ## 3. What the model already knows and we are discarding
 
 The container prints its own prediction keys. All of these are produced on every run:

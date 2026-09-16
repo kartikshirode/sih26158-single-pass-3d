@@ -2,12 +2,17 @@
 Figures for the SIH idea-submission deck.
 
 Separate from `make_share_images.py` because that one targets a dark chat window and
-this one has to sit on the mandated SIH template, which is white. Same numbers, same
-colour roles, different ground.
+this one has to sit on the mandated SIH template, which is white.
+
+Everything visual comes from `deck_theme`: the same navy, the same rust, the same greys
+and the same two typefaces the slides use. Each figure is also authored at exactly the
+width it is placed at, so its type is in the same point system as the surrounding slide
+rather than being silently rescaled.
 """
 from __future__ import annotations
 
 import os
+import sys
 
 import matplotlib
 import numpy as np
@@ -15,9 +20,25 @@ import numpy as np
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from deck_theme import FAINT, FIG, INK, MONO, MUTED, NAVY, PAPER, RULE, RUST, SANS
+
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 OUT = os.path.join(ROOT, "out", "ppt")
-BASE, MVS, INK, DIM = "#C2612C", "#1F6FA8", "#1A1A1A", "#6B6B6B"
+DPI = 300
+
+# matplotlib registers seguisb.ttf under the family "Segoe UI" at weight semibold
+# rather than as a family of its own, so headings ask for the weight, not the name.
+SEMI = dict(family=SANS, weight="semibold")
+plt.rcParams.update({
+    "font.family": SANS,
+    "axes.edgecolor": RULE, "axes.linewidth": 0.8, "axes.labelcolor": MUTED,
+    "xtick.color": FAINT, "ytick.color": FAINT,
+    "xtick.major.width": 0.8, "ytick.major.width": 0.8,
+    "grid.color": RULE, "grid.linewidth": 0.7,
+    "figure.facecolor": PAPER, "savefig.facecolor": PAPER,
+})
+
 
 def series(clip):
     """
@@ -37,8 +58,6 @@ def series(clip):
 
 
 MAX_TRIS = 400_000
-# width / height of one before-after panel, used to size the view window
-PANEL_ASPECT = 4.45 / 3.35
 LIGHT_DIR = np.array([0.35, -0.75, 0.56])
 
 
@@ -60,7 +79,7 @@ def _mesh_in_frame(d, B, c0):
     return V, F, C
 
 
-def _shade(ax, V, F, C, az, el, radius, centre):
+def _shade(ax, V, F, C, az, el, radius, centre, aspect):
     """
     Flat-shaded triangles on a light ground, painter's-algorithm depth sort.
 
@@ -68,7 +87,6 @@ def _shade(ax, V, F, C, az, el, radius, centre):
     lit for a black background reads as a silhouette, and the detail this whole deck
     is arguing about disappears.
     """
-    import sys
     sys.path.insert(0, os.path.join(ROOT, "src", "pipeline"))
     from render_views import rot
     from matplotlib.collections import PolyCollection
@@ -84,12 +102,14 @@ def _shade(ax, V, F, C, az, el, radius, centre):
                                      edgecolors="none", linewidths=0))
     # One camera for both panels. Centring each on its own centroid made the smaller,
     # holier reconstruction look merely zoomed out, which hides the actual finding.
-    # `radius` is the half-height; the width follows the panel's aspect so the model
-    # fills the frame instead of floating in a square window inside a wide axes.
     cx, cy = centre
-    ax.set_xlim(cx - radius * PANEL_ASPECT, cx + radius * PANEL_ASPECT)
+    ax.set_xlim(cx - radius * aspect, cx + radius * aspect)
     ax.set_ylim(cy - radius, cy + radius)
-    ax.set_aspect("equal"); ax.axis("off")
+    ax.set_aspect("equal")
+    ax.set_xticks([])
+    ax.set_yticks([])
+    for sp in ax.spines.values():
+        sp.set_visible(False)
 
 
 def before_after(az=30, el=55):
@@ -101,7 +121,6 @@ def before_after(az=30, el=55):
     MapAnything's frame, so the two really are in one coordinate system, and sharing
     the framing is what makes this a comparison rather than two pictures.
     """
-    import sys
     sys.path.insert(0, os.path.join(ROOT, "src", "pipeline"))
     from render_views import rot, upright_frame
 
@@ -110,6 +129,14 @@ def before_after(az=30, el=55):
     cen = np.load(f"{ROOT}/out/{base}/cam_centres.npy")
     B, c0 = upright_frame(P, cen), P.mean(0)
 
+    w, h = FIG["beforeafter"]
+    fig, ax = plt.subplots(1, 2, figsize=(w, h))
+    fig.subplots_adjust(left=.004, right=.996, top=.845, bottom=.055, wspace=.024)
+    # The view window has to match the axes box, or the model floats inside a frame of
+    # the wrong shape. Measured off the laid-out figure rather than guessed.
+    bb = ax[0].get_position()
+    aspect = (bb.width * w) / (bb.height * h)
+
     # Framing taken from BOTH clouds together, in the view's own screen plane, so the
     # wider reconstruction is not cropped and the narrower one is not re-centred.
     R = rot(az, el)
@@ -117,17 +144,22 @@ def before_after(az=30, el=55):
                        - c0) @ B.T @ R.T)[::37, :2] for d in (base, mvs)])
     centre = (float((scr[:, 0].min() + scr[:, 0].max()) / 2),
               float((scr[:, 1].min() + scr[:, 1].max()) / 2))
-    radius = 0.52 * float(max(np.ptp(scr[:, 1]), np.ptp(scr[:, 0]) / PANEL_ASPECT))
+    radius = 0.52 * float(max(np.ptp(scr[:, 1]), np.ptp(scr[:, 0]) / aspect))
 
-    fig, ax = plt.subplots(1, 2, figsize=(9.2, 3.9), facecolor="white")
-    for axi, d, lab, c in ((ax[0], base, "BEFORE  ·  feed-forward point maps", BASE),
-                           (ax[1], mvs, "AFTER  ·  full-res photometric MVS", MVS)):
-        _shade(axi, *_mesh_in_frame(d, B, c0), az, el, radius, centre)
-        axi.set_title(lab, color=c, fontsize=11.5, fontweight="bold", pad=7)
-        axi.set_facecolor("white")
-    fig.subplots_adjust(left=.01, right=.99, top=.88, bottom=.02, wspace=.03)
+    for axi, d, lab, note, c in (
+            (ax[0], base, "BEFORE", "feed-forward point maps", RUST),
+            (ax[1], mvs, "AFTER", "full-resolution photometric MVS", NAVY)):
+        _shade(axi, *_mesh_in_frame(d, B, c0), az, el, radius, centre, aspect)
+        axi.set_title(lab, color=c, fontsize=9.5, pad=9, loc="left", **SEMI)
+        axi.text(1.0, 1.028, note, transform=axi.transAxes, ha="right", va="baseline",
+                 fontsize=7.4, color=MUTED)
+        # A hairline under each caption ties the two panels to the slide's own rules.
+        axi.plot([0, 1], [1.005, 1.005], transform=axi.transAxes, color=c,
+                 lw=0.9, clip_on=False)
+
     p = f"{OUT}/fig_beforeafter.png"
-    fig.savefig(p, dpi=190, facecolor="white"); plt.close(fig)
+    fig.savefig(p, dpi=DPI)
+    plt.close(fig)
     print("wrote", p)
 
 
@@ -135,45 +167,60 @@ def accuracy():
     """
     Detail vs scale. The baseline stalls at a floor; MVS keeps a constant slope, which
     is what a real surface looks like. This chart carries the novelty claim.
+
+    No legend box. The two series are named once, in place, at the left-hand end where
+    they are furthest apart and where the baseline simply stops - which is itself the
+    finding, so the labelling and the argument become the same gesture.
     """
     from matplotlib.ticker import FixedLocator, FuncFormatter
     fmt = FuncFormatter(lambda v, _: ("%g" % v))
     (kb, km), (sb, sm) = series("kolu"), series("short")
-    fig, axes = plt.subplots(1, 2, figsize=(9.6, 4.0), facecolor="white")
-    for ax, (bl, mv, name) in zip(axes, ((kb, km, "Kolu survey pass  ·  45 views"),
-                                         (sb, sm, "Village pass  ·  42 views"))):
-        for data, c, lab, m in ((bl, BASE, "feed-forward point maps", "o"),
-                                (mv, MVS, "full-resolution photometric MVS", "s")):
-            x = [d[0] for d in data]; y = [d[1] for d in data]
-            ax.plot(x, y, m + "-", color=c, lw=2.2, ms=6, label=lab)
-        ax.set_xscale("log"); ax.set_yscale("log")
-        ax.set_xlabel("window radius (cm)", fontsize=9.5, color=DIM)
-        ax.set_title(name, fontsize=10.5, color=INK, fontweight="bold", pad=8)
-        ax.grid(alpha=.22, which="major", lw=.6)
+    w, h = FIG["accuracy"]
+    fig, axes = plt.subplots(1, 2, figsize=(w, h))
+    for ax, (bl, mv, name) in zip(axes, ((kb, km, "Kolu survey pass · 45 views"),
+                                         (sb, sm, "Village pass · 42 views"))):
+        for data, c in ((bl, RUST), (mv, NAVY)):
+            ax.plot([d[0] for d in data], [d[1] for d in data], "o-",
+                    color=c, lw=1.9, ms=3.6, mew=0, zorder=3)
+        ax.set_xscale("log")
+        ax.set_yscale("log")
+        ax.set_xlim(2.4, 130)
+        ax.set_ylim(0.13, 12)
+        ax.set_xlabel("window radius, cm", fontsize=7.4, labelpad=2)
+        ax.set_title(name, fontsize=8.2, color=INK, pad=5, loc="left", **SEMI)
+        ax.grid(alpha=.55, which="major")
+        ax.set_axisbelow(True)
         ax.xaxis.set_major_locator(FixedLocator([3, 6, 12, 25, 50, 100]))
-        ax.xaxis.set_minor_locator(FixedLocator([]))
         ax.yaxis.set_major_locator(FixedLocator([0.2, 0.5, 1, 2, 5, 10]))
-        ax.yaxis.set_minor_locator(FixedLocator([]))
-        ax.xaxis.set_major_formatter(fmt); ax.yaxis.set_major_formatter(fmt)
-        ax.tick_params(labelsize=8.8, colors=DIM)
+        for a in (ax.xaxis, ax.yaxis):
+            a.set_minor_locator(FixedLocator([]))
+            a.set_major_formatter(fmt)
+        ax.tick_params(labelsize=7, pad=1.5)
+        for lab in ax.get_xticklabels() + ax.get_yticklabels():
+            lab.set_fontfamily(MONO)
         for sp in ("top", "right"):
             ax.spines[sp].set_visible(False)
-    axes[0].set_ylabel("finest detail resolved\nmedian |residual|, cm", fontsize=9.5, color=DIM)
-    axes[0].legend(fontsize=8.8, frameon=False, loc="upper left")
-    # The two annotations are the whole point: where the old curve stops, and how far
-    # past it the new one goes.
-    # Anchored on the measured end points, not on typed-in coordinates, so the labels
-    # follow the data if a re-run moves it.
+    axes[0].set_ylabel("median |residual|, cm", fontsize=7.4, labelpad=2)
+
+    # Named in place, on the panel that establishes the comparison. The right panel
+    # inherits the meaning from the colour and stays clean.
     bx, by = kb[0]
-    axes[0].annotate(f"stalls at a {by:.1f} cm floor\n(no structure below it)",
-                     xy=(bx, by), xytext=(bx * 1.6, by * 0.38), fontsize=8.4,
-                     color=BASE, arrowprops=dict(arrowstyle="->", color=BASE, lw=1.1))
+    axes[0].plot([bx], [by], "o", color=RUST, ms=6.5, mfc=PAPER, mew=1.6, zorder=4)
+    axes[0].annotate("feed-forward point maps stop here:"
+                     f"\na {by:.1f} cm floor, nothing below it",
+                     xy=(bx, by), xytext=(2.68, 5.2), fontsize=7.2, color=RUST,
+                     linespacing=1.35, va="bottom",
+                     arrowprops=dict(arrowstyle="-", color=RUST, lw=0.8,
+                                     shrinkA=2, shrinkB=5))
+    axes[0].text(2.68, 0.152, "full-resolution photometric MVS", fontsize=7.2,
+                 color=NAVY, **SEMI)
     for ax, (mx, my) in ((axes[0], km[0]), (axes[1], sm[0])):
-        ax.annotate(f"{my * 10:.1f} mm", xy=(mx, my), xytext=(mx * 1.18, my * 0.90),
-                    fontsize=9, color=MVS, fontweight="bold")
-    fig.subplots_adjust(left=.115, right=.985, top=.86, bottom=.155, wspace=.16)
+        ax.annotate(f"{my * 10:.1f} mm", xy=(mx, my), xytext=(mx * 1.22, my * 0.80),
+                    fontsize=8, color=NAVY, family=MONO, weight="bold")
+    fig.subplots_adjust(left=.098, right=.995, top=.885, bottom=.155, wspace=.14)
     p = f"{OUT}/fig_accuracy.png"
-    fig.savefig(p, dpi=190, facecolor="white"); plt.close(fig)
+    fig.savefig(p, dpi=DPI)
+    plt.close(fig)
     print("wrote", p)
 
 
@@ -184,44 +231,69 @@ def missions():
     Two flight plans over the same ground. Nobody needs to read a bullet explaining
     that one line is cheaper than eight lines plus surveyed markers.
     """
-    fig, axes = plt.subplots(1, 2, figsize=(9.4, 3.5), facecolor="white")
-    for ax, single in zip(axes, (False, True)):
-        ax.add_patch(plt.Rectangle((0, 0), 10, 6, fc="#F2F0EA", ec="#DAD5C8", lw=1))
-        for x, y in ((1.4, 1.1), (8.4, 1.4), (5.0, 3.1), (1.9, 4.8), (8.0, 4.7)):
-            ax.add_patch(plt.Rectangle((x, y), 1.2, 0.75, fc="#CFC8B6", ec="none"))
-        col = MVS if single else BASE
+    # Map and stats live in separate axes. Sharing one axes forced the equal-aspect
+    # map to reserve vertical room for the title and the stat row, and an equal-aspect
+    # box that tall could only fill about two thirds of the width it was given.
+    w, h = FIG["missions"]
+    fig = plt.figure(figsize=(w, h))
+    gs = fig.add_gridspec(2, 2, height_ratios=[2.15, 1], hspace=0.10, wspace=0.07,
+                          left=.006, right=.994, top=.875, bottom=.02)
+    maps = [fig.add_subplot(gs[0, j]) for j in (0, 1)]
+    bars = [fig.add_subplot(gs[1, j]) for j in (0, 1)]
+    for ax, sax, single in zip(maps, bars, (False, True)):
+        ax.add_patch(plt.Rectangle((0, 0), 10, 4.4, fc="#F4F4F1", ec=RULE, lw=0.8))
+        for x, y in ((1.4, 0.8), (8.4, 1.0), (5.0, 2.3), (1.9, 3.5), (8.0, 3.4)):
+            ax.add_patch(plt.Rectangle((x, y), 1.2, 0.55, fc="#D9D9D3", ec="none"))
+        col = NAVY if single else RUST
         if single:
-            ax.annotate("", xy=(9.6, 3.0), xytext=(0.4, 3.0),
-                        arrowprops=dict(arrowstyle="-|>", color=col, lw=2.6))
+            ax.annotate("", xy=(9.6, 2.2), xytext=(0.4, 2.2),
+                        arrowprops=dict(arrowstyle="-|>", color=col, lw=2.0))
             for x in np.linspace(1.2, 8.8, 6):          # camera stations along the pass
-                ax.plot([x], [3.0], "o", color=col, ms=6, zorder=3)
-            stats = [("flight legs", "1"), ("ground control points", "0"),
-                     ("passes over target", "1")]
+                ax.plot([x], [2.2], "o", color=col, ms=4, zorder=3)
+            stats = [("1", "flight\nleg"), ("0", "ground control\npoints"),
+                     ("1", "pass over\ntarget")]
         else:
-            ys = np.linspace(0.7, 5.3, 7)
+            ys = np.linspace(0.5, 3.9, 7)
             path = []
             for i, y in enumerate(ys):
                 path += [(0.5, y), (9.5, y)] if i % 2 == 0 else [(9.5, y), (0.5, y)]
-            ax.plot([p[0] for p in path], [p[1] for p in path], "-", color=col, lw=1.9)
-            for gx, gy in ((1.0, 0.9), (9.0, 0.9), (5.0, 3.0), (1.0, 5.1), (9.0, 5.1)):
-                ax.plot([gx], [gy], "^", color="#2E7D32", ms=9, zorder=4)
-            stats = [("flight legs", "7+"), ("ground control points", "5+"),
-                     ("passes over target", "3+")]
-        ax.set_xlim(-0.3, 10.3); ax.set_ylim(-2.6, 7.2)
-        ax.set_aspect("equal"); ax.axis("off")
-        ax.text(5, 6.55, "ONE PASS  ·  this system" if single
-                else "CONVENTIONAL  ·  planned grid survey",
-                ha="center", fontsize=11.5, fontweight="bold", color=col)
-        for i, (lab, val) in enumerate(stats):
-            ax.text(1.0 + i * 4.0, -0.95, val, fontsize=15, fontweight="bold",
-                    color=col, ha="center")
-            ax.text(1.0 + i * 4.0, -1.95, lab, fontsize=8, color=DIM, ha="center")
-    # Legend sits above the panel, not in the stats row, where it collided with "3+".
-    axes[0].plot([0.45], [6.18], "^", color="#2E7D32", ms=8, clip_on=False)
-    axes[0].text(0.85, 6.05, "surveyed ground control marker", fontsize=7.5, color=DIM)
-    fig.subplots_adjust(left=.01, right=.99, top=.97, bottom=.02, wspace=.05)
+            ax.plot([p[0] for p in path], [p[1] for p in path], "-", color=col, lw=1.3)
+            for gx, gy in ((1.0, 0.68), (9.0, 0.68), (5.0, 2.2), (1.0, 3.72),
+                           (9.0, 3.72)):
+                ax.plot([gx], [gy], "^", color=PAPER, mec=col, mew=1.2, ms=5.5,
+                        zorder=4)
+            stats = [("7+", "flight\nlegs"), ("5+", "ground control\npoints"),
+                     ("3+", "passes over\ntarget")]
+        ax.set_xlim(-0.15, 10.15)
+        ax.set_ylim(-0.15, 4.55)
+        ax.set_aspect("equal")
+        ax.axis("off")
+        # Titles in axes coordinates: the map's own units now cover only the ground, so
+        # anything anchored in data space would move whenever the plot is retuned.
+        ax.text(0, 1.10, "ONE PASS" if single else "CONVENTIONAL", fontsize=9,
+                color=col, va="bottom", transform=ax.transAxes, **SEMI)
+        ax.text(1.0, 1.115, "this system" if single else "planned grid survey",
+                fontsize=7.2, color=MUTED, ha="right", va="bottom",
+                transform=ax.transAxes)
+        ax.plot([0, 1], [1.06, 1.06], color=col, lw=0.9, transform=ax.transAxes,
+                clip_on=False)
+
+        sax.set_xlim(0, 10)
+        sax.set_ylim(0, 1)
+        sax.axis("off")
+        sax.plot([0, 10], [0.95, 0.95], color="#E6E9ED", lw=0.8)
+        for i, (val, lab) in enumerate(stats):
+            sax.text(0.1 + i * 3.5, 0.76, val, fontsize=12.5, color=col, va="top",
+                     family=MONO, weight="bold")
+            sax.text(0.1 + i * 3.5, 0.30, lab, fontsize=6.6, color=MUTED, va="top",
+                     linespacing=1.3)
+    # The triangles need a key, but a floating one collided with the panel title, so it
+    # sits inside the survey panel where the grid lines leave the corner free.
+    maps[0].plot([0.45], [4.18], "^", color=PAPER, mec=RUST, mew=1.1, ms=5, zorder=5)
+    maps[0].text(0.78, 4.18, "ground control", fontsize=6.2, color=RUST, va="center")
     p = f"{OUT}/fig_missions.png"
-    fig.savefig(p, dpi=190, facecolor="white"); plt.close(fig)
+    fig.savefig(p, dpi=DPI)
+    plt.close(fig)
     print("wrote", p)
 
 
@@ -238,36 +310,43 @@ def timing():
     r = json.load(open(f"{ROOT}/out/kolu_mvs/mvs_result.json"))
     t = {s["stage"]: s["seconds"] for s in r["stages"]}
     groups = [
-        ("features + matching", t["feature_extractor"] + t["exhaustive_matcher"], "#9AA7B0"),
-        ("pose + bundle adjustment", t["point_triangulator"] + t["bundle_adjuster"], "#7C8B96"),
-        ("dense geometry (PatchMatch MVS)", t["DensifyPointCloud"], BASE),
-        ("mesh", t["ReconstructMesh"], "#5E6B75"),
+        ("features + matching", t["feature_extractor"] + t["exhaustive_matcher"],
+         "#C3CBD4"),
+        ("pose + bundle adjustment", t["point_triangulator"] + t["bundle_adjuster"],
+         "#9AA6B3"),
+        ("dense geometry · PatchMatch MVS", t["DensifyPointCloud"], RUST),
+        ("mesh", t["ReconstructMesh"], "#77828F"),
     ]
     total = r["total_seconds"]
-    fig, ax = plt.subplots(figsize=(7.5, 1.42), facecolor="white")
+    w, h = FIG["timing"]
+    fig, ax = plt.subplots(figsize=(w, h))
     left = 0.0
     for name, sec, c in groups:
-        ax.barh([0], [sec], left=left, height=0.42, color=c,
-                edgecolor="white", linewidth=1.2)
+        ax.barh([0], [sec], left=left, height=0.34, color=c,
+                edgecolor=PAPER, linewidth=1.0)
         if sec / total > 0.06:
             ax.text(left + sec / 2, 0, f"{sec/60:.0f}m", ha="center", va="center",
-                    color="white", fontsize=9.5, fontweight="bold")
+                    color=PAPER, fontsize=8, family=MONO, weight="bold")
         left += sec
-    ax.set_xlim(0, total); ax.set_ylim(-1.35, 0.85); ax.axis("off")
-    ax.text(0, 0.62, f"Where the {int(total)//60}m {int(total)%60:02d}s goes",
-            fontsize=10.5, fontweight="bold", color=INK)
+    ax.set_xlim(0, total)
+    ax.set_ylim(-1.18, 0.86)
+    ax.axis("off")
+    ax.text(0, 0.52, f"WHERE THE {int(total)//60}m {int(total)%60:02d}s GOES",
+            fontsize=7.6, color=MUTED, va="bottom", **SEMI)
+    ax.plot([0, total], [0.42, 0.42], color=RULE, lw=0.8)
     x = 0.0
     for name, sec, c in groups:
         if sec / total > 0.06:
-            ax.text(x + sec / 2, -0.34, name, ha="center", va="top",
-                    fontsize=7.8, color=DIM)
+            ax.text(x + sec / 2, -0.28, name, ha="center", va="top",
+                    fontsize=6.8, color=MUTED)
         x += sec
-    ax.annotate(f"{groups[2][1]/total:.0%} of the run — and the one stage a GPU changes",
-                xy=(groups[0][1] + groups[1][1] + groups[2][1] / 2, -0.84),
-                ha="center", fontsize=8.6, color=BASE, fontweight="bold")
-    fig.subplots_adjust(left=.005, right=.995, top=.98, bottom=.02)
+    ax.annotate(f"{groups[2][1]/total:.0%} of the run, and the one stage a GPU changes",
+                xy=(groups[0][1] + groups[1][1] + groups[2][1] / 2, -0.80),
+                ha="center", va="top", fontsize=7.6, color=RUST, **SEMI)
+    fig.subplots_adjust(left=.004, right=.996, top=.99, bottom=.02)
     p = f"{OUT}/fig_timing.png"
-    fig.savefig(p, dpi=190, facecolor="white"); plt.close(fig)
+    fig.savefig(p, dpi=DPI)
+    plt.close(fig)
     print("wrote", p)
 
 

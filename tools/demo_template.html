@@ -1,0 +1,1102 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>__TITLE__</title>
+<meta name="description" content="__DESC__">
+<!-- competition material on a public URL: shareable by link, not by search -->
+<meta name="robots" content="noindex, nofollow">
+<meta property="og:type" content="website">
+<meta property="og:title" content="__TITLE__">
+<meta property="og:description" content="__DESC__">
+<meta property="og:image" content="__OGIMG__">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' fill='%2306080a'/><path d='M16 4 28 26 4 26Z' fill='none' stroke='%23e8a84a' stroke-width='2.5' stroke-linejoin='round'/><path d='M16 4V26M9 15h14' stroke='%23e8a84a' stroke-width='1.2' opacity='.7'/></svg>">
+<style>__DS_CSS__
+/* ---------------------------------------------------------------------------
+   WALKTHROUGH-SPECIFIC LAYOUT. Everything above is tools/design_system.css,
+   inlined at build time. Only the three-act machinery lives here, and every
+   value below resolves to a token.
+   --------------------------------------------------------------------------- */
+
+html,body{height:100%}
+body{overflow:hidden; display:flex; flex-direction:column}
+.topbar,.banner{flex:none}
+
+/* In-page progress through ONE clip. Deliberately shaped unlike .sitenav,
+   which navigates between three separate pages and sits in the same bar:
+   this one is numbered, connected by rules, and disables what you cannot
+   reach yet. Numbers + links = progress; underline = navigation. */
+.stepper{display:flex; align-items:center; margin-left:auto; margin-right:auto}
+.stepper button{
+  display:flex; align-items:center; gap:var(--sp-2);
+  background:none; border:0; padding:var(--sp-2) var(--sp-4); cursor:pointer;
+  font:600 var(--t-xs)/1 var(--sans); letter-spacing:.1em; text-transform:uppercase;
+  color:var(--fg-3); transition:color var(--dur-1) var(--ease);
+}
+.stepper button:disabled{cursor:not-allowed; opacity:.45}
+.stepper button:not(:disabled):hover{color:var(--fg)}
+.stepper button[aria-current="true"]{color:var(--accent)}
+.stepper button .n{
+  display:inline-flex; align-items:center; justify-content:center;
+  width:18px; height:18px; border:1px solid currentColor; border-radius:var(--r-sm);
+  font-size:var(--t-xs); letter-spacing:0;
+}
+.stepper .link{width:22px; height:1px; background:var(--line-2)}
+
+/* ---------- act plumbing ---------- */
+main{flex:1; min-height:0; position:relative}
+.act{position:absolute; inset:0; display:none; overflow:auto}
+.act.on{display:block}
+body[data-act="3"] .act3{display:flex}
+.wrap{max-width:1180px; padding:var(--sp-7) var(--sp-6) var(--sp-8)}
+
+/* ---------- act 1: input ---------- */
+.pickrow{display:grid; grid-template-columns:1fr 1fr; gap:var(--sp-5); margin-top:var(--sp-6)}
+.clipcard{display:flex; gap:var(--sp-5)}
+.clipcard img{
+  width:132px; height:74px; object-fit:cover; border-radius:var(--r-sm);
+  flex:none; background:var(--s2);
+}
+.clipcard .cc-t{
+  display:block; font-family:var(--mono); font-size:var(--t-sm);
+  color:var(--fg); margin-bottom:var(--sp-1); word-break:break-all;
+}
+.clipcard .cc-s{display:block; font-size:var(--t-xs); line-height:1.55; color:var(--fg-3)}
+.clipcard .cc-b{margin-top:var(--sp-2)}
+
+/* Drop target. It exists to say no honestly: the page cannot process a file
+   you drop on it, and pretending otherwise is the one dishonest move here. */
+.drop{
+  display:flex; flex-direction:column; align-items:center; justify-content:center;
+  gap:var(--sp-3); padding:var(--sp-4);
+  border:1px dashed var(--line-2); border-radius:var(--r-md);
+  color:var(--fg-3); text-align:center;
+  transition:border-color var(--dur-1) var(--ease),color var(--dur-1) var(--ease);
+}
+.drop.over{border-color:var(--accent); color:var(--fg-2)}
+.drop.said{border-color:var(--bad); color:var(--fg-2)}
+.drop .d1{font-size:var(--t-sm)}
+.drop .d2{font-size:var(--t-xs); line-height:1.5; max-width:38ch}
+.drop.said .d2{color:var(--bad)}
+
+.stagegrid{
+  display:grid; grid-template-columns:1.35fr 1fr; gap:var(--sp-6);
+  margin-top:var(--sp-6); align-items:start;
+}
+.vidbox{
+  background:var(--bg); border:1px solid var(--line);
+  border-radius:var(--r-md); overflow:hidden; position:relative;
+}
+.vidbox video{width:100%; height:auto; background:var(--bg)}
+.vidbox .vcap{
+  padding:var(--sp-3) var(--sp-4); background:var(--s1); border-top:1px solid var(--line);
+  font-size:var(--t-xs); color:var(--fg-3); display:flex;
+  justify-content:space-between; gap:var(--sp-3);
+}
+.kfstrip{display:none; grid-template-columns:repeat(5,1fr); gap:2px; padding:2px}
+.kfstrip img{width:100%; border-radius:var(--r-sm)}
+
+/* Ingest readout. Rows fade in one at a time as the detector "reads" the file. */
+.drow{
+  display:grid; grid-template-columns:1fr auto; gap:var(--sp-3);
+  padding:var(--sp-2) 0; border-bottom:1px solid var(--line);
+  font-size:var(--t-sm);
+  opacity:0; transform:translateY(-3px);
+  transition:opacity var(--dur-2) var(--ease),transform var(--dur-2) var(--ease);
+}
+.drow.in{opacity:1; transform:none}
+.drow:last-child{border-bottom:0}
+.drow .dk{color:var(--fg-3)}
+.drow .dv{
+  font-family:var(--mono); color:var(--fg-2); text-align:right;
+  font-variant-numeric:tabular-nums;
+}
+.drow .dv.warn{color:var(--accent)}
+.drow .dv.ok{color:var(--ok)}
+
+/* ---------- act 2: run ---------- */
+.runhead{
+  display:flex; align-items:flex-end; justify-content:space-between;
+  gap:var(--sp-6); flex-wrap:wrap;
+}
+.clock{text-align:right; flex:none}
+.clock .cv{
+  font-family:var(--mono); font-size:var(--t-3xl); font-weight:600;
+  font-variant-numeric:tabular-nums; color:var(--accent); line-height:1;
+}
+.clock .ck{margin-top:var(--sp-1)}
+
+.rungrid{
+  display:grid; grid-template-columns:1.15fr 1fr; gap:var(--sp-6);
+  margin-top:var(--sp-5); align-items:start;
+}
+.phases{display:flex; flex-direction:column; gap:var(--sp-1)}
+.ph{
+  background:var(--s1); border:1px solid var(--line); border-radius:var(--r-sm);
+  padding:var(--sp-3) var(--sp-4); position:relative; overflow:hidden; opacity:.45;
+  transition:opacity var(--dur-2) var(--ease),border-color var(--dur-2) var(--ease);
+}
+.ph.run{opacity:1; border-color:var(--accent)}
+.ph.done{opacity:1}
+.ph .fill{
+  position:absolute; inset:0 auto 0 0; width:0;
+  background:color-mix(in srgb,var(--accent) 10%,transparent);
+  transition:width .5s ease-out;
+}
+.ph .r1{display:flex; align-items:baseline; gap:var(--sp-3); position:relative}
+.ph .pn{font-family:var(--mono); font-size:var(--t-xs); color:var(--fg-3); flex:none; width:15px}
+.ph .pl{font-size:var(--t-sm); color:var(--fg); flex:1; min-width:0}
+.ph.run .pl,.ph.done .pl{font-weight:600}
+.ph .pt{
+  font-family:var(--mono); font-size:var(--t-xs); color:var(--fg-2); flex:none;
+  font-variant-numeric:tabular-nums;
+}
+.ph .pt.untimed{color:var(--fg-3); font-style:italic}
+.ph .pt.dom{color:var(--accent); font-weight:600}
+.ph .r2{
+  position:relative; margin:var(--sp-1) 0 0 var(--sp-6);
+  display:none; flex-wrap:wrap; gap:2px var(--sp-4);
+}
+.ph.done .r2,.ph.run .r2{display:flex}
+.ph .sub{
+  font-family:var(--mono); font-size:var(--t-xs); color:var(--fg-3);
+  font-variant-numeric:tabular-nums;
+}
+.ph .out{
+  position:relative; margin:var(--sp-2) 0 0 var(--sp-6);
+  font-size:var(--t-xs); color:var(--ok); display:none;
+}
+.ph.done .out{display:block}
+
+.detail{min-height:330px}
+
+/* Keyframe-selection funnel: how many frames survived each gate. */
+.funnel{display:flex; flex-direction:column; gap:2px}
+.fstep{
+  display:grid; grid-template-columns:1fr auto; align-items:baseline; gap:var(--sp-3);
+  padding:var(--sp-2) var(--sp-3); background:var(--s2);
+  position:relative; overflow:hidden; border-radius:var(--r-sm);
+}
+.fstep .fb{
+  position:absolute; inset:0 auto 0 0;
+  background:color-mix(in srgb,var(--accent) 14%,transparent);
+}
+.fstep .fk,.fstep .fv{position:relative}
+.fstep .fk{font-size:var(--t-sm); color:var(--fg-2)}
+.fstep .fv{
+  font-family:var(--mono); font-size:var(--t-sm); color:var(--fg);
+  font-variant-numeric:tabular-nums;
+}
+.fstep.rej .fb{background:color-mix(in srgb,var(--bad) 13%,transparent)}
+.fstep.rej .fk,.fstep.rej .fv{color:var(--fg-3)}
+.fstep.fin .fb{background:color-mix(in srgb,var(--ok) 15%,transparent)}
+.fstep.fin .fv{color:var(--ok); font-weight:600}
+
+.bigpair{display:flex; align-items:center; gap:var(--sp-4); margin:var(--sp-2) 0 var(--sp-4)}
+.bigpair .bp{text-align:center; flex:1}
+.bigpair .bpv{
+  font-family:var(--mono); font-size:var(--t-2xl); font-weight:600;
+  font-variant-numeric:tabular-nums;
+}
+.bigpair .bpk{margin-top:var(--sp-1)}
+.bigpair .arw{color:var(--fg-3); font-size:var(--t-lg); flex:none}
+
+.kfgrid{display:grid; grid-template-columns:repeat(9,1fr); gap:2px; margin-top:var(--sp-4)}
+.kfgrid img{
+  width:100%; border-radius:var(--r-sm); opacity:0;
+  transition:opacity var(--dur-2) var(--ease);
+}
+.kfgrid img.in{opacity:1}
+
+/* Where the wall clock actually went. This bar is the argument of act 2. */
+.tl{margin-top:var(--sp-5)}
+.tlbar{
+  display:flex; height:22px; border-radius:var(--r-sm); overflow:hidden;
+  border:1px solid var(--line);
+}
+.tlbar span{display:block; height:100%}
+/* Phase fills. Only dense MVS gets the accent, because it is the claim: it is
+   77.5% of the run and the one stage a GPU changes. The other three are
+   deliberately neutral so the eye lands in the right place from the back row. */
+.tl-sparse{background:var(--line-2)}
+.tl-ba{background:color-mix(in srgb,var(--accent) 38%,var(--line))}
+.tl-dense{background:var(--accent)}
+.tl-mesh{background:var(--fg-3)}
+.tlkey{
+  display:flex; flex-wrap:wrap; gap:var(--sp-1) var(--sp-4); margin-top:var(--sp-3);
+  font-family:var(--mono); font-size:var(--t-xs); color:var(--fg-3);
+}
+.tlkey i{
+  display:inline-block; width:8px; height:8px; border-radius:var(--r-sm);
+  margin-right:var(--sp-1); font-style:normal;
+}
+
+/* The problem statement's own six Desired Output rows, scored. */
+.verdict{margin-top:var(--sp-5); display:grid; grid-template-columns:1fr 1fr; gap:var(--sp-4)}
+.vcard{padding:var(--sp-4) var(--sp-5); border-left-width:3px}
+.vcard.met{border-left-color:var(--ok)}
+.vcard.open{border-left-color:var(--bad)}
+.vcard .vt{display:flex; align-items:baseline; justify-content:space-between; gap:var(--sp-3)}
+.vcard .vn{font-size:var(--t-sm); font-weight:600}
+.vcard.met .vs{color:var(--ok)}
+.vcard.open .vs{color:var(--bad)}
+.vcard .vd{font-size:var(--t-xs); line-height:1.55; color:var(--fg-3); margin-top:var(--sp-2)}
+
+/* ---------- act 3: result ---------- */
+.act3{display:none}
+.rail{
+  width:302px; flex:none; background:var(--s1); border-right:1px solid var(--line);
+  padding:var(--sp-5); overflow-y:auto;
+  display:flex; flex-direction:column; gap:var(--sp-5);
+}
+.rail .block{border-top:1px solid var(--line); padding-top:var(--sp-4)}
+.rail .block:first-of-type{border-top:0; padding-top:0}
+.rail h2{margin:0 0 var(--sp-3)}
+.exp{display:flex; flex-direction:column; gap:2px}
+.erow{
+  display:grid; grid-template-columns:auto 1fr auto; gap:var(--sp-3); align-items:baseline;
+  padding:var(--sp-2) var(--sp-3); background:var(--s2); border-radius:var(--r-sm);
+  font-size:var(--t-xs);
+}
+.erow .ef{font-family:var(--mono); color:var(--ok); width:52px}
+.erow .en{color:var(--fg-3); overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.erow .ez{font-family:var(--mono); color:var(--fg-2); font-variant-numeric:tabular-nums}
+
+.stage3{flex:1; position:relative; min-width:0}
+
+/* ---------- narrow screens --------------------------------------------
+   Built for a projector, but the URL is shareable, so it has to survive a
+   phone. Act 3 stacks, model first. */
+@media (max-width:900px){
+  .topbar{gap:var(--sp-3) var(--sp-4)}
+  .stepper{margin:0; order:3; width:100%; justify-content:space-between}
+  .sitenav{order:2}
+  .stepper button{padding:var(--sp-2) var(--sp-3)}
+  .wrap{padding:var(--sp-6) var(--sp-5) var(--sp-7)}
+  .pickrow,.stagegrid,.rungrid,.verdict{grid-template-columns:1fr}
+  .clock{text-align:left}
+  .detail{min-height:0}
+  .kfgrid{grid-template-columns:repeat(6,1fr)}
+  body[data-act="3"] .act3{flex-direction:column}
+  /* Model first: on a phone the rail is reference material, and burying the
+     thing people came to look at below a fold of statistics is backwards. */
+  .stage3{order:-1; flex:1 0 auto; min-height:62vh}
+  .rail{
+    width:auto; flex:none; max-height:34vh;
+    border-right:0; border-top:1px solid var(--line);
+  }
+  .hud{display:none}
+}
+@media (max-width:560px){
+  .brand .nm{display:none}
+  .clipcard{flex-direction:column}
+  .clipcard img{width:100%; height:auto; aspect-ratio:16/9}
+  .kfgrid{grid-template-columns:repeat(5,1fr)}
+  .runhead{gap:var(--sp-4)}
+  .clock .cv{font-size:var(--t-2xl)}
+}
+</style>
+
+<div class="topbar">
+  <div class="brand">
+    <span class="nm">Single-pass drone video to 3D</span>
+    <span class="tag">SIH26158 &middot; NTRO</span>
+  </div>
+  <nav class="stepper" id="stepper" aria-label="Progress">
+    <button data-go="1"><span class="n">1</span>Input</button>
+    <span class="link"></span>
+    <button data-go="2"><span class="n">2</span>Run</button>
+    <span class="link"></span>
+    <button data-go="3"><span class="n">3</span>Result</button>
+  </nav>
+  <nav class="sitenav" aria-label="Pages">
+    <a href="index.html" aria-current="page">Walkthrough</a>
+    <a href="gallery/index.html">Gallery</a>
+    <a href="qa/index.html">Q&amp;A</a>
+  </nav>
+  <span class="replay">Replay</span>
+</div>
+
+<div class="banner">
+  <b>This is a replay, not a live reconstruction.</b>
+  The compute was performed ahead of time on this clip. Every counter, timing and
+  artefact shown is the real output of that run. Nothing here is simulated.
+</div>
+
+<main>
+  <!-- ============================ ACT 1 ============================ -->
+  <section class="act act1 on" id="act1"><div class="wrap">
+    <p class="label">Step 1 &middot; Input</p>
+    <h2 class="h1" style="margin-top:var(--sp-2)">Select a source clip</h2>
+    <p class="lede" style="margin-top:var(--sp-3)">The system takes a single-pass drone
+      video plus whatever metadata the aircraft wrote alongside it. Ingest auto-detects
+      container, resolution, frame rate and any GNSS sidecar, because the problem
+      statement says the dataset is handed over at the event and the drone, camera and
+      metadata schema are not known in advance.</p>
+
+    <div class="pickrow">
+      <button class="card clipcard" id="pick" aria-pressed="false">
+        <img id="pickthumb" alt="">
+        <span>
+          <span class="cc-t" id="pickname"></span>
+          <span class="cc-s" id="pickmeta"></span>
+          <span class="chip chip--acc cc-b">prepared clip &middot; run recorded</span>
+        </span>
+      </button>
+      <div class="drop" id="drop">
+        <div class="d1">Drop a video here</div>
+        <div class="d2" id="dropmsg">In the real system this accepts any 1080p or 4K
+          single-pass clip. This demo build only replays the prepared run.</div>
+      </div>
+    </div>
+
+    <div class="row" id="ctarow" style="display:none">
+      <button class="btn btn--primary" id="toRun">Run reconstruction &rarr;</button>
+      <span class="xs fg-3">Replays the recorded run</span>
+    </div>
+
+    <div class="stagegrid" id="a1grid" style="display:none">
+      <div>
+        <div class="vidbox">
+          <video id="vid" controls preload="auto" playsinline></video>
+          <div class="kfstrip" id="kffallback"></div>
+          <div class="vcap">
+            <span id="vcapl"></span>
+            <span id="vcapr"></span>
+          </div>
+        </div>
+      </div>
+      <div class="panel panel-pad detect">
+        <h3 class="label" style="margin-bottom:var(--sp-4)">Auto-detected on ingest</h3>
+        <div id="detrows"></div>
+      </div>
+    </div>
+  </div></section>
+
+  <!-- ============================ ACT 2 ============================ -->
+  <section class="act act2" id="act2"><div class="wrap">
+    <div class="runhead">
+      <div>
+        <p class="label">Step 2 &middot; Run</p>
+        <h2 class="h1" style="margin-top:var(--sp-2)">Reconstruction</h2>
+        <p class="lede" style="margin-top:var(--sp-3)">Durations below are the real
+          recorded wall-clock times from the run, on 8 vCPU with no GPU. The replay
+          advances on a fixed beat so it fits a presentation; the numbers it prints are
+          not rescaled.</p>
+      </div>
+      <div class="clock">
+        <div class="cv" id="clock">00:00</div>
+        <div class="ck label">recorded elapsed</div>
+      </div>
+    </div>
+
+    <div class="row" style="margin-top:var(--sp-5)">
+      <button class="btn btn--primary" id="play">Start replay</button>
+      <button class="btn" id="skip">Skip to end</button>
+      <button class="btn" id="toResult" disabled>View 3D result &rarr;</button>
+    </div>
+
+    <div class="rungrid">
+      <div class="phases" id="phases"></div>
+      <div>
+        <div class="panel panel-pad detail" id="detail">
+          <h3 class="label" id="dtitle" style="margin-bottom:var(--sp-4)">Waiting to start</h3>
+          <div id="dbody"></div>
+        </div>
+        <div class="tl">
+          <p class="label" style="margin-bottom:var(--sp-2)">Where the time actually goes</p>
+          <div class="tlbar" id="tlbar"></div>
+          <div class="tlkey" id="tlkey"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="verdict" id="verdict"></div>
+  </div></section>
+
+  <!-- ============================ ACT 3 ============================ -->
+  <section class="act act3" id="act3">
+    <aside class="rail">
+      <div class="block">
+        <p class="label">Step 3 &middot; Result</p>
+        <h2 class="h3" id="r3title" style="margin-top:var(--sp-2)"></h2>
+        <p class="sm fg-2" id="r3sub" style="margin:var(--sp-2) 0 0"></p>
+      </div>
+      <div class="block">
+        <h2 class="label">Geometry</h2>
+        <dl class="kv" id="r3geom"></dl>
+      </div>
+      <div class="block">
+        <h2 class="label">Exports written</h2>
+        <div class="exp" id="r3exp"></div>
+      </div>
+      <div class="block">
+        <h2 class="label">Georeferencing</h2>
+        <p class="note note--bad" id="r3note"></p>
+      </div>
+    </aside>
+    <div class="stage3">
+      <canvas id="gl"></canvas>
+      <svg id="ovl"></svg>
+      <div class="hud at-tr" id="hud"></div>
+      <div class="mtip" id="mtip"></div>
+      <div class="dock at-bl">
+        <button class="btn btn--sm" id="bMesh" aria-pressed="true">mesh</button>
+        <button class="btn btn--sm" id="bPts" aria-pressed="false">points</button>
+        <span class="sep"></span>
+        <button class="btn btn--sm" data-view="plan">plan</button>
+        <button class="btn btn--sm" data-view="oblique">oblique</button>
+        <button class="btn btn--sm" data-view="low">low angle</button>
+        <button class="btn btn--sm" data-view="along">along track</button>
+        <span class="sep"></span>
+        <button class="btn btn--sm" id="bMeasure" aria-pressed="false">measure</button>
+        <button class="btn btn--sm" id="bClear">clear</button>
+      </div>
+    </div>
+  </section>
+</main>
+
+<script>
+"use strict";
+var D = __MESH__, R = __RUN__;
+
+/* ================= act plumbing ================= */
+var acts = {1:document.getElementById('act1'), 2:document.getElementById('act2'),
+            3:document.getElementById('act3')};
+var reached = {1:true, 2:false, 3:false};
+var cur = 1;
+function go(n){
+  if(!reached[n]) return;
+  cur = n;
+  for(var k in acts) acts[k].classList.toggle('on', String(k)===String(n));
+  document.body.setAttribute('data-act', String(n));
+  var bs = document.querySelectorAll('#stepper button');
+  for(var i=0;i<bs.length;i++){
+    var g = bs[i].getAttribute('data-go');
+    bs[i].setAttribute('aria-current', String(g===String(n)));
+    bs[i].disabled = !reached[g];
+  }
+  if(n===3) startGL();
+}
+document.querySelectorAll('#stepper button').forEach(function(b){
+  b.onclick = function(){ go(+b.getAttribute('data-go')); };
+});
+
+/* ================= act 1 ================= */
+var C = R.clip;
+document.getElementById('pickthumb').src = R.thumbs[0];
+document.getElementById('pickname').textContent = C.name;
+document.getElementById('pickmeta').innerHTML =
+  C.resolution + ' &middot; ' + C.codec.toUpperCase() + ' &middot; ' +
+  C.fps + ' fps &middot; ' + C.duration_s.toFixed(1) + ' s &middot; ' + mb(C.size_bytes);
+
+function mb(b){
+  if(b >= 1e6) return (b/1e6).toFixed(1) + ' MB';
+  if(b >= 1e3) return (b/1e3).toFixed(1) + ' KB';
+  return b + ' B';
+}
+
+var DET = [
+  ['container / codec', C.codec.toUpperCase() + ' in ' + C.container, ''],
+  ['resolution', C.resolution, ''],
+  ['frame rate', C.fps + ' fps', ''],
+  ['frames decoded', R.ingest.frames_decoded.toLocaleString(), ''],
+  ['shots detected', String(R.ingest.shots_detected), ''],
+  ['camera intrinsics', 'absent, self-calibrated', 'warn'],
+  ['GNSS sidecar', 'none found', 'warn'],
+  ['SRT telemetry records', String(R.ingest.srt_records), 'warn'],
+  ['result', 'ingestable, metric-relative only', 'ok']
+];
+
+var picked = false;
+document.getElementById('pick').onclick = function(){
+  if(picked) return;
+  picked = true;
+  this.setAttribute('aria-pressed','true');
+  document.getElementById('a1grid').style.display = 'grid';
+  document.getElementById('ctarow').style.display = 'flex';
+  var v = document.getElementById('vid');
+  v.poster = R.poster;
+  v.src = C.clip_file;
+  v.onerror = function(){
+    v.style.display='none';
+    var s = document.getElementById('kffallback');
+    s.style.display = 'grid';
+    s.innerHTML = R.thumbs.slice(0,10).map(function(t){
+      return '<img src="'+t+'" alt="">'; }).join('');
+    document.getElementById('vcapl').textContent =
+      'clip.mp4 not found, showing keyframes instead';
+  };
+  document.getElementById('vcapl').textContent =
+    'frames ' + R.ingest.keyframes[0] + ' to ' +
+    R.ingest.keyframes[R.ingest.keyframes.length-1] + ' of the source';
+  document.getElementById('vcapr').textContent =
+    C.clip_duration_s.toFixed(1) + ' s · the span the keyframes came from';
+  var host = document.getElementById('detrows');
+  host.innerHTML = DET.map(function(d){
+    return '<div class="drow"><span class="dk">'+d[0]+'</span>'+
+           '<span class="dv '+d[2]+'">'+d[1]+'</span></div>'; }).join('');
+  var rows = host.children;
+  for(var i=0;i<rows.length;i++){
+    (function(el,i){ setTimeout(function(){ el.classList.add('in'); }, 90+i*130); })(rows[i],i);
+  }
+  reached[2] = true; go(1);
+};
+
+var drop = document.getElementById('drop');
+['dragenter','dragover'].forEach(function(e){
+  drop.addEventListener(e, function(ev){ ev.preventDefault();
+    drop.classList.add('over'); }); });
+['dragleave','drop'].forEach(function(e){
+  drop.addEventListener(e, function(ev){ ev.preventDefault();
+    drop.classList.remove('over'); }); });
+drop.addEventListener('drop', function(ev){
+  var f = ev.dataTransfer && ev.dataTransfer.files && ev.dataTransfer.files[0];
+  drop.classList.add('said');
+  document.getElementById('dropmsg').innerHTML = f
+    ? '<b>' + f.name.replace(/[<>&]/g,'') + '</b> was not processed. This demo build ' +
+      'replays one prepared run only. It does not run the pipeline in the browser.'
+    : 'Nothing was processed. This demo build replays one prepared run only.';
+});
+
+document.getElementById('toRun').onclick = function(){ go(2); };
+
+/* ================= act 2 ================= */
+var PH = R.phases, TOT = R.totals;
+var phHost = document.getElementById('phases');
+phHost.innerHTML = PH.map(function(p,i){
+  var t = p.seconds===null ? '<span class="pt untimed">not separately timed</span>'
+        : '<span class="pt'+(p.dominant?' dom':'')+'">'+fsec(p.seconds)+'</span>';
+  var subs = (p.steps||[]).map(function(s){
+    return '<span class="sub">'+s.name+' '+s.seconds.toFixed(1)+'s</span>'; }).join('');
+  return '<div class="ph" id="ph'+i+'"><span class="fill"></span>'+
+    '<div class="r1"><span class="pn">'+roman(i+1)+'</span>'+
+    '<span class="pl">'+p.name+'</span>'+t+'</div>'+
+    (subs?'<div class="r2">'+subs+'</div>':'')+
+    '<div class="out">'+p.out+'</div></div>';
+}).join('');
+
+function roman(n){
+  return ['i','ii','iii','iv','v','vi','vii','viii','ix','x'][n-1] || String(n);
+}
+function fsec(s){
+  if(s < 60) return s.toFixed(1) + ' s';
+  var m = Math.floor(s/60);
+  return m + 'm ' + (s - m*60).toFixed(0) + 's';
+}
+function fclock(s){
+  var m = Math.floor(s/60), q = s - m*60;
+  return (m<10?'0':'') + m + ':' + (q<10?'0':'') + q.toFixed(0);
+}
+
+/* Timeline: real proportions of the timed stages. Colour is keyed by PHASE,
+   not by rank, so the amber lands on dense MVS (77.5%) rather than on whichever
+   bar happens to be widest — an earlier version keyed it by rank and put the
+   emphasis on bundle adjustment at 0.8%. The four fills are classes, not inline
+   hex, so they move with the palette. */
+var timed = PH.filter(function(p){ return p.seconds; });
+document.getElementById('tlbar').innerHTML = timed.map(function(p,i){
+  return '<span class="tl-'+p.key+'" style="width:'+
+    (100*p.seconds/TOT.stage_sum).toFixed(3)+'%" title="'+p.name+'"></span>'; }).join('');
+document.getElementById('tlkey').innerHTML = timed.map(function(p,i){
+  return '<span><i class="tl-'+p.key+'"></i>'+
+    p.short + ' ' + (100*p.seconds/TOT.stage_sum).toFixed(1) + '%</span>'; }).join('');
+
+/* detail panels, all real */
+var IN = R.ingest, SP = R.sparse, DN = R.dense, PO = R.pose;
+function funnelHTML(){
+  var top = IN.frames_decoded;
+  var rows = [
+    ['frames decoded', IN.frames_decoded, ''],
+    ['rejected, blur below varLap ' + IN.blur_threshold_varlap,
+      IN.rejected_blur, 'rej'],
+    ['rejected, sky fraction too high', IN.rejected_sky, 'rej'],
+    ['rejected, horizon geometry', IN.rejected_horizon, 'rej'],
+    ['keyframes selected', IN.keyframes_selected, 'fin']
+  ];
+  return '<div class="funnel">' + rows.map(function(r){
+    return '<div class="fstep '+r[2]+'"><span class="fb" style="width:'+
+      Math.max(2, 100*r[1]/top).toFixed(1)+'%"></span><span class="fk">'+r[0]+
+      '</span><span class="fv">'+r[1].toLocaleString()+'</span></div>'; }).join('') +
+    '</div><div class="kfgrid" id="kfg">' + R.thumbs.map(function(t){
+      return '<img src="'+t+'" alt="">'; }).join('') + '</div>';
+}
+
+var DETAILS = {
+  ingest: {t:'Adaptive keyframing', h:funnelHTML,
+    n:'<b>' + IN.reduction + '</b>. Frames are dropped before pose is solved, so ' +
+      'motion blur and compression artefacts never enter the reconstruction. Flow ' +
+      'budget ' + IN.flow_budget_px + ' px between kept frames; median sky fraction ' +
+      IN.median_sky_fraction + '.'},
+  pose: {t:'Pose and metric scale', h:function(){
+      return kvHTML([
+        ['model', 'MapAnything (Apache-2.0)'],
+        ['point-map grid', PO.model_grid[0] + ' × ' + PO.model_grid[1]],
+        ['full frame', PO.full_frame[0] + ' × ' + PO.full_frame[1]],
+        ['focal length, fitted', PO.f.toFixed(1) + ' px'],
+        ['principal point', PO.cx.toFixed(1) + ', ' + PO.cy.toFixed(1)],
+        ['intrinsics fit residual', PO.residual_px.toFixed(4) + ' px']
+      ]); },
+    n:'The feed-forward model supplies <b>pose and metric scale only</b>. Its ' +
+      'geometry is discarded: it samples depth on a ' + PO.model_grid[0] + '×' +
+      PO.model_grid[1] + ' grid against a ' + PO.full_frame[0] + '×' +
+      PO.full_frame[1] + ' frame, so it cannot carry the detail the delivered ' +
+      'surface needs.'},
+  sparse: {t:'Sparse structure from motion', h:function(){
+      return kvHTML([
+        ['registered images', SP.registered + ' / ' + SP.registered],
+        ['sparse points', (+SP.points).toLocaleString()],
+        ['observations', (+SP.observations).toLocaleString()],
+        ['mean track length', (+SP.track).toFixed(2)],
+        ['mean reprojection error', SP.reproj_tri.toFixed(4) + ' px']
+      ]); },
+    n:'Every keyframe registered. Matching is exhaustive rather than sequential ' +
+      'because a single pass gives no loop closures to fall back on.'},
+  ba: {t:'Global bundle adjustment', h:function(){
+      return '<div class="bigpair">' +
+        '<div class="bp"><div class="bpv fg-bad">' +
+          SP.reproj_tri.toFixed(3) + '</div><div class="bpk label">px, triangulated</div></div>' +
+        '<div class="arw">&rarr;</div>' +
+        '<div class="bp"><div class="bpv fg-ok">' +
+          SP.reproj_ba.toFixed(3) + '</div><div class="bpk label">px, after BA</div></div>' +
+        '</div>' + kvHTML([
+          ['improvement', (SP.reproj_tri/SP.reproj_ba).toFixed(1) + '×'],
+          ['registered images held', SP.registered + ' / ' + SP.registered],
+          ['observations', (+SP.observations).toLocaleString()]
+        ]); },
+    n:'GPS, when present, enters here as a <b>prior and never as a constraint</b>, ' +
+      'so sensor noise cannot drag the solution. This clip carries none.'},
+  dense: {t:'Dense geometry', h:function(){
+      return kvHTML([
+        ['method', 'OpenMVS PatchMatch'],
+        ['resolution', 'full keyframe, level ' + R.dense.level],
+        ['consistency', 'geometric, across ≥ 3 views'],
+        ['dense points', DN.points.toLocaleString()]
+      ]); },
+    n:'This one stage is <b>' + TOT.dense_pct.toFixed(1) + '% of the whole run</b>, ' +
+      'and it is the stage a GPU changes. Cross-view consistency also rejects ' +
+      'vehicles, people and animals by construction, with no detector involved.'},
+  mesh: {t:'Surface and colour', h:function(){
+      return kvHTML([
+        ['method', 'Delaunay + graph cut'],
+        ['triangles', DN.triangles.toLocaleString()],
+        ['colour', 'per-vertex, no texture atlas'],
+        ['vertical', 'ground plane, roll cross-checked']
+      ]); },
+    n:'Per-vertex colour rather than a texture atlas, so there are <b>no seams ' +
+      'across exposure changes</b> along the pass.'},
+  export: {t:'Export and view', h:function(){
+      return '<div class="exp">' + R.exports.map(function(e){
+        return '<div class="erow"><span class="ef">' + e.fmt + '</span>' +
+          '<span class="en">' + e.file + '</span>' +
+          '<span class="ez">' + mb(e.bytes) + '</span></div>'; }).join('') + '</div>';},
+    n:'All six formats the problem statement asks for, written and read back in one ' +
+      'shared ENU frame in metres. <b>No CRS is attached</b>: the clip carries no ' +
+      'GNSS, and a plausible-looking wrong one would silently reproject downstream.'}
+};
+
+function kvHTML(rows){
+  return '<dl class="kv">' + rows.map(function(r){
+    return '<dt>'+r[0]+'</dt><dd>'+r[1]+'</dd>'; }).join('') + '</dl>';
+}
+function showDetail(key){
+  var d = DETAILS[key];
+  if(!d) return;
+  document.getElementById('dtitle').textContent = d.t;
+  document.getElementById('dbody').innerHTML =
+    (typeof d.h === 'function' ? d.h() : d.h) +
+    '<p class="note" style="margin-top:var(--sp-4)">' + d.n + '</p>';
+  if(key === 'ingest'){
+    var ims = document.querySelectorAll('#kfg img');
+    for(var i=0;i<ims.length;i++){
+      (function(el,i){ setTimeout(function(){ el.classList.add('in'); }, i*22); })(ims[i],i);
+    }
+  }
+}
+
+/* replay driver: fixed beat, real numbers */
+var BEAT = 1150, idx = -1, timer = null, elapsed = 0, running = false;
+function stepTo(i){
+  idx = i;
+  var p = PH[i];
+  var el = document.getElementById('ph'+i);
+  var prev = document.getElementById('ph'+(i-1));
+  if(prev){ prev.classList.remove('run'); prev.classList.add('done'); }
+  el.classList.add('run');
+  el.querySelector('.fill').style.width = '100%';
+  el.scrollIntoView({block:'nearest'});
+  showDetail(p.key);
+  /* a stage's cost lands when it completes, so the clock never claims
+     time for work that is still running */
+  if(i > 0 && PH[i-1].seconds) elapsed += PH[i-1].seconds;
+  document.getElementById('clock').textContent = fclock(elapsed);
+}
+function finish(){
+  running = false;
+  clearInterval(timer); timer = null;
+  for(var i=0;i<PH.length;i++){
+    var el = document.getElementById('ph'+i);
+    el.classList.remove('run'); el.classList.add('done');
+    el.querySelector('.fill').style.width = '100%';
+  }
+  elapsed = TOT.wall_clock;
+  document.getElementById('clock').textContent = fclock(elapsed);
+  document.getElementById('play').textContent = 'Replay again';
+  document.getElementById('play').disabled = false;
+  document.getElementById('toResult').disabled = false;
+  reached[3] = true; go(2);
+  showDetail('export');
+  document.getElementById('verdict').innerHTML = R.verdict.map(function(v){
+    return '<div class="panel vcard '+(v.met?'met':'open')+'"><div class="vt">' +
+      '<span class="vn">'+v.name+'</span><span class="vs label">'+(v.met?'met':'not met')+
+      '</span></div><div class="vd">'+v.detail+'</div></div>'; }).join('');
+}
+function reset(){
+  clearInterval(timer); timer = null; idx = -1; elapsed = 0;
+  document.getElementById('clock').textContent = '00:00';
+  document.getElementById('verdict').innerHTML = '';
+  for(var i=0;i<PH.length;i++){
+    var el = document.getElementById('ph'+i);
+    el.className = 'ph';
+    el.querySelector('.fill').style.width = '0';
+  }
+}
+document.getElementById('play').onclick = function(){
+  reset(); running = true; this.disabled = true; this.textContent = 'Replaying…';
+  stepTo(0);
+  timer = setInterval(function(){
+    if(idx + 1 >= PH.length){ finish(); return; }
+    stepTo(idx + 1);
+  }, BEAT);
+};
+document.getElementById('skip').onclick = function(){ reset(); finish(); };
+document.getElementById('toResult').onclick = function(){ go(3); };
+
+/* ================= act 3: rail ================= */
+document.getElementById('r3title').textContent = R.title;
+document.getElementById('r3sub').textContent = R.subtitle;
+document.getElementById('r3geom').innerHTML = [
+  ['dense points', DN.points.toLocaleString()],
+  ['mesh triangles', DN.triangles.toLocaleString()],
+  ['shown here', D.nt.toLocaleString() + ' tri / ' + D.np.toLocaleString() + ' pts'],
+  ['reproj, after BA', SP.reproj_ba.toFixed(3) + ' px'],
+  ['scene extent', (D.scale*2*32767/32000).toFixed(1) + ' m']
+].map(function(r){ return '<dt>'+r[0]+'</dt><dd>'+r[1]+'</dd>'; }).join('');
+document.getElementById('r3exp').innerHTML = R.exports.map(function(e){
+  return '<div class="erow"><span class="ef">'+e.fmt+'</span>' +
+    '<span class="en">'+e.file+'</span><span class="ez">'+mb(e.bytes)+'</span></div>';
+}).join('');
+document.getElementById('r3note').innerHTML = R.manifest_note;
+
+/* ================= act 3: WebGL (core reused from viewer_template) ===== */
+var un = function(s){ var b = atob(s), u = new Uint8Array(b.length);
+  for(var i=0;i<b.length;i++) u[i] = b.charCodeAt(i); return u; };
+var VP = new Int16Array(un(D.vpos).buffer), VC = un(D.vcol);
+var IX = new Uint32Array(un(D.idx).buffer);
+var PP = new Int16Array(un(D.ppos).buffer), PC = un(D.pcol);
+
+/* metres per shader unit: positions were quantised to +/-32000 about the centre
+   over a half-extent of D.scale metres, then normalised by the GPU over 32767. */
+var M_PER_UNIT = D.scale * 32767 / 32000;
+
+var NR = new Float32Array(VP.length);
+for(var t=0; t<IX.length; t+=3){
+  var i0=IX[t]*3, i1=IX[t+1]*3, i2=IX[t+2]*3;
+  var ux=VP[i1]-VP[i0], uy=VP[i1+1]-VP[i0+1], uz=VP[i1+2]-VP[i0+2];
+  var vx=VP[i2]-VP[i0], vy=VP[i2+1]-VP[i0+1], vz=VP[i2+2]-VP[i0+2];
+  var nx=uy*vz-uz*vy, ny=uz*vx-ux*vz, nz=ux*vy-uy*vx;
+  NR[i0]+=nx; NR[i0+1]+=ny; NR[i0+2]+=nz;
+  NR[i1]+=nx; NR[i1+1]+=ny; NR[i1+2]+=nz;
+  NR[i2]+=nx; NR[i2+1]+=ny; NR[i2+2]+=nz;
+}
+for(var i=0;i<NR.length;i+=3){
+  var L=Math.hypot(NR[i],NR[i+1],NR[i+2])||1;
+  NR[i]/=L; NR[i+1]/=L; NR[i+2]/=L;
+}
+
+var cv = document.getElementById('gl'), gl = null, glReady = false;
+var az=0.55, el=0.80, dist=2.6, panx=0, pany=0, target=null;
+var PRESETS = {plan:[0,1.5605,2.30], oblique:[0.55,0.80,2.60],
+               low:[1.25,0.26,2.50], along:[1.5705,0.50,2.40]};
+var showMesh=true, showPts=false;
+var pM,pP,vaoM,vaoP,bIX,uM,uP, curMVP=null, curW=1, curH=1;
+
+function startGL(){
+  if(glReady) return;
+  gl = cv.getContext('webgl2', {antialias:true, alpha:false});
+  if(!gl){
+    document.getElementById('hud').textContent = 'WebGL2 unavailable';
+    return;
+  }
+  glReady = true;
+  function prog(vs, fs){
+    var c = function(ty,s){ var o=gl.createShader(ty); gl.shaderSource(o,s);
+      gl.compileShader(o);
+      if(!gl.getShaderParameter(o,gl.COMPILE_STATUS))
+        console.error(gl.getShaderInfoLog(o));
+      return o; };
+    var p=gl.createProgram();
+    gl.attachShader(p,c(gl.VERTEX_SHADER,vs));
+    gl.attachShader(p,c(gl.FRAGMENT_SHADER,fs));
+    gl.linkProgram(p); return p;
+  }
+  var VS_M = ['#version 300 es',
+   'in vec3 aPos; in vec3 aCol; in vec3 aNrm;',
+   'uniform mat4 uMVP; out vec3 vCol; out vec3 vN;',
+   'void main(){ vCol=aCol; vN=aNrm; gl_Position=uMVP*vec4(aPos,1.0); }'].join('\n');
+  var FS_M = ['#version 300 es','precision highp float;',
+   'in vec3 vCol; in vec3 vN; out vec4 o; uniform vec3 uLight;',
+   'void main(){',
+   '  float d = 0.40 + 0.60*abs(dot(normalize(vN), normalize(uLight)));',
+   '  o = vec4(vCol*d, 1.0);','}'].join('\n');
+  var VS_P = ['#version 300 es',
+   'in vec3 aPos; in vec3 aCol; uniform mat4 uMVP; uniform float uSize;',
+   'out vec3 vCol;',
+   'void main(){ vCol=aCol; gl_Position=uMVP*vec4(aPos,1.0); gl_PointSize=uSize; }'
+   ].join('\n');
+  var FS_P = ['#version 300 es','precision highp float; in vec3 vCol; out vec4 o;',
+   'void main(){ o=vec4(vCol,1.0); }'].join('\n');
+  pM = prog(VS_M, FS_M); pP = prog(VS_P, FS_P);
+
+  function buf(data, tgt){
+    var t = tgt || gl.ARRAY_BUFFER, b = gl.createBuffer();
+    gl.bindBuffer(t,b); gl.bufferData(t,data,gl.STATIC_DRAW); return b;
+  }
+  var bVP=buf(VP), bVC=buf(VC), bNR=buf(NR), bPP=buf(PP), bPC=buf(PC);
+  bIX = buf(IX, gl.ELEMENT_ARRAY_BUFFER);
+  vaoM = gl.createVertexArray(); vaoP = gl.createVertexArray();
+  function bindVao(vao,p,pos,col,nrm){
+    gl.bindVertexArray(vao);
+    var at = function(n,b,size,ty,norm){ var l=gl.getAttribLocation(p,n); if(l<0)return;
+      gl.bindBuffer(gl.ARRAY_BUFFER,b); gl.enableVertexAttribArray(l);
+      gl.vertexAttribPointer(l,size,ty,norm,0,0); };
+    at('aPos',pos,3,gl.SHORT,true);
+    at('aCol',col,3,gl.UNSIGNED_BYTE,true);
+    if(nrm) at('aNrm',nrm,3,gl.FLOAT,false);
+    gl.bindVertexArray(null);
+  }
+  bindVao(vaoM,pM,bVP,bVC,bNR); bindVao(vaoP,pP,bPP,bPC,null);
+  uM = {mvp:gl.getUniformLocation(pM,'uMVP'), light:gl.getUniformLocation(pM,'uLight')};
+  uP = {mvp:gl.getUniformLocation(pP,'uMVP'), size:gl.getUniformLocation(pP,'uSize')};
+  draw();
+}
+
+var mul = function(a,b){ var o=new Float32Array(16);
+  for(var i=0;i<4;i++) for(var j=0;j<4;j++){ var s=0;
+    for(var k=0;k<4;k++) s+=a[k*4+j]*b[i*4+k]; o[i*4+j]=s; } return o; };
+var persp = function(f,ar,n,fa){ var t=1/Math.tan(f/2); return new Float32Array(
+  [t/ar,0,0,0, 0,t,0,0, 0,0,(fa+n)/(n-fa),-1, 0,0,2*fa*n/(n-fa),0]); };
+var look = function(e,c,u){
+  var nz = function(v){ var L=Math.hypot(v[0],v[1],v[2])||1;
+    return [v[0]/L,v[1]/L,v[2]/L]; };
+  var cr = function(a,b){ return [a[1]*b[2]-a[2]*b[1], a[2]*b[0]-a[0]*b[2],
+    a[0]*b[1]-a[1]*b[0]]; };
+  var dt = function(a,b){ return a[0]*b[0]+a[1]*b[1]+a[2]*b[2]; };
+  var f=nz([c[0]-e[0],c[1]-e[1],c[2]-e[2]]), r=nz(cr(f,u)), v=cr(r,f);
+  return new Float32Array([r[0],v[0],-f[0],0, r[1],v[1],-f[1],0, r[2],v[2],-f[2],0,
+    -dt(r,e),-dt(v,e),dt(f,e),1]); };
+
+/* column-major transform, matches mul()/persp()/look() above */
+function xform(m,x,y,z){
+  return [m[0]*x+m[4]*y+m[8]*z+m[12], m[1]*x+m[5]*y+m[9]*z+m[13],
+          m[2]*x+m[6]*y+m[10]*z+m[14], m[3]*x+m[7]*y+m[11]*z+m[15]];
+}
+function toScreen(m,x,y,z,w,h){
+  var c = xform(m,x,y,z);
+  if(c[3] <= 1e-6) return null;
+  return [(c[0]/c[3]*0.5+0.5)*w, (1-(c[1]/c[3]*0.5+0.5))*h, c[2]/c[3]];
+}
+
+function draw(){
+  if(target){
+    az += (target[0]-az)*0.16; el += (target[1]-el)*0.16;
+    dist += (target[2]-dist)*0.16;
+    if(Math.abs(target[0]-az)+Math.abs(target[1]-el)+Math.abs(target[2]-dist) < 2e-3)
+      target = null;
+  }
+  var dpr = Math.min(window.devicePixelRatio||1, 2);
+  var w = Math.max(1, cv.clientWidth*dpr|0), h = Math.max(1, cv.clientHeight*dpr|0);
+  if(cv.width!==w || cv.height!==h){ cv.width=w; cv.height=h; }
+  gl.viewport(0,0,w,h);
+  gl.clearColor(0.043,0.055,0.063,1);
+  gl.enable(gl.DEPTH_TEST);
+  gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
+
+  var eye = [Math.cos(el)*Math.sin(az)*dist+panx, Math.sin(el)*dist+pany,
+             Math.cos(el)*Math.cos(az)*dist];
+  var mvp = mul(persp(0.85, w/h, 0.02, 60), look(eye,[panx,pany,0],[0,1,0]));
+  curMVP = mvp; curW = w; curH = h;
+
+  if(showMesh){
+    gl.useProgram(pM); gl.bindVertexArray(vaoM);
+    gl.uniformMatrix4fv(uM.mvp,false,mvp);
+    gl.uniform3f(uM.light, 0.36,0.78,0.51);
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,bIX);
+    gl.drawElements(gl.TRIANGLES, IX.length, gl.UNSIGNED_INT, 0);
+  }
+  if(showPts){
+    gl.useProgram(pP); gl.bindVertexArray(vaoP);
+    gl.uniformMatrix4fv(uP.mvp,false,mvp);
+    gl.uniform1f(uP.size, Math.max(1.0, 1.7*dpr));
+    gl.drawArrays(gl.POINTS, 0, PP.length/3);
+  }
+  gl.bindVertexArray(null);
+
+  document.getElementById('hud').textContent =
+    'az ' + (az*57.2958).toFixed(0) + '°   el ' + (el*57.2958).toFixed(0) +
+    '°   ' + (showMesh ? D.nt.toLocaleString()+' tri' : '') +
+    (showMesh && showPts ? '  +  ' : '') +
+    (showPts ? D.np.toLocaleString()+' pts' : '');
+
+  drawOverlay(dpr);
+  requestAnimationFrame(draw);
+}
+
+/* ---------------- interaction ---------------- */
+var down=false, lx=0, ly=0, panning=false, dsx=0, dsy=0, moved=0;
+cv.addEventListener('pointerdown', function(e){
+  down=true; panning = e.shiftKey || e.button===2;
+  lx=e.clientX; ly=e.clientY; dsx=e.clientX; dsy=e.clientY; moved=0;
+  cv.classList.add('drag'); cv.setPointerCapture(e.pointerId); target=null; });
+cv.addEventListener('pointerup', function(e){
+  down=false; cv.classList.remove('drag');
+  if(measuring && moved < 5) pick(e); });
+cv.addEventListener('pointermove', function(e){
+  if(!down) return;
+  var dx=e.clientX-lx, dy=e.clientY-ly; lx=e.clientX; ly=e.clientY;
+  moved += Math.abs(dx) + Math.abs(dy);
+  if(panning){ panx -= dx*0.0022*dist; pany += dy*0.0022*dist; }
+  else { az -= dx*0.0062; el = Math.max(-1.52, Math.min(1.52, el+dy*0.0062)); } });
+cv.addEventListener('contextmenu', function(e){ e.preventDefault(); });
+cv.addEventListener('wheel', function(e){ e.preventDefault();
+  dist = Math.max(0.35, Math.min(9, dist*(1+Math.sign(e.deltaY)*0.09)));
+  target = null; }, {passive:false});
+
+function toggle(id, fn){
+  var b = document.getElementById(id);
+  b.onclick = function(){
+    var v = b.getAttribute('aria-pressed') !== 'true';
+    b.setAttribute('aria-pressed', String(v)); fn(v); };
+}
+toggle('bMesh', function(v){ showMesh = v; });
+toggle('bPts', function(v){ showPts = v; });
+document.querySelectorAll('[data-view]').forEach(function(b){
+  b.onclick = function(){ target = PRESETS[b.dataset.view].slice(); }; });
+
+/* ---------------- measurement ----------------
+   Picks against the dense point cloud: those are real measured surface points,
+   which is what a distance on this model should be anchored to. Two clicks give a
+   straight-line distance in metres of the reconstruction's own metric frame. */
+var measuring = false, marks = [];
+var mtip = document.getElementById('mtip');
+var tipTimer = null;
+function flash(msg){
+  mtip.innerHTML = msg;
+  clearTimeout(tipTimer);
+  tipTimer = setTimeout(setTip, 1800);
+}
+function setTip(){
+  clearTimeout(tipTimer);
+  mtip.innerHTML = marks.length === 0
+    ? 'Click a surface point to start measuring.'
+    : marks.length === 1
+      ? 'Click a second point.'
+      : 'Distance shown. Click again to start a new measurement.<br>' +
+        '<span class="fg-3">Metric-relative: scale comes from the ' +
+        'feed-forward prior, not from ground control. Absolute accuracy is ' +
+        'unvalidated on this clip.</span>';
+}
+toggle('bMeasure', function(v){
+  measuring = v;
+  document.body.classList.toggle('measuring', v);
+  if(!v){ marks = []; }
+  setTip();
+});
+document.getElementById('bClear').onclick = function(){ marks = []; setTip(); };
+
+function pick(e){
+  var r = cv.getBoundingClientRect();
+  var dpr = Math.min(window.devicePixelRatio||1, 2);
+  var mx = (e.clientX - r.left) * dpr, my = (e.clientY - r.top) * dpr;
+  var m = curMVP;
+  if(!m) return;
+  var best = -1, bestD = 1e9, bestZ = 2, rad = 14 * dpr, rad2 = rad*rad;
+  var n = PP.length/3;
+  for(var i=0;i<n;i++){
+    var s = toScreen(m, PP[i*3]/32767, PP[i*3+1]/32767, PP[i*3+2]/32767, curW, curH);
+    if(!s) continue;
+    var dx = s[0]-mx, dy = s[1]-my, d2 = dx*dx + dy*dy;
+    if(d2 > rad2) continue;
+    /* nearest to the camera wins, so we pick the visible surface not one behind it */
+    if(s[2] < bestZ - 1e-6 || (Math.abs(s[2]-bestZ) < 1e-6 && d2 < bestD)){
+      bestZ = s[2]; bestD = d2; best = i;
+    }
+  }
+  if(best < 0){ flash('No surface point there. Aim at the model.'); return; }
+  if(marks.length >= 2) marks = [];
+  marks.push([PP[best*3]/32767, PP[best*3+1]/32767, PP[best*3+2]/32767]);
+  setTip();
+}
+
+var ovl = document.getElementById('ovl');
+function drawOverlay(dpr){
+  if(!marks.length){ if(ovl.innerHTML) ovl.innerHTML = ''; return; }
+  var pts = marks.map(function(p){
+    return toScreen(curMVP, p[0], p[1], p[2], curW, curH); });
+  if(pts.some(function(p){ return !p; })){ ovl.innerHTML=''; return; }
+  var s = pts.map(function(p){ return [p[0]/dpr, p[1]/dpr]; });
+  /* Colours come from #ovl's classes in the design system, never from fill=""
+     attributes here: a hex in a JS string is invisible to the stylesheet and
+     is how the old amber survived a palette change unnoticed. */
+  var h = '';
+  if(s.length === 2){
+    h += '<line class="m-line" x1="'+s[0][0]+'" y1="'+s[0][1]+
+         '" x2="'+s[1][0]+'" y2="'+s[1][1]+'"/>';
+  }
+  s.forEach(function(p){
+    h += '<circle class="m-ring" cx="'+p[0]+'" cy="'+p[1]+'" r="5"/>' +
+         '<circle class="m-dot" cx="'+p[0]+'" cy="'+p[1]+'" r="1.5"/>';
+  });
+  if(marks.length === 2){
+    var a = marks[0], b = marks[1];
+    var d = Math.hypot(a[0]-b[0], a[1]-b[1], a[2]-b[2]) * M_PER_UNIT;
+    var mx = (s[0][0]+s[1][0])/2, my = (s[0][1]+s[1][1])/2;
+    var lab = d.toFixed(2) + ' m';
+    var wpx = lab.length * 7.6 + 14;
+    h += '<rect class="m-box" x="'+(mx-wpx/2)+'" y="'+(my-24)+'" width="'+wpx+
+         '" height="19" rx="3"/>' +
+         '<text class="m-txt" x="'+mx+'" y="'+(my-10.5)+'">'+lab+'</text>';
+  }
+  ovl.innerHTML = h;
+}
+
+/* ================= keyboard ================= */
+/* Shortcuts matter here: presenting means driving this from a lectern, where
+   hunting for an 11px button on a projector is the slowest thing in the room. */
+var KEYS = {m:'bMeasure', c:'bClear', p:'bPts', v:'bMesh'};
+document.addEventListener('keydown', function(e){
+  var t = e.target.tagName;
+  if(t === 'INPUT' || t === 'TEXTAREA' || e.metaKey || e.ctrlKey || e.altKey) return;
+  var k = e.key.toLowerCase();
+  if(k === '1' || k === '2' || k === '3'){
+    if(reached[k]){ go(+k); e.preventDefault(); }
+    return;
+  }
+  if(cur === 2 && (k === ' ' || k === 'enter')){
+    var b = document.getElementById('play');
+    if(!b.disabled){ b.click(); e.preventDefault(); }
+    return;
+  }
+  if(cur === 3 && KEYS[k]){ document.getElementById(KEYS[k]).click(); e.preventDefault(); }
+});
+/* forEach, not a bare for/var: `var el` here is function-scoped and would
+   clobber the camera's own `el` elevation, NaN-ing the whole view matrix. */
+Object.keys(KEYS).forEach(function(kk){
+  var b = document.getElementById(KEYS[kk]);
+  if(b) b.title = 'shortcut: ' + kk;
+});
+document.getElementById('play').title = 'shortcut: space';
+
+/* ================= boot ================= */
+go(1);
+setTip();
+</script>
