@@ -6,11 +6,13 @@ Two rules from the template's own instruction slide drive the whole design:
   "You can only use provided template for making the PPT without changing the idea
    details pointers"          -> we EDIT the downloaded .pptx in place. The SIH logo,
                                  the footer, the slide numbers, the team-name badge and
-                                 the six section headings are left exactly as shipped;
-                                 only the prompt text inside the content boxes is
-                                 replaced. "Clarity and details in the prescribed
-                                 format" is one of the scored criteria, so the chrome is
-                                 not cosmetic.
+                                 the six section headings are left exactly as shipped.
+                                 The template's own content pointers are not deleted
+                                 either: each one is kept verbatim and set small at the
+                                 top right of its slide, so an evaluator can read the
+                                 question and our answer to it on the same line.
+                                 "Clarity and details in the prescribed format" is one
+                                 of the scored criteria, so the chrome is not cosmetic.
 
   "You need to save the file in PDF"   -> exported through PowerPoint COM at the end.
                                           python-pptx cannot write PDF.
@@ -19,12 +21,16 @@ Slide 7 (Important Instructions) is deleted before export, as that slide itself 
 
 Nothing on these slides is invented. Every number traces to docs/05-quality-analysis.md,
 docs/06-gcp-deployment.md, or the mvs_result.json / export_manifest.json written by the
-runs themselves. Where a PS target is not yet met, the slide says so — NTRO evaluates its
+runs themselves. Where a PS target is not yet met, the slide says so - NTRO evaluates its
 own problem statement and will recognise its own numbers.
+
+Layout follows `deck_theme`: a 12-column grid inside the margins the mandated chrome
+leaves free, two hues and no more, and rules and whitespace instead of boxes. The
+previous version put every group in a rounded rectangle with a hairline border, which
+flattened the hierarchy - when everything is a card, nothing is emphasis.
 """
 from __future__ import annotations
 
-import copy
 import os
 import subprocess
 import sys
@@ -32,8 +38,12 @@ import sys
 from pptx import Presentation
 from pptx.dml.color import RGBColor
 from pptx.enum.shapes import MSO_SHAPE
-from pptx.enum.text import PP_ALIGN
-from pptx.util import Emu, Inches, Pt
+from pptx.enum.text import MSO_ANCHOR, PP_ALIGN
+from pptx.oxml.ns import qn
+from pptx.util import Inches, Pt
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import deck_theme as th
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 FIG = os.path.join(ROOT, "out", "ppt")
@@ -41,12 +51,13 @@ TEMPLATE = os.path.join(FIG, "SIH2026-IDEA-Presentation-Format.pptx")
 OUT_PPTX = os.path.join(FIG, "SIH26158_IdeaSubmission.pptx")
 OUT_PDF = os.path.join(FIG, "SIH26158_IdeaSubmission.pdf")
 
-INK = RGBColor(0x1A, 0x1A, 0x1A)
-BLUE = RGBColor(0x1F, 0x6F, 0xA8)
-ORANGE = RGBColor(0xC2, 0x61, 0x2C)
-GREY = RGBColor(0x5A, 0x5A, 0x5A)
-LIGHT = RGBColor(0xEC, 0xF2, 0xF7)
-RULE = RGBColor(0xC8, 0xD6, 0xE2)
+C = lambda h: RGBColor.from_string(h[1:])
+NAVY, RUST, INK = C(th.NAVY), C(th.RUST), C(th.INK)
+MUTED, FAINT, RULE = C(th.MUTED), C(th.FAINT), C(th.RULE)
+PAPER, WASH = C(th.PAPER), C(th.WASH)
+
+SANS, SEMI, MONO = th.SANS, th.SEMI, th.MONO
+L, R, X, SPAN = th.L, th.R, th.X, th.SPAN
 
 TEAM_NAME = "«TEAM NAME»"          # filled by the team on the portal; never invented
 TEAM_ID = "«TEAM ID»"
@@ -131,86 +142,254 @@ def shape(slide, name):
     raise KeyError(f"{name} not on slide")
 
 
+def _nobullet(p):
+    """
+    Strip the bullet a template placeholder brings with it.
+
+    The prescribed pointer boxes are bulleted lists in the shipped file. Reusing one as
+    a quiet caption otherwise drags a stray glyph and a hanging indent along with it.
+    """
+    pPr = p._p.get_or_add_pPr()
+    pPr.set("marL", "0")
+    pPr.set("indent", "0")
+    for tag in ("a:buChar", "a:buAutoNum", "a:buNone"):
+        for e in pPr.findall(qn(tag)):
+            pPr.remove(e)
+    pPr.insert_element_before(pPr.makeelement(qn("a:buNone"), {}),
+                              "a:tabLst", "a:defRPr", "a:extLst")
+
+
 def write(tf, blocks, line=1.0):
     """
     Replace a text frame's contents.
 
-    `blocks` is a list of dicts: text, size, bold, colour, indent level, space above.
-    Written as a list of bullets rather than prose because the template asks for points,
-    and because a screening reader gives this slide seconds, not minutes.
+    `blocks` is a list of dicts: text, size, bold, colour, font, letter spacing,
+    alignment, space above. Written as short blocks rather than prose because the
+    template asks for points, and because a screening reader gives this slide seconds.
     """
     tf.clear()
     tf.word_wrap = True
     for i, b in enumerate(blocks):
         p = tf.paragraphs[0] if i == 0 else tf.add_paragraph()
         p.level = b.get("level", 0)
+        _nobullet(p)
         p.line_spacing = b.get("line", line)
         if b.get("space"):
             p.space_before = Pt(b["space"])
         if b.get("align"):
             p.alignment = b["align"]
-        for j, run_spec in enumerate(b["text"] if isinstance(b["text"], list) else [b]):
+        for spec in (b["text"] if isinstance(b["text"], list) else [b]):
             r = p.add_run()
-            r.text = run_spec["text"] if isinstance(run_spec, dict) else run_spec
+            r.text = spec["text"] if isinstance(spec, dict) else spec
+            src = spec if isinstance(spec, dict) else b
             f = r.font
-            src = run_spec if isinstance(run_spec, dict) else b
-            f.size = Pt(src.get("size", b.get("size", 12)))
+            f.size = Pt(src.get("size", b.get("size", th.T_BODY)))
             f.bold = src.get("bold", b.get("bold", False))
             f.color.rgb = src.get("colour", b.get("colour", INK))
-            f.name = "Calibri"
+            f.name = src.get("font", b.get("font", SANS))
+            spc = src.get("spc", b.get("spc"))
+            if spc:
+                # Tracking is not exposed by python-pptx; it is a plain rPr attribute
+                # in hundredths of a point. Used only on the small uppercase labels.
+                f._rPr.set("spc", str(int(spc)))
     return tf
 
 
-def textbox(slide, x, y, w, h, blocks, line=1.0):
+def textbox(slide, x, y, w, h, blocks, line=1.0, anchor=None):
+    """
+    A text frame whose left edge is actually at `x`.
+
+    PowerPoint gives every new textbox a 0.1 in left and right inset, so a box placed
+    on a grid column starts its text 0.1 in inside it. Every column, figure edge and
+    rule in this deck is aligned to the same grid, so the insets are zeroed instead of
+    being compensated for one shape at a time.
+    """
     tb = slide.shapes.add_textbox(Inches(x), Inches(y), Inches(w), Inches(h))
-    write(tb.text_frame, blocks, line=line)
+    tf = tb.text_frame
+    tf.margin_left = tf.margin_right = tf.margin_top = tf.margin_bottom = 0
+    if anchor is not None:
+        tf.vertical_anchor = anchor
+    write(tf, blocks, line=line)
     return tb
 
 
-def band(slide, x, y, w, h, fill=LIGHT, edge=RULE, radius=0.06):
-    """A soft panel behind a block of text, so the eye can find the groups."""
-    sh = slide.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE,
-                                Inches(x), Inches(y), Inches(w), Inches(h))
-    sh.adjustments[0] = radius
-    sh.fill.solid(); sh.fill.fore_color.rgb = fill
-    sh.line.color.rgb = edge; sh.line.width = Pt(0.75)
-    sh.shadow.inherit = False
-    sh.text_frame.text = ""
-    return sh
+def _bar(slide, x, y, w, h, colour):
+    s = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(x), Inches(y),
+                               Inches(w), Inches(h))
+    s.fill.solid()
+    s.fill.fore_color.rgb = colour
+    s.line.fill.background()
+    s.shadow.inherit = False
+    s.text_frame.text = ""
+    return s
 
 
-def chip(slide, x, y, w, h, head, sub, colour=BLUE):
-    """One measured fact, big enough to read from the back of a screening queue."""
-    band(slide, x, y, w, h, fill=RGBColor(0xFF, 0xFF, 0xFF), edge=RULE)
-    textbox(slide, x + 0.10, y + 0.06, w - 0.2, 0.42,
-            [{"text": head, "size": 17, "bold": True, "colour": colour,
-              "align": PP_ALIGN.CENTER}])
-    textbox(slide, x + 0.08, y + 0.46, w - 0.16, h - 0.5,
-            [{"text": sub, "size": 9, "colour": GREY, "align": PP_ALIGN.CENTER}],
-            line=0.95)
+def hair(slide, x, y, w, colour=RULE, weight=0.0085):
+    """A horizontal hairline. This deck's only grouping device."""
+    return _bar(slide, x, y, w, weight, colour)
 
 
-def flow_box(slide, x, y, w, h, n, title, body):
-    band(slide, x, y, w, h, fill=RGBColor(0xFF, 0xFF, 0xFF), edge=BLUE)
-    textbox(slide, x + 0.08, y + 0.05, w - 0.16, 0.3,
-            [{"text": [{"text": f"S{n}  ", "size": 10, "bold": True, "colour": ORANGE},
-                       {"text": title, "size": 10, "bold": True, "colour": BLUE}],
-              "size": 10}])
-    textbox(slide, x + 0.08, y + 0.36, w - 0.16, h - 0.42,
-            [{"text": body, "size": 8.5, "colour": INK}], line=0.92)
+def vhair(slide, x, y, h, colour=RULE, weight=0.0085):
+    return _bar(slide, x, y, weight, h, colour)
 
 
-def arrow(slide, x, y):
-    a = slide.shapes.add_shape(MSO_SHAPE.RIGHT_ARROW, Inches(x), Inches(y),
-                               Inches(0.20), Inches(0.20))
-    a.fill.solid(); a.fill.fore_color.rgb = BLUE
-    a.line.fill.background(); a.shadow.inherit = False
-    return a
+def keyline(slide, x, y, h, colour, w=0.028):
+    """A short vertical accent bar. Carries status without drawing a box."""
+    return _bar(slide, x, y, w, h, colour)
+
+
+def eyebrow(slide, x, y, w, text, colour=MUTED, align=None, size=None):
+    """
+    A tracked-out uppercase label.
+
+    Used to name a block, never as decoration above every paragraph - the moment an
+    eyebrow appears over everything it stops marking anything.
+    """
+    return textbox(slide, x, y, w, 0.20, [
+        {"text": text.upper(), "size": size or th.T_EYEBROW, "bold": True,
+         "colour": colour, "font": SEMI, "spc": 75, "align": align}])
+
+
+def metric(slide, x, y, w, value, label, colour=NAVY, size=None):
+    """
+    One measured fact, unboxed.
+
+    The number is set in Consolas because that is what it is: instrument output, not a
+    marketing figure. Digits also line up column to column, which a proportional face
+    does not do.
+    """
+    textbox(slide, x, y, w, 0.36, [
+        {"text": value, "size": size or th.T_HERO, "bold": True, "colour": colour,
+         "font": MONO}])
+    textbox(slide, x, y + (0.40 if size is None else 0.33), w, 0.40, [
+        {"text": label, "size": th.T_MICRO, "colour": MUTED}], line=1.08)
+
+
+MARK_YES, MARK_PART, MARK_NO = "y", "p", "n"
+
+
+# A traffic light, deliberately, and the one place the deck's two-hue rule is set
+# aside. A matrix of twenty-five judgements is the one thing on these slides a reader
+# scores rather than reads, and green/amber/red is the convention they already know.
+# All three are dark enough to hold their hue on white paper at 0.125 in.
+GREEN = C("#1B7340")         # meets it
+AMBER = C("#B8860B")         # partly
+RED = C("#A32015")           # does not
+MARK_COLOUR = {"y": GREEN, "p": AMBER, "n": RED}
+
+
+def markdisc(slide, cx, cy, kind, d=0.125):
+    """
+    One cell of the comparison matrix: a filled traffic-light disc.
+
+    Colour alone cannot survive the greyscale printout a screening table works from -
+    dark green, dark goldenrod and dark red sit close in luminance. The key in the
+    header names all three, and nineteen of the twenty-five cells carry a note under
+    the disc saying why, so the meaning does not rest on hue by itself.
+    """
+    s = slide.shapes.add_shape(MSO_SHAPE.OVAL, Inches(cx - d / 2), Inches(cy - d / 2),
+                               Inches(d), Inches(d))
+    s.shadow.inherit = False
+    s.text_frame.text = ""
+    s.fill.solid()
+    s.fill.fore_color.rgb = MARK_COLOUR[kind]
+    s.line.fill.background()
+    return s
+
+
+def retext(sh, s, size=None):
+    """
+    Replace a placeholder's text while keeping every property it inherits.
+
+    Used for the one heading we are allowed to fill in. Writing the run through
+    `write()` would set an explicit font and colour and the slide would stop matching
+    the five prescribed headings beside it.
+
+    `size` is the one property worth overriding. The master sets this placeholder for
+    the two words "IDEA TITLE"; a real 63-character idea title at that size wraps to
+    two lines and the first one climbs off the top of the slide. The face and colour
+    still come from the master, so the heading keeps matching the prescribed five.
+    """
+    tf = sh.text_frame
+    p0 = tf.paragraphs[0]
+    if not p0.runs:
+        raise SystemExit("expected a run to inherit formatting from")
+    p0.runs[0].text = s
+    if size is not None:
+        p0.runs[0].font.size = Pt(size)
+    for r in p0.runs[1:]:
+        r._r.getparent().remove(r._r)
+    for p in tf.paragraphs[1:]:
+        p._p.getparent().remove(p._p)
+
+
+def pointers(slide):
+    """The template's own content pointers for this slide, verbatim, as one line."""
+    sh = shape(slide, "TextBox 8")
+    lines = [ln.strip(" \t ") for ln in sh.text_frame.text.splitlines()]
+    return sh, [ln for ln in lines if ln]
+
+
+def header(slide, statement, keep=None, strong=False):
+    """
+    The repeated slide header: our claim on the left, the template's own question on
+    the right, one rule under both. Returns the pointer lines for the caller to use.
+
+    Keeping the prescribed pointers on the slide rather than deleting them is a small
+    format-compliance argument made typographically - the evaluator sees what was asked
+    and what we answered without having to hold the template in their head.
+
+    `keep` selects which pointer lines appear in the corner. Slides 2 and 4 answer
+    their pointers *under the pointers' own words*, used as block headings; repeating
+    those words in the corner as well would print the same sentence twice on one slide.
+    So those slides keep a narrower selection, or none.
+    """
+    sh, lines = pointers(slide)
+    textbox(slide, X(0), 1.13, SPAN(8), 0.42, statement, line=1.06)
+    shown = lines if keep is None else [lines[i] for i in keep]
+    if not shown:
+        sh._element.getparent().remove(sh._element)
+    else:
+        sh.left, sh.top, sh.width, sh.height = (Inches(X(8)), Inches(1.15),
+                                                Inches(SPAN(4)), Inches(0.40))
+        tf = sh.text_frame
+        tf.margin_left = tf.margin_right = tf.margin_top = tf.margin_bottom = 0
+        tf.word_wrap = True
+        write(tf, [{"text": " · ".join(shown),
+                    "size": 8.0 if strong else 6.8, "bold": strong,
+                    "font": SEMI if strong else SANS,
+                    "colour": NAVY if strong else FAINT,
+                    "align": PP_ALIGN.RIGHT}], line=1.14)
+    hair(slide, X(0), 1.62, SPAN(12))
+    return lines
+
+
+def inline(items, sep=" · ", size=th.T_SEC, colour=INK, strong=()):
+    """A list rendered as one flowing line instead of a row of identical pills."""
+    out = []
+    for i, it in enumerate(items):
+        if i:
+            out.append({"text": sep, "size": size, "colour": FAINT})
+        out.append({"text": it, "size": size,
+                    "colour": NAVY if it in strong else colour,
+                    "bold": it in strong,
+                    "font": SEMI if it in strong else SANS})
+    return out
 
 
 def drop_slide(prs, index):
+    """
+    Remove a slide, and its relationship, so the part is not written at all.
+
+    Dropping only the sldIdLst entry leaves the slide's XML orphaned inside the .pptx.
+    The exported PDF is correct either way, but the template's instruction slide is the
+    one thing the template explicitly tells you to delete, and leaving it in the package
+    means a repair pass in PowerPoint can put it back.
+    """
     lst = prs.slides._sldIdLst
-    lst.remove(list(lst)[index])
+    sld = list(lst)[index]
+    prs.part.drop_rel(sld.get(qn("r:id")))
+    lst.remove(sld)
 
 
 TEMPLATE_URL = "https://www.sih.gov.in/letters/2026/SIH2026-IDEA-Presentation-Format.pptx"
@@ -218,7 +397,7 @@ TEMPLATE_URL = "https://www.sih.gov.in/letters/2026/SIH2026-IDEA-Presentation-Fo
 
 def fetch_template():
     """
-    The mandated template is an input, not an output, but `out/` is gitignored — so a
+    The mandated template is an input, not an output, but `out/` is gitignored - so a
     fresh clone has to be able to pull it. Straight from sih.gov.in, never a mirror: the
     SIH logo, footer and slide numbering all have to be the shipped ones.
     """
@@ -236,63 +415,6 @@ def fetch_template():
 
 
 # ----------------------------------------------------------------------------- build
-# ------------------------------------------------------------- visual-first helpers
-GREEN = RGBColor(0x2E, 0x7D, 0x32)
-PAPER = RGBColor(0xFF, 0xFF, 0xFF)
-WARM = RGBColor(0xFD, 0xF3, 0xEB)
-
-
-def dot(slide, cx, cy, d, colour, glyph="", gcol=PAPER):
-    """A filled status disc. Colour carries the meaning; the glyph repeats it, because
-    a reader who prints this in greyscale still has to be able to score the row."""
-    s = slide.shapes.add_shape(MSO_SHAPE.OVAL, Inches(cx - d / 2), Inches(cy - d / 2),
-                               Inches(d), Inches(d))
-    s.fill.solid(); s.fill.fore_color.rgb = colour
-    s.line.fill.background(); s.shadow.inherit = False
-    write(s.text_frame, [{"text": glyph, "size": 9.5, "bold": True, "colour": gcol,
-                          "align": PP_ALIGN.CENTER}])
-    s.text_frame.margin_top = s.text_frame.margin_bottom = 0
-    return s
-
-
-def pill(slide, x, y, w, h, text, colour=BLUE, fill=None, size=8.6):
-    s = slide.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE,
-                               Inches(x), Inches(y), Inches(w), Inches(h))
-    s.adjustments[0] = 0.42
-    s.fill.solid(); s.fill.fore_color.rgb = fill or LIGHT
-    s.line.color.rgb = colour; s.line.width = Pt(0.75)
-    s.shadow.inherit = False
-    write(s.text_frame, [{"text": text, "size": size, "bold": True, "colour": colour,
-                          "align": PP_ALIGN.CENTER}], line=0.9)
-    s.text_frame.margin_left = s.text_frame.margin_right = Emu(18000)
-    s.text_frame.margin_top = s.text_frame.margin_bottom = 0
-    return s
-
-
-def rule(slide, x, y, w, colour=RULE):
-    s = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(x), Inches(y),
-                               Inches(w), Inches(0.008))
-    s.fill.solid(); s.fill.fore_color.rgb = colour
-    s.line.fill.background(); s.shadow.inherit = False
-    return s
-
-
-MARKS = {"y": (GREEN, "✓"), "n": (RGBColor(0xC0, 0x39, 0x2B), "✗"),
-         "p": (RGBColor(0xC9, 0x93, 0x1F), "~")}
-
-
-def mark(slide, cx, cy, kind, note="", w=1.8):
-    """One cell of the comparison matrix: a coloured mark, plus three or four words
-    saying why. The mark is what gets read; the words are for whoever leans in."""
-    colour, glyph = MARKS[kind]
-    dot(slide, cx, cy, 0.24, colour, glyph)
-    if note:
-        textbox(slide, cx - w / 2, cy + 0.15, w, 0.44,
-                [{"text": note, "size": 7.4, "colour": GREY,
-                  "align": PP_ALIGN.CENTER}], line=0.88)
-
-
-# ----------------------------------------------------------------------------- build
 def build():
     fetch_template()
     m = measurements()
@@ -300,143 +422,212 @@ def build():
     s1, s2, s3, s4, s5, s6 = [prs.slides[i] for i in range(6)]
 
     for s in (s2, s3, s4, s5, s6):
-        write(shape(s, [o.name for o in s.shapes
-                        if o.name.startswith("Oval")][0]).text_frame,
-              [{"text": TEAM_NAME, "size": 10, "bold": True, "colour": INK,
-                "align": PP_ALIGN.CENTER}])
+        badge = shape(s, [o.name for o in s.shapes if o.name.startswith("Oval")][0])
+        write(badge.text_frame, [{"text": TEAM_NAME, "size": 9.5, "bold": True,
+                                  "colour": INK, "font": SEMI,
+                                  "align": PP_ALIGN.CENTER}], line=0.95)
 
     # ---------------------------------------------------------------- 1 · title page
-    write(shape(s1, "TextBox 9").text_frame, [
-        {"text": [{"text": "Problem Statement ID – ", "size": 15},
-                  {"text": "SIH26158", "size": 15, "bold": True}], "space": 4},
-        {"text": [{"text": "Problem Statement Title – ", "size": 15},
-                  {"text": "Single-Pass Drone Video to Accurate 3D Model "
-                           "Generation System", "size": 15, "bold": True}], "space": 8},
-        {"text": [{"text": "Theme – ", "size": 15},
-                  {"text": "Robotics and Drones", "size": 15, "bold": True}], "space": 8},
-        {"text": [{"text": "PS Category – ", "size": 15},
-                  {"text": "Software", "size": 15, "bold": True}], "space": 8},
-        {"text": [{"text": "Team ID – ", "size": 15},
-                  {"text": TEAM_ID, "size": 15, "bold": True}], "space": 8},
-        {"text": [{"text": "Team Name (Registered on portal) – ", "size": 15},
-                  {"text": TEAM_NAME, "size": 15, "bold": True}], "space": 8},
-    ], line=1.05)
     sub = shape(s1, "Subtitle 3")
     # The placeholder ships overlapping the SIH title block, which is fine for the two
-    # words "TITLE PAGE" and not for a real title. Drop it clear of the descenders.
-    sub.top, sub.left, sub.width = Inches(1.30), Inches(0.36), Inches(10.6)
-    write(sub.text_frame, [{"text": IDEA_TITLE, "size": 21, "bold": True,
-                            "colour": INK, "align": PP_ALIGN.CENTER}])
-    textbox(s1, 0.36, 6.35, 6.6, 0.5, [
-        {"text": "National Technical Research Organisation (NTRO)",
-         "size": 12, "bold": True, "colour": BLUE}])
+    # words "TITLE PAGE" and not for a real title. Drop it clear of the descenders and
+    # into the left column, where the template's own artwork leaves the page free.
+    # It also ships centred; a centred two-line title beside a left-aligned field list
+    # has no shared edge to read down, so it is set left with the rule as that edge.
+    sub.left, sub.top, sub.width, sub.height = (Inches(0.62), Inches(1.34),
+                                                Inches(5.10), Inches(1.10))
+    write(sub.text_frame, [{"text": IDEA_TITLE, "size": 19, "bold": True,
+                            "colour": INK, "font": SEMI, "align": PP_ALIGN.LEFT}],
+          line=1.06)
+    sub.text_frame.margin_left = sub.text_frame.margin_right = 0
+    sub.text_frame.margin_top = sub.text_frame.margin_bottom = 0
+    keyline(s1, 0.42, 1.38, 0.90, NAVY, w=0.034)
+
+    textbox(s1, 0.62, 2.50, 5.30, 0.28, [
+        {"text": [{"text": "for the ", "size": 9.5, "colour": MUTED},
+                  {"text": "National Technical Research Organisation (NTRO)",
+                   "size": 9.5, "bold": True, "colour": NAVY, "font": SEMI}]}])
+    hair(s1, 0.42, 2.92, 5.50)
+
+    # The prescribed fields, as a two-column list. Label and value shared one paragraph
+    # in the first version, so the long PS title wrapped back under its own label and
+    # the column of values lost its left edge.
+    tb9 = shape(s1, "TextBox 9")
+    tb9._element.getparent().remove(tb9._element)
+    fields = [("Problem Statement ID", "SIH26158", 0.30),
+              ("Problem Statement Title",
+               "Single-Pass Drone Video to Accurate 3D Model Generation System", 0.58),
+              ("Theme", "Robotics and Drones", 0.30),
+              ("PS Category", "Software", 0.30),
+              ("Team ID", TEAM_ID, 0.30),
+              ("Team Name (Registered on portal)", TEAM_NAME, 0.30)]
+    y = 3.10
+    for lab, val, h in fields:
+        textbox(s1, 0.42, y + 0.03, 1.92, 0.24,
+                [{"text": lab, "size": 8.4, "colour": MUTED}], line=1.10)
+        textbox(s1, 2.46, y, 3.46, h,
+                [{"text": val, "size": 12, "bold": True, "colour": INK, "font": SEMI}],
+                line=1.08)
+        y += h
 
     # ------------------------------------------------------- 2 · proposed solution
-    write(shape(s2, "Title 1").text_frame,
-          [{"text": "MEASURED, NOT INTERPOLATED", "size": 34, "bold": True,
-            "colour": INK, "align": PP_ALIGN.CENTER}])
-    shape(s2, "TextBox 8")._element.getparent().remove(shape(s2, "TextBox 8")._element)
+    # This slide is the one the template leaves structurally open, and it is the one
+    # place the shipped file states its own section heading in the body rather than in
+    # Title 1. An earlier version put a tagline in the IDEA TITLE slot and shrank
+    # "Proposed Solution" and its three pointers to grey corner text - which inverts
+    # what the template asks for. The pointers are now the slide's skeleton: each of
+    # the three is a block heading, quoted exactly, with our answer under it.
+    t2 = shape(s2, "Title 1")
+    t2.left, t2.top, t2.width, t2.height = (Inches(1.82), Inches(0.06),
+                                            Inches(8.80), Inches(1.04))
+    t2.text_frame.vertical_anchor = MSO_ANCHOR.MIDDLE
+    t2.text_frame.word_wrap = True
+    retext(t2, IDEA_TITLE, size=20)
 
-    textbox(s2, 0.45, 1.16, 12.4, 0.34, [
-        {"text": [{"text": "One drone pass in — a metrically scaled, textured 3D mesh "
-                           "and dense point cloud out, in all six required formats, "
-                           "measurable in the browser.",
-                   "size": 12.5, "bold": True, "colour": INK}]}])
+    # Corner keeps only line 0, the section name. Lines 1-3 are the pointers, and they
+    # appear below at full size as the headings of the three blocks that answer them.
+    pts = header(s2, [{"text": "One drone pass in; a georeferenced, metrically scaled, "
+                               "textured 3D mesh and dense point cloud out, fit for "
+                               "visualisation, measurement and analysis.",
+                       "size": th.T_STATE, "bold": True, "colour": INK, "font": SEMI}],
+                 keep=(0,), strong=True)
 
-    # The idea, as a picture. Everything the AI is good at is kept; the one thing it is
-    # bad at is thrown away and replaced. That is the whole submission in one row.
-    band(s2, 0.45, 1.58, 6.32, 1.92, fill=PAPER, edge=RULE)
-    pill(s2, 0.58, 1.86, 1.05, 0.46, "ONE\nDRONE PASS", INK, PAPER, size=8.2)
-    arrow(s2, 1.68, 2.00)
-    pill(s2, 1.93, 1.86, 1.15, 0.46, "FEED-\nFORWARD AI", INK, PAPER, size=8.2)
-    arrow(s2, 3.13, 1.75); arrow(s2, 3.13, 2.29)
-    pill(s2, 3.38, 1.64, 3.24, 0.42, "✓  KEEP   camera pose + metric scale",
-         GREEN, RGBColor(0xEE, 0xF6, 0xEE), size=9)
-    pill(s2, 3.38, 2.18, 3.24, 0.42, "✗  DROP   its geometry",
-         RGBColor(0xC0, 0x39, 0x2B), RGBColor(0xFC, 0xEF, 0xEE), size=9)
-    textbox(s2, 3.38, 2.60, 3.24, 0.26, [
-        {"text": "sampled at 2.2 cm, but only carries 30–50 cm",
-         "size": 7.6, "colour": GREY, "align": PP_ALIGN.CENTER}])
-    # Second row: what the kept half actually drives. Kept on its own line because the
-    # first draft interleaved it with the fork and the reading order became ambiguous.
-    textbox(s2, 0.58, 2.70, 6.1, 0.24, [
-        {"text": "the kept pose and scale then drive:", "size": 8, "bold": True,
-         "colour": GREY}])
-    pill(s2, 0.58, 2.96, 1.72, 0.40, "global bundle adjustment", BLUE, LIGHT, size=8.2)
-    arrow(s2, 2.35, 3.06)
-    pill(s2, 2.60, 2.96, 2.20, 0.40, "full-resolution photometric MVS",
-         BLUE, LIGHT, size=8.2)
-    arrow(s2, 4.85, 3.06)
-    pill(s2, 5.10, 2.96, 1.52, 0.40, "MEASURED 3D", GREEN,
-         RGBColor(0xEE, 0xF6, 0xEE), size=8.6)
+    # ---- pointer 1: detailed explanation of the proposed solution
+    eyebrow(s2, X(0), 1.74, SPAN(6), pts[1], colour=NAVY)
+    textbox(s2, X(0), 1.98, SPAN(6), 0.26, [
+        {"text": [{"text": "ONE DRONE PASS", "size": 10.5, "bold": True, "font": SEMI},
+                  {"text": "   →   ", "size": 10.5, "colour": FAINT},
+                  {"text": "FEED-FORWARD AI", "size": 10.5, "bold": True,
+                   "font": SEMI}]}])
 
-    textbox(s2, 0.45, 3.62, 6.32, 0.3, [
-        {"text": "Reconstructs, per the problem statement", "size": 9.5,
-         "bold": True, "colour": BLUE}])
-    for i, t in enumerate(("terrain +\nstructures", "building facades\n+ rooftops",
-                           "roads +\ninfrastructure", "vegetation\n+ obstacles",
-                           "textured mesh\nor point cloud")):
-        pill(s2, 0.45 + i * 1.28, 3.94, 1.20, 0.50, t, BLUE, LIGHT, size=7.6)
+    # Indented, and the bodies say "its", so both rows read as halves of what the AI
+    # returned rather than as the next two steps after it.
+    for i, (word, body, note, col) in enumerate((
+            ("KEEP", "its camera pose and metric scale", "", NAVY),
+            ("DROP", "its geometry",
+             "sampled at 2.2 cm, but only carries 30–50 cm", RUST))):
+        y = 2.32 + i * 0.40
+        keyline(s2, X(0) + 0.22, y, 0.28, col)
+        textbox(s2, X(0) + 0.36, y, SPAN(6) - 0.36, 0.28, [
+            {"text": [{"text": word + "   ", "size": 9.4, "bold": True, "colour": col,
+                       "font": SEMI},
+                      {"text": body, "size": 9.4, "colour": INK}]}])
+        if note:
+            textbox(s2, X(0) + 0.36, y + 0.17, SPAN(6) - 0.36, 0.22,
+                    [{"text": note, "size": th.T_MICRO, "colour": MUTED}])
 
-    s2.shapes.add_picture(f"{FIG}/fig_beforeafter.png", Inches(6.95), Inches(1.52),
-                          width=Inches(5.93))
-    textbox(s2, 6.95, 4.12, 5.93, 0.32, [
+    textbox(s2, X(0), 3.22, SPAN(6), 0.26, [
+        {"text": inline(("global bundle adjustment", "full-resolution photometric MVS",
+                         "MEASURED 3D"), sep="   →   ", size=9.4,
+                        strong=("MEASURED 3D",))}])
+
+    # Sits low against the rule rather than directly under the flow: the two blocks
+    # then read as two statements with air between them, instead of one block with a
+    # hole underneath it.
+    textbox(s2, X(0), 4.02, SPAN(6), 0.44, [
+        {"text": [{"text": "Reconstructs (i)–(v), the PS's own list:   ", "size": 8.2,
+                   "bold": True, "colour": MUTED, "font": SEMI}] +
+                 inline(("3D terrain and structures", "building facades and rooftops",
+                         "roads and infrastructure", "vegetation and obstacles",
+                         "textured 3D meshes or point clouds"), size=8.2)}], line=1.20)
+
+    s2.shapes.add_picture(f"{FIG}/fig_beforeafter.png", Inches(X(6)), Inches(1.74),
+                          width=Inches(SPAN(6)))
+    textbox(s2, X(6), 1.74 + th.FIG["beforeafter"][1] + 0.06, SPAN(6), 0.24, [
         {"text": "Same clip, same 45 keyframes, same camera poses. Only the geometry "
-                 "stage changed.", "size": 8.6, "colour": GREY,
-         "align": PP_ALIGN.CENTER}])
+                 "stage changed.", "size": th.T_MICRO, "colour": MUTED}])
 
-    for i, (h, sub_t) in enumerate((
-            (m["registered"], "keyframes registered"),
-            (f'{m["reproj_ba"]:.2f} px', "reprojection error"),
-            (f'{m["dense_points"]/1e6:.2f} M', "measured dense points"),
-            (f'{m["finest_mm"]:.1f} mm', "finest detail resolved"),
-            (f'{m["gain_lo"]:.1f}–{m["gain_hi"]:.1f}×', "finer than the AI alone"),
-            (f'{m["formats_have"]} / {m["formats_need"]}', "export formats"))):
-        chip(s2, 0.45 + i * 2.09, 4.86, 1.98, 0.98, h, sub_t)
+    hair(s2, X(0), 4.62, SPAN(12))
 
-    textbox(s2, 0.45, 6.00, 12.4, 0.5, [
-        {"text": [{"text": "Prototype status:  ", "size": 9.6, "bold": True,
-                   "colour": ORANGE},
-                  {"text": "the pipeline is containerised and running end to end on two "
-                           "real clips. Four of the PS's six desired-output targets are "
-                           "met and measured; the other two are on the feasibility "
-                           "slide with the work that closes them.",
-                   "size": 9.6, "colour": INK}]}], line=0.95)
+    # ---- pointer 2: how it addresses the problem
+    eyebrow(s2, X(0), 4.74, SPAN(6), pts[2], colour=NAVY)
+    for i, (lab, txt) in enumerate((
+            ("One pass, no re-flight",
+             "reconstructs from a single trajectory with no cross-strip overlap, which "
+             "is the capture constraint the PS is built around"),
+            ("Zero ground control points",
+             "metric scale comes from the feed-forward prior and the flight metadata, "
+             "not from surveyed markers"),
+            ("Georeferenced and measurable",
+             "one shared ENU frame across all six export formats, and a browser viewer "
+             "built for measurement rather than display"))):
+        y = 4.96 + i * 0.30
+        textbox(s2, X(0), y, 1.62, 0.26,
+                [{"text": lab, "size": 8.4, "bold": True, "colour": INK, "font": SEMI}])
+        textbox(s2, X(0) + 1.70, y, SPAN(6) - 1.70, 0.28,
+                [{"text": txt, "size": 8.2, "colour": MUTED}], line=1.12)
+
+    # ---- pointer 3: innovation and uniqueness of the solution
+    eyebrow(s2, X(6), 4.74, SPAN(6), pts[3], colour=NAVY)
+    textbox(s2, X(6), 4.96, SPAN(6), 0.60, [
+        {"text": [{"text": "We measured the ceiling instead of assuming it. ",
+                   "size": 8.6, "bold": True, "colour": INK, "font": SEMI},
+                  {"text": "A feed-forward model samples depth at 2.2 cm but carries "
+                           "information only at 30–50 cm, set by its patch-14 backbone "
+                           "and an interpolating depth head. Confirmed three ways, with "
+                           "the competing explanation tested and rejected.",
+                   "size": 8.6, "colour": MUTED}]}], line=1.14)
+    textbox(s2, X(6), 5.62, SPAN(6), 0.44, [
+        {"text": [{"text": "So the AI is a pose and scale prior, nothing more. ",
+                   "size": 8.6, "bold": True, "colour": INK, "font": SEMI},
+                  {"text": "Every delivered surface point is triangulated from real "
+                           "pixels by full-resolution photometric MVS.",
+                   "size": 8.6, "colour": MUTED}]}], line=1.14)
+
+    hair(s2, X(0), 6.16, SPAN(12))
+    cells = ((m["registered"], "keyframes\nregistered"),
+             (f'{m["reproj_ba"]:.2f} px', "reprojection\nerror"),
+             (f'{m["dense_points"]/1e6:.2f} M', "measured\ndense points"),
+             (f'{m["finest_mm"]:.1f} mm', "finest detail\nresolved"),
+             (f'{m["gain_lo"]:.1f}–{m["gain_hi"]:.1f}×', "finer than\nthe AI alone"),
+             (f'{m["formats_have"]} / {m["formats_need"]}', "export\nformats"))
+    cw = SPAN(12) / len(cells)
+    for i, (h, sub_t) in enumerate(cells):
+        metric(s2, X(0) + i * cw, 6.26, cw - 0.18, h, sub_t, size=16.5)
+        if i:
+            vhair(s2, X(0) + i * cw - 0.09, 6.26, 0.52)
 
     # -------------------------------------------------------- 3 · technical approach
-    shape(s3, "TextBox 8")._element.getparent().remove(shape(s3, "TextBox 8")._element)
-    textbox(s3, 0.45, 1.14, 12.4, 0.32, [
-        {"text": "Methodology — five stages, all of them already running end to end",
-         "size": 12.5, "bold": True, "colour": BLUE}])
+    header(s3, [{"text": "Five stages, all of them already running end to end on two "
+                         "unrelated clips.", "size": th.T_STATE, "bold": True,
+                 "colour": INK, "font": SEMI}])
 
     stages = [
-        ("INGEST", "1080p/4K video + GPS + flight metadata.\nAdaptive keyframing drops "
-                   "motion blur, compression artefacts and duplicates.\nAuto-detects "
-                   "SRT / CSV / EXIF / flight log."),
-        ("POSE + METRIC SCALE", "MapAnything point maps → intrinsics by robust masked "
-                                f"fit ({m['intrinsics_px']:.2f} px) → COLMAP "
-                                "triangulation + global bundle adjustment."),
-        ("DENSE GEOMETRY", "OpenMVS PatchMatch at full keyframe resolution.\nGeometric-"
-                           "consistency filtering across ≥ 3 views also rejects moving "
-                           "vehicles, people and animals."),
-        ("SURFACE + FRAME", "Delaunay + graph-cut mesh, per-vertex colour.\nVertical "
-                            "from the ground plane, cross-checked against the gimbal's "
-                            "roll-zero constraint."),
-        ("EXPORT + VIEW", "OBJ · PLY · LAS 1.4 · GeoTIFF DSM · glB/glTF · FBX, in one "
-                          "shared ENU frame.\nBrowser viewer for measurement."),
+        ("INGEST", "Mandatory in: 1080p/4K video, GPS, flight metadata. Optional: IMU, "
+                   "barometric altitude, intrinsics, RTK/PPK; used when present, never "
+                   "required. Auto-detects SRT, CSV, EXIF or flight log."),
+        ("POSE + METRIC SCALE", "MapAnything point maps, intrinsics by robust masked "
+                                f"fit at {m['intrinsics_px']:.2f} px, then COLMAP "
+                                "triangulation and global bundle adjustment."),
+        ("DENSE GEOMETRY", "OpenMVS PatchMatch at full keyframe resolution. Geometric-"
+                           "consistency filtering across three or more views also "
+                           "rejects moving vehicles, people and animals."),
+        ("SURFACE + FRAME", "Delaunay and graph-cut mesh with per-vertex colour. "
+                            "Vertical from the ground plane, cross-checked against the "
+                            "gimbal's roll-zero constraint."),
+        ("EXPORT + VIEW", "OBJ, PLY, LAS 1.4, GeoTIFF DSM, glB/glTF and FBX in one "
+                          "shared ENU frame. Browser viewer built for measurement."),
     ]
-    x = 0.45
+    gap = 0.34
+    cw = (SPAN(12) - (len(stages) - 1) * gap) / len(stages)
     for i, (t, b) in enumerate(stages):
-        flow_box(s3, x, 1.50, 2.29, 1.66, i + 1, t, b)
-        if i < 4:
-            arrow(s3, x + 2.33, 2.23)
-        x += 2.53
-    for i, (lab, side) in enumerate((("IN", 0.45), ("OUT", 12.18))):
-        textbox(s3, side - 0.02, 3.19, 0.7, 0.24,
-                [{"text": lab, "size": 7.5, "bold": True, "colour": GREY}])
+        x = X(0) + i * (cw + gap)
+        hair(s3, x, 1.78, cw, NAVY, weight=0.013)
+        textbox(s3, x, 1.86, cw, 0.22, [
+            {"text": [{"text": f"{i+1:02d}   ", "size": 7.6, "bold": True,
+                       "colour": FAINT, "font": MONO},
+                      {"text": t, "size": 8.8, "bold": True, "colour": INK,
+                       "font": SEMI}]}])
+        textbox(s3, x, 2.12, cw, 1.00,
+                [{"text": b, "size": 7.8, "colour": MUTED}], line=1.16)
+        if i < len(stages) - 1:
+            textbox(s3, x + cw, 1.84, gap, 0.24, [
+                {"text": "→", "size": 10, "colour": FAINT,
+                 "align": PP_ALIGN.CENTER}])
 
-    textbox(s3, 0.45, 3.56, 7.55, 0.3, [
-        {"text": "Technology stack", "size": 12, "bold": True, "colour": BLUE}])
+    hair(s3, X(0), 3.30, SPAN(12))
+
+    eyebrow(s3, X(0), 3.42, SPAN(7), "technology stack")
     groups = [
         ("Vision / 3D", ("PyTorch", "MapAnything", "COLMAP", "OpenMVS", "Open3D",
                          "OpenCV")),
@@ -444,208 +635,286 @@ def build():
         ("Serve", ("Python 3.11", "Docker", "Cloud Run · asia-south1", "GCS",
                    "three.js")),
     ]
-    y = 3.90
-    for lab, items in groups:
-        textbox(s3, 0.45, y + 0.04, 1.05, 0.3,
-                [{"text": lab, "size": 8.6, "bold": True, "colour": GREY}])
-        gx = 1.52
-        for it in items:
-            w = 0.20 + 0.072 * len(it)
-            pill(s3, gx, y, w, 0.30, it, BLUE, LIGHT, size=8)
-            gx += w + 0.09
-        y += 0.44
+    for i, (lab, items) in enumerate(groups):
+        y = 3.66 + i * 0.30
+        textbox(s3, X(0), y, 1.10, 0.22,
+                [{"text": lab, "size": th.T_MICRO, "bold": True, "colour": FAINT,
+                  "font": SEMI}])
+        textbox(s3, X(0) + 1.16, y - 0.01, SPAN(7) - 1.16, 0.24,
+                [{"text": inline(items, size=8.4)}])
 
-    band(s3, 8.22, 3.56, 4.63, 3.20, fill=WARM, edge=ORANGE)
-    textbox(s3, 8.40, 3.64, 4.3, 3.05, [
-        {"text": "Four choices we can defend", "size": 11.5, "bold": True,
-         "colour": ORANGE},
-        {"text": [{"text": "Licence, not leaderboard.  ", "size": 9.2, "bold": True},
-                  {"text": "VGGT is the better-known model. Its acceptable-use policy "
-                           "bars military and espionage use — which this PS names. "
-                           "MapAnything's Apache-2.0 checkpoint does not.",
-                   "size": 9.2}], "space": 7},
-        {"text": [{"text": "Sovereign by construction.  ", "size": 9.2, "bold": True},
-                  {"text": "All processing pinned to asia-south1: India's geospatial "
-                           "guidelines require finer-than-1 m data to be processed "
-                           "within India, and this PS targets ≤ 1 m.", "size": 9.2}],
-         "space": 6},
-        {"text": [{"text": "No GPU floor.  ", "size": 9.2, "bold": True},
-                  {"text": "Every component is permissive and runs on CPU. GPU is a "
-                           "speed upgrade, never a dependency for getting a result.",
-                   "size": 9.2}], "space": 6},
-        {"text": [{"text": "Honest by construction.  ", "size": 9.2, "bold": True},
-                  {"text": "With no GNSS in a clip the DEM ships with a real "
-                           "geotransform in metres and no CRS at all, rather than a "
-                           "plausible-looking wrong one that downstream GIS would "
-                           "silently reproject.", "size": 9.2}], "space": 6},
-    ], line=0.96)
+    hair(s3, X(0), 4.62, SPAN(7))
+    s3.shapes.add_picture(f"{FIG}/fig_timing.png", Inches(X(0)), Inches(4.76),
+                          width=Inches(SPAN(7)))
 
-    s3.shapes.add_picture(f"{FIG}/fig_timing.png", Inches(0.45), Inches(5.28),
-                          width=Inches(7.50))
+    eyebrow(s3, X(7), 3.42, SPAN(5), "four choices we can defend", colour=RUST)
+    choices = [
+        ("Licence, not leaderboard",
+         "VGGT is the better-known model. Its acceptable-use policy bars military and "
+         "espionage use, which this PS names. MapAnything's Apache-2.0 checkpoint does "
+         "not."),
+        ("Sovereign by construction",
+         "All processing pinned to asia-south1: India's geospatial guidelines require "
+         "finer-than-1 m data to be processed within India, and this PS targets ≤ 1 m."),
+        ("No GPU floor",
+         "Every component is permissive and runs on CPU. GPU is a speed upgrade, never "
+         "a dependency for getting a result."),
+        ("Honest by construction",
+         "With no GNSS in a clip the DEM ships with a real geotransform in metres and "
+         "no CRS at all, rather than a plausible-looking wrong one that downstream GIS "
+         "would silently reproject."),
+    ]
+    y = 3.66
+    for i, (head, body) in enumerate(choices):
+        if i:
+            hair(s3, X(7), y - 0.11, SPAN(5))
+        textbox(s3, X(7), y, SPAN(5), 0.20,
+                [{"text": head, "size": 8.8, "bold": True, "colour": NAVY,
+                  "font": SEMI}])
+        textbox(s3, X(7), y + 0.19, SPAN(5), 0.50,
+                [{"text": body, "size": 8.2, "colour": MUTED}], line=1.16)
+        y += 0.80
 
     # ------------------------------------------------------ 4 · feasibility, risks
-    shape(s4, "TextBox 8")._element.getparent().remove(shape(s4, "TextBox 8")._element)
-    textbox(s4, 0.45, 1.10, 12.4, 0.32, [
-        {"text": [{"text": "Scored against the PS's own six desired outputs.  ",
-                   "size": 12.5, "bold": True, "colour": BLUE},
-                  {"text": "Four met and measured, two open and named.",
-                   "size": 11, "colour": INK}]}])
+    # The PS names its own eight key challenges and, in the linked PDF, its own weighted
+    # scoring function. Both are quoted here rather than paraphrased: answering NTRO in
+    # NTRO's own vocabulary is the cheapest possible demonstration that we read the
+    # problem statement, and the weights say plainly where the marks actually are.
+    # The three prescribed pointers are the two column headings below, so the corner
+    # caption is dropped on this slide to avoid printing the same words twice.
+    pts4 = header(s4, [{"text": [
+        {"text": "70% of NTRO's score is objectively measurable. ", "size": th.T_STATE,
+         "bold": True, "colour": INK, "font": SEMI},
+        {"text": "We report all three measured, misses included.",
+         "size": th.T_STATE, "colour": MUTED}]}], keep=())
 
-    targets = [
-        ("y", "3D mesh or point cloud",
-         f'{m["triangles"]/1e6:.2f} M triangles · {m["dense_points"]/1e6:.2f} M points',
-         "every point triangulated from real pixels"),
-        ("y", "Six output formats",
-         "OBJ · PLY · LAS 1.4 · GeoTIFF · glB/glTF · FBX",
-         "all written and read back in one shared frame"),
-        ("y", "Coverage of the visible scene",
-         f'{m["coverage"]:.0%} of the AI-only baseline',
-         "on the survey clip; it declines to invent unmatched ground"),
-        ("y", "Web or desktop visualisation",
-         "browser viewer, with measurement",
-         "runs straight off the exported model"),
-        ("n", "Processing < 15 min for a 10-min video",
-         f'{hms(m["seconds"])} for {m["n_views"]} views on 8 vCPU',
-         "GPU PatchMatch + keyframe budgeting; CPU fan-out already measured at 1.42×"),
-        ("n", "Spatial accuracy ≤ 1 m, georeferenced",
-         "unvalidated — no GNSS in either test clip",
-         "RTK/PPK dataset with surveyed check points; CRS left empty, never faked"),
+    # ---- pointers 2 and 3: challenges, and the strategy for each
+    eyebrow(s4, X(0), 1.70, SPAN(7), pts4[1] + " · " + pts4[2], colour=NAVY)
+    hair(s4, X(0), 1.92, SPAN(7), C(th.RULE_STRONG))
+    challenges = [
+        ("i", "Limited viewing angles, single flight path",
+         "MVS along one trajectory; coverage measured, not assumed", False),
+        ("ii", "Motion blur and compression artefacts",
+         "adaptive keyframing drops degraded frames before pose is solved", False),
+        ("iii", "Variable illumination and shadows",
+         "keyframe scoring survives exposure ramps; per-vertex colour, no atlas seams",
+         False),
+        ("iv", "Dynamic objects: vehicles, humans, animals",
+         "geometric-consistency filtering across ≥ 3 views rejects them", False),
+        ("v", "GPS inaccuracies and sensor noise",
+         "GPS is a prior, never a constraint; bundle adjustment re-solves pose", False),
+        ("vi", "Real-time or near-real-time processing",
+         "OPEN: 34m 38s on CPU vs < 15 min; GPU MVS and keyframe budgeting close it",
+         True),
+        ("vii", "Reconstruction of occluded surfaces",
+         "bounded geometric closure only, and every inferred face is tagged inferred",
+         False),
+        ("viii", "Metric accuracy without extensive GCPs",
+         "zero GCPs by design; scale from the AI prior; absolute accuracy unvalidated",
+         True),
     ]
-    y = 1.52
-    for i, (st, target, measured, note) in enumerate(targets):
-        met = st == "y"
-        band(s4, 0.45, y, 12.4, 0.40,
-             fill=PAPER if met else WARM, edge=RULE if met else ORANGE)
-        dot(s4, 0.75, y + 0.20, 0.22, GREEN if met else ORANGE, "✓" if met else "!")
-        textbox(s4, 0.98, y + 0.07, 3.35, 0.3,
-                [{"text": target, "size": 9.6, "bold": True, "colour": INK}])
-        textbox(s4, 4.40, y + 0.07, 3.55, 0.3,
-                [{"text": measured, "size": 9.4,
-                  "colour": GREEN if met else ORANGE, "bold": True}])
-        textbox(s4, 8.05, y + 0.08, 4.72, 0.3,
-                [{"text": note, "size": 8.6, "colour": GREY}])
-        y += 0.46
+    y = 1.99
+    for num, chal, fix, open_ in challenges:
+        col = RUST if open_ else NAVY
+        textbox(s4, X(0), y + 0.015, 0.34, 0.22,
+                [{"text": f"({num})", "size": 6.8, "colour": FAINT, "font": MONO}])
+        textbox(s4, X(0) + 0.36, y, 2.46, 0.24,
+                [{"text": chal, "size": 8.2, "bold": True, "colour": INK,
+                  "font": SEMI}], line=1.06)
+        textbox(s4, X(0) + 2.92, y, SPAN(7) - 2.92, 0.26,
+                [{"text": fix, "size": 8.0, "colour": col}], line=1.08)
+        y += 0.29
+        hair(s4, X(0), y - 0.045, SPAN(7))
 
-    # Caption above the chart, not below: the chart is 2.4:1, and anything underneath it
-    # lands in the footer bar.
-    textbox(s4, 0.45, 4.34, 5.85, 0.30, [
-        {"text": [{"text": "Why the accuracy claim holds.  ", "size": 9.4,
-                   "bold": True, "colour": ORANGE},
-                  {"text": "The old curve flattens into a floor; the rebuilt one keeps "
-                           "a constant slope. Both meet at 1 m, as they must.",
-                   "size": 8.8, "colour": GREY}]}], line=0.93)
-    s4.shapes.add_picture(f"{FIG}/fig_accuracy.png", Inches(0.45), Inches(4.64),
-                          width=Inches(5.40))
-
-    textbox(s4, 6.62, 4.42, 6.23, 0.3, [
-        {"text": "Other risks, and the strategy for each", "size": 11.5, "bold": True,
-         "colour": ORANGE}])
-    others = [
-        ("Facades from a nadir pass", "physically unobservable straight down",
-         "handle oblique passes natively; bound the inference and mark inferred "
-         "surface as inferred, never as measured"),
-        ("Dataset schema unknown until the event",
-         "the PS says the link is provided in real time",
-         "auto-detecting ingest across SRT / CSV / EXIF / flight log, and self-"
-         "calibration when intrinsics are absent — already exercised on two clips"),
-        ("OpenMVS is AGPL-3.0", "a deployment licence question, not a technical one",
-         "invoked as a separate unmodified process, so our code is not a derived work; "
-         "a BSD GPU replacement for that one stage is the clean answer"),
-        ("Moving vehicles, people, animals", "they corrupt a naive reconstruction",
-         "geometric-consistency filtering across ≥ 3 views rejects them by "
-         "construction — nothing extra to build"),
+    # ---- pointer 1: analysis of the feasibility of the idea
+    eyebrow(s4, X(7), 1.70, SPAN(5), pts4[0], colour=NAVY)
+    hair(s4, X(7), 1.92, SPAN(5), C(th.RULE_STRONG))
+    criteria = [
+        ("Reconstruction Accuracy", "30%",
+         f'{m["reproj_ba"]:.2f} px reprojection after bundle adjustment; ≤ 1 m absolute '
+         f'still unvalidated, no GNSS in either clip', True),
+        ("Model Completeness", "20%",
+         f'{m["coverage"]:.0%} of the AI-only baseline\'s ground coverage', False),
+        ("Processing Speed", "20%",
+         f'{hms(m["seconds"])} for {m["n_views"]} views on 8 vCPU, against < 15 min',
+         True),
+        ("Innovation", "15%",
+         "the patch-grid ceiling measured rather than assumed; the AI is a pose and "
+         "scale prior only", False),
+        ("Scalability", "10%",
+         "CPU-only and containerised; fan-out measured at 1.42×", False),
+        ("User Interface", "5%",
+         "browser viewer built for measurement, not display", False),
     ]
-    y = 4.78
-    for head, state, fix in others:
-        textbox(s4, 6.62, y, 6.23, 0.5, [
-            {"text": [{"text": "▸ " + head + "  ", "size": 9.2, "bold": True,
-                       "colour": INK},
-                      {"text": state, "size": 8.6, "colour": GREY}]},
-            {"text": [{"text": "→ ", "size": 8.6, "bold": True, "colour": BLUE},
-                      {"text": fix, "size": 8.6, "colour": BLUE}], "space": 1}],
-            line=0.92)
-        y += 0.52
+    y = 1.99
+    for name, wt, standing, open_ in criteria:
+        col = RUST if open_ else NAVY
+        keyline(s4, X(7), y + 0.01, 0.22, col)
+        textbox(s4, X(7) + 0.14, y, SPAN(5) - 0.80, 0.22,
+                [{"text": name, "size": 8.4, "bold": True, "colour": INK,
+                  "font": SEMI}])
+        textbox(s4, X(7) + SPAN(5) - 0.62, y, 0.62, 0.22,
+                [{"text": wt, "size": 8.8, "bold": True, "colour": col, "font": MONO,
+                  "align": PP_ALIGN.RIGHT}])
+        textbox(s4, X(7) + 0.14, y + 0.18, SPAN(5) - 0.14, 0.28,
+                [{"text": standing, "size": 7.6, "colour": MUTED}], line=1.08)
+        y += 0.40
+        hair(s4, X(7), y - 0.055, SPAN(5))
+
+    hair(s4, X(0), 4.52, SPAN(12), C(th.RULE_STRONG))
+
+    # Caption above the chart, not below: the chart is wide and flat, and anything
+    # underneath it lands in the footer bar.
+    textbox(s4, X(0), 4.64, SPAN(7), 0.24, [
+        {"text": [{"text": "Why the 30% criterion is winnable.  ", "size": 8.8,
+                   "bold": True, "colour": INK, "font": SEMI},
+                  {"text": "The feed-forward curve flattens into a floor and stops; "
+                           "ours holds its slope.", "size": 8.4, "colour": MUTED}]}])
+    s4.shapes.add_picture(f"{FIG}/fig_accuracy.png", Inches(X(0)), Inches(4.88),
+                          width=Inches(SPAN(7)))
+
+    eyebrow(s4, X(7), 4.64, SPAN(5), "desired output, per the PS's own table",
+            colour=NAVY)
+    outputs = [
+        ("Reconstruction Type", "3D Mesh / Point Cloud", "MET"),
+        ("Processing Time", "< 15 min for 10-min video", "OPEN"),
+        ("Spatial Accuracy", "≤ 1 m", "OPEN"),
+        ("Coverage", "Entire visible scene", "MET"),
+        ("Output Formats", "OBJ · PLY · LAS · GeoTIFF · glb/gltf · fbx",
+         f'{m["formats_have"]}/{m["formats_need"]}'),
+        ("Visualization", "Web-based or Desktop Viewer", "MET"),
+    ]
+    y = 4.88
+    for param, target, status in outputs:
+        col = RUST if status == "OPEN" else NAVY
+        textbox(s4, X(7), y, 1.50, 0.22,
+                [{"text": param, "size": 7.8, "bold": True, "colour": INK,
+                  "font": SEMI}])
+        textbox(s4, X(7) + 1.54, y + 0.01, SPAN(5) - 2.20, 0.22,
+                [{"text": target, "size": 7.4, "colour": MUTED, "font": MONO}])
+        textbox(s4, X(7) + SPAN(5) - 0.60, y + 0.01, 0.60, 0.22,
+                [{"text": status, "size": 6.8, "bold": True, "colour": col,
+                  "font": MONO, "spc": 50, "align": PP_ALIGN.RIGHT}])
+        y += 0.28
+        hair(s4, X(7), y - 0.05, SPAN(5))
+
+    textbox(s4, X(7), y + 0.06, SPAN(5), 0.30, [
+        {"text": [{"text": "Both open targets carry a route, not a hope.  ", "size": 7.8,
+                   "bold": True, "colour": RUST, "font": SEMI},
+                  {"text": "GPU PatchMatch plus keyframe budgeting for speed; an "
+                           "RTK/PPK clip with surveyed check points for accuracy.",
+                   "size": 7.8, "colour": MUTED}]}], line=1.10)
 
     # ------------------------------------------------------- 5 · impact and benefits
-    shape(s5, "TextBox 8")._element.getparent().remove(shape(s5, "TextBox 8")._element)
-    textbox(s5, 0.45, 1.10, 6.32, 0.32, [
-        {"text": "What changes for the operator", "size": 12.5, "bold": True,
-         "colour": BLUE}])
-    s5.shapes.add_picture(f"{FIG}/fig_missions.png", Inches(0.45), Inches(1.42),
-                          width=Inches(6.32))
-    textbox(s5, 0.45, 3.78, 6.32, 0.32, [
-        {"text": "A 3D model stops costing a planned survey and starts costing one "
-                 "flight line.", "size": 9.4, "bold": True, "colour": INK,
-         "align": PP_ALIGN.CENTER}])
+    # The statement is the PS's own claim for why this matters, quoted back: it names
+    # mission time, operator effort, data acquisition and processing complexity, and
+    # near real-time situational awareness. Our job on this slide is to show which of
+    # those we can already put a measured number against.
+    header(s5, [{"text": "The PS's own four: less mission time, operator effort, data "
+                         "acquisition, processing complexity.", "size": th.T_STATE,
+                 "bold": True, "colour": INK, "font": SEMI}])
 
-    textbox(s5, 7.02, 1.10, 5.83, 0.32, [
-        {"text": "Where it is used — the PS's own applications", "size": 12.5,
-         "bold": True, "colour": BLUE}])
-    apps = ("Border + strategic\narea mapping", "Military reconnaissance\n+ mission "
-            "planning", "Disaster damage\nassessment", "Infrastructure\ninspection",
-            "Urban planning\n+ smart cities", "Construction\nprogress monitoring",
-            "Archaeological\ndocumentation", "Digital twin\ngeneration")
-    for i, t in enumerate(apps):
-        gx = 7.02 + (i % 4) * 1.48
-        gy = 1.46 + (i // 4) * 0.66
-        pill(s5, gx, gy, 1.40, 0.58, t, BLUE,
-             WARM if i < 3 else LIGHT, size=7.4)
-    textbox(s5, 7.02, 2.82, 5.83, 0.3, [
-        {"text": "shaded: the three NTRO named first", "size": 7.6, "colour": GREY}])
+    s5.shapes.add_picture(f"{FIG}/fig_missions.png", Inches(X(0)), Inches(1.74),
+                          width=Inches(SPAN(6)))
+    textbox(s5, X(0), 1.74 + th.FIG["missions"][1] + 0.08, SPAN(6), 0.24, [
+        {"text": "Same ground, same product. The left plan is what a metrically "
+                 "accurate model costs today.", "size": th.T_MICRO, "colour": MUTED}])
 
-    textbox(s5, 7.02, 3.14, 5.83, 0.3, [
-        {"text": "Benefits", "size": 12, "bold": True, "colour": BLUE}])
+    # All eight, in the PS's own order. An earlier version shaded three as "the ones
+    # NTRO named first" and picked the wrong three: military reconnaissance is (viii),
+    # last, not first. Position in a list is not priority, so the claim is gone rather
+    # than corrected.
+    eyebrow(s5, X(6), 1.74, SPAN(6),
+            "potential applications · all eight, in the PS's own order")
+    apps = ("Border and strategic area mapping", "Construction progress monitoring",
+            "Disaster damage assessment", "Archaeological documentation",
+            "Urban planning and smart cities", "Digital twin generation",
+            "Infrastructure inspection", "Military reconnaissance, mission planning")
+    nums = ("i", "v", "ii", "vi", "iii", "vii", "iv", "viii")
+    for i, (t, n) in enumerate(zip(apps, nums)):
+        ax = X(6) + (i % 2) * 3.14
+        ay = 1.98 + (i // 2) * 0.25
+        textbox(s5, ax, ay + 0.012, 0.40, 0.22,
+                [{"text": f"({n})", "size": 6.6, "colour": FAINT, "font": MONO}])
+        textbox(s5, ax + 0.40, ay, 2.70, 0.22,
+                [{"text": t, "size": 8.2, "colour": INK}])
+
+    hair(s5, X(6), 3.06, SPAN(6))
+    eyebrow(s5, X(6), 3.18, SPAN(6), "benefits")
+    # One line each, deliberately. At two lines they ran together into a paragraph and
+    # the three headings stopped being findable.
     for i, (lab, txt) in enumerate((
-            ("Economic", "permissive open source on commodity cloud CPU — no per-seat "
-                         "photogrammetry licence, no proprietary SDK"),
-            ("Strategic", "processing stays in India by construction; the model was "
-                          "chosen against acceptable-use terms, not benchmarks"),
-            ("Operational", "less air time and less operator effort per target; output "
-                            "feeds existing GIS and 3D tooling directly"))):
-        textbox(s5, 7.02, 3.46 + i * 0.44, 5.83, 0.42, [
-            {"text": [{"text": lab + ":  ", "size": 9.2, "bold": True,
-                       "colour": ORANGE},
-                      {"text": txt, "size": 9.2, "colour": INK}]}], line=0.93)
+            ("Economic", "permissive open source on commodity cloud CPU: no per-seat "
+                         "photogrammetry licence"),
+            ("Strategic", "processing stays in India by construction; the model chosen "
+                          "on licence terms, not benchmarks"),
+            ("Operational", "one flight line instead of a planned grid, and no GCP "
+                            "survey to organise"))):
+        textbox(s5, X(6) + 0.86, 3.40 + i * 0.30, SPAN(6) - 0.86, 0.26,
+                [{"text": txt, "size": 8.6, "colour": INK}], line=1.10)
+        textbox(s5, X(6), 3.40 + i * 0.30, 0.84, 0.26,
+                [{"text": lab, "size": 8.6, "bold": True, "colour": NAVY,
+                  "font": SEMI}], line=1.10)
 
-    rule(s5, 0.45, 4.86, 12.4)
-    textbox(s5, 0.45, 4.96, 12.4, 0.3, [
-        {"text": "Measured benefit, on the two clips we have run", "size": 12,
-         "bold": True, "colour": BLUE}])
-    for i, (h, sub_t) in enumerate((
-            (f'{m["gain_lo"]:.1f}–{m["gain_hi"]:.1f}×',
-             "finer detail at 6 cm scale,\non two unrelated clips"),
-            (f'{m["relief_base"]:.2f} → {m["relief_mvs"]:.2f} m',
-             "vertical structure ceiling;\nbuildings stop being paint"),
-            (f'{m["coverage"]:.0%}',
-             "of the AI-only baseline's\nground coverage"),
-            (f'{m["reproj_gain"]:.1f}×',
-             "reprojection error improved\nby bundle adjustment"))):
-        chip(s5, 0.45 + i * 3.13, 5.30, 3.00, 1.10, h, sub_t)
+    textbox(s5, X(6), 4.34, SPAN(6), 0.26, [
+        {"text": [{"text": "Near real-time situational awareness ", "size": 8.2,
+                   "bold": True, "colour": RUST, "font": SEMI},
+                  {"text": "is the PS's fifth benefit, and the one we cannot claim yet.",
+                   "size": 8.2, "colour": MUTED}]}])
 
-    textbox(s5, 0.45, 6.48, 12.4, 0.35, [
-        {"text": [{"text": "Not claimed:  ", "size": 9.2, "bold": True,
-                   "colour": ORANGE},
-                  {"text": f"≤ 1 m absolute accuracy is unproven on our clips (no "
-                           f"GNSS), and the 15-minute budget is not met on CPU. We "
-                           f"would rather bring NTRO a measured "
+    hair(s5, X(0), 4.72, SPAN(12))
+    eyebrow(s5, X(0), 4.84, SPAN(12), "measured benefit, on the two clips we have run")
+    cells = ((f'{m["gain_lo"]:.1f}–{m["gain_hi"]:.1f}×',
+              "finer detail at 6 cm scale,\non two unrelated clips"),
+             (f'{m["relief_base"]:.2f} → {m["relief_mvs"]:.2f} m',
+              "vertical structure ceiling;\nbuildings stop being paint"),
+             (f'{m["coverage"]:.0%}',
+              "of the AI-only baseline's\nground coverage"),
+             (f'{m["reproj_gain"]:.1f}×',
+              "reprojection error improved\nby bundle adjustment"))
+    cw = SPAN(12) / len(cells)
+    for i, (h, sub_t) in enumerate(cells):
+        metric(s5, X(0) + i * cw, 5.10, cw - 0.20, h, sub_t)
+        if i:
+            vhair(s5, X(0) + i * cw - 0.10, 5.10, 0.66)
+
+    hair(s5, X(0), 6.02, SPAN(12))
+    textbox(s5, X(0), 6.14, SPAN(12), 0.36, [
+        {"text": [{"text": "Not claimed   ", "size": 9.0, "bold": True, "colour": RUST,
+                   "font": SEMI},
+                  {"text": f"≤ 1 m absolute accuracy is unproven on our clips, which "
+                           f"carry no GNSS, and the 15-minute budget is not met on CPU. "
+                           f"We would rather bring NTRO a measured "
                            f"{int(m['seconds'] // 60)} minutes than a claimed 12.",
-                   "size": 9.2, "colour": GREY}]}], line=0.93)
+                   "size": 9.0, "colour": MUTED}]}], line=1.12)
 
     # -------------------------------------------------- 6 · research and references
-    shape(s6, "TextBox 8")._element.getparent().remove(shape(s6, "TextBox 8")._element)
-    textbox(s6, 0.45, 1.08, 12.4, 0.32, [
-        {"text": [{"text": "Existing approaches, scored against what this PS actually "
-                           "needs.  ", "size": 12.5, "bold": True, "colour": BLUE},
-                  {"text": "This is why the two-model split exists.",
-                   "size": 11, "colour": INK}]}])
+    header(s6, [{"text": [{"text": "Existing approaches, scored against what this PS "
+                                   "actually needs. ", "size": th.T_STATE,
+                           "bold": True, "colour": INK, "font": SEMI},
+                          {"text": "This is why the two-model split exists.",
+                           "size": th.T_STATE, "colour": MUTED}]}])
 
+    namew = 3.05
+    cw = (SPAN(12) - namew) / 5
     cols = ("pose from a\nsingle pass", "metric scale\nwithout GCPs",
             "detail below\n10 cm", "GIS-ready\nexports", "licence clear\nfor NTRO")
-    x0, cw, roww = 0.45, 1.86, 3.10
     for j, c in enumerate(cols):
-        textbox(s6, x0 + roww + j * cw, 1.44, cw, 0.42,
-                [{"text": c, "size": 8.4, "bold": True, "colour": GREY,
-                  "align": PP_ALIGN.CENTER}], line=0.9)
+        textbox(s6, X(0) + namew + j * cw, 1.72, cw, 0.34,
+                [{"text": c, "size": 7.4, "bold": True, "colour": FAINT, "font": SEMI,
+                  "align": PP_ALIGN.CENTER}], line=1.10)
+    # The key goes in the name column's header space, which is otherwise empty. Each
+    # label takes its own colour, so the traffic light is defined on the slide rather
+    # than assumed - six of the twenty-five cells carry no note to fall back on.
+    for j, (kind, lab) in enumerate(((MARK_YES, "meets it"), (MARK_PART, "partly"),
+                                     (MARK_NO, "does not"))):
+        kx = X(0) + j * 1.02
+        markdisc(s6, kx + 0.06, 1.83, kind, d=0.105)
+        textbox(s6, kx + 0.18, 1.76, 0.84, 0.20,
+                [{"text": lab, "size": 6.8, "bold": True, "font": SEMI,
+                  "colour": MARK_COLOUR[kind]}])
+    hair(s6, X(0), 2.06, SPAN(12), C(th.RULE_STRONG))
+
     rows = [
         ("Classical SfM + MVS", "COLMAP, OpenMVS alone",
          [("p", "thin strip, low overlap"), ("n", "needs GCPs or RTK"),
@@ -664,67 +933,81 @@ def build():
          [("y", ""), ("y", ""), ("y", f'{m["finest_mm"]:.1f} mm measured'),
           ("y", "all six formats"), ("y", "Apache-2.0 / BSD")]),
     ]
-    y = 1.94
+    y = 2.14
     for i, (name, sub_t, marks) in enumerate(rows):
         last = i == len(rows) - 1
-        band(s6, x0, y, roww + 5 * cw, 0.62, fill=WARM if last else PAPER,
-             edge=ORANGE if last else RULE)
-        textbox(s6, x0 + 0.12, y + 0.06, roww - 0.2, 0.5, [
-            {"text": name, "size": 9.4, "bold": True,
-             "colour": ORANGE if last else INK},
-            {"text": sub_t, "size": 7.4, "colour": GREY}], line=0.9)
+        if last:
+            keyline(s6, X(0), y - 0.02, 0.50, NAVY)
+        textbox(s6, X(0) + (0.14 if last else 0.0), y, namew - 0.20, 0.22,
+                [{"text": name, "size": 9.0, "bold": True,
+                  "colour": NAVY if last else INK, "font": SEMI}])
+        textbox(s6, X(0) + (0.14 if last else 0.0), y + 0.19, namew - 0.20, 0.22,
+                [{"text": sub_t, "size": 7.2, "colour": FAINT}], line=1.10)
         for j, (kind, note) in enumerate(marks):
-            mark(s6, x0 + roww + j * cw + cw / 2, y + 0.17, kind, note, w=cw - 0.1)
-        y += 0.68
+            ccx = X(0) + namew + j * cw + cw / 2
+            markdisc(s6, ccx, y + 0.08, kind)
+            if note:
+                textbox(s6, ccx - cw / 2 + 0.05, y + 0.21, cw - 0.10, 0.30,
+                        [{"text": note, "size": 6.8, "colour": MUTED,
+                          "align": PP_ALIGN.CENTER}], line=1.08)
+        y += 0.56
+        if not last:
+            hair(s6, X(0), y - 0.06, SPAN(12))
 
-    textbox(s6, 0.45, 5.46, 6.15, 0.3, [
-        {"text": "Methods and models", "size": 11.5, "bold": True, "colour": BLUE}])
-    textbox(s6, 0.45, 5.76, 6.15, 1.15, [
-        {"text": [{"text": "MapAnything", "size": 8.8, "bold": True},
-                  {"text": " — Meta AI, 2025 · Apache-2.0.  ", "size": 8.6},
-                  {"text": "COLMAP", "size": 8.8, "bold": True},
-                  {"text": " — Schönberger & Frahm, CVPR 2016.  ", "size": 8.6},
-                  {"text": "OpenMVS 2.4.0", "size": 8.8, "bold": True},
-                  {"text": " — PatchMatch MVS + Delaunay/graph-cut meshing.  ",
-                   "size": 8.6},
-                  {"text": "DINOv2", "size": 8.8, "bold": True},
-                  {"text": " — Oquab et al., TMLR 2024; the patch-14 backbone whose "
-                           "grid is the ceiling we measured.  ", "size": 8.6},
-                  {"text": "PatchMatch Stereo", "size": 8.8, "bold": True},
-                  {"text": " — Bleyer et al., BMVC 2011; Schönberger et al., ECCV 2016.  ",
-                   "size": 8.6},
-                  {"text": "VGGT", "size": 8.8, "bold": True},
-                  {"text": " — Wang et al., CVPR 2025; evaluated, rejected on licence.",
-                   "size": 8.6}]}], line=0.95)
+    hair(s6, X(0), 4.96, SPAN(12), C(th.RULE_STRONG))
+    eyebrow(s6, X(0), 5.08, SPAN(6), "methods and models")
+    textbox(s6, X(0), 5.30, SPAN(6), 1.50, [
+        {"text": [{"text": "MapAnything", "size": 8.4, "bold": True, "font": SEMI},
+                  {"text": ": Meta AI, 2025 · Apache-2.0.   ", "size": 8.2,
+                   "colour": MUTED},
+                  {"text": "COLMAP", "size": 8.4, "bold": True, "font": SEMI},
+                  {"text": ": Schönberger & Frahm, CVPR 2016.   ", "size": 8.2,
+                   "colour": MUTED},
+                  {"text": "OpenMVS 2.4.0", "size": 8.4, "bold": True, "font": SEMI},
+                  {"text": ": PatchMatch MVS with Delaunay/graph-cut meshing.   ",
+                   "size": 8.2, "colour": MUTED},
+                  {"text": "DINOv2", "size": 8.4, "bold": True, "font": SEMI},
+                  {"text": ": Oquab et al., TMLR 2024; the patch-14 backbone whose "
+                           "grid is the ceiling we measured.   ", "size": 8.2,
+                   "colour": MUTED},
+                  {"text": "PatchMatch Stereo", "size": 8.4, "bold": True,
+                   "font": SEMI},
+                  {"text": ": Bleyer et al., BMVC 2011; Schönberger et al., ECCV "
+                           "2016.   ", "size": 8.2, "colour": MUTED},
+                  {"text": "VGGT", "size": 8.4, "bold": True, "font": SEMI},
+                  {"text": ": Wang et al., CVPR 2025; evaluated, rejected on licence.",
+                   "size": 8.2, "colour": MUTED}]}], line=1.18)
 
-    textbox(s6, 6.90, 5.46, 5.95, 0.3, [
-        {"text": "Standards, policy, and our own record", "size": 11.5, "bold": True,
-         "colour": BLUE}])
-    textbox(s6, 6.90, 5.76, 5.95, 1.15, [
-        {"text": [{"text": "Geospatial Data Guidelines, DST 2021", "size": 8.8,
-                   "bold": True},
-                  {"text": " and the National Geospatial Policy 2022 — why processing "
-                           "is pinned to an Indian region.  ", "size": 8.6},
-                  {"text": "ASPRS LAS 1.4", "size": 8.8, "bold": True},
-                  {"text": " pf3 and ", "size": 8.6},
-                  {"text": "Khronos glTF 2.0", "size": 8.8, "bold": True},
-                  {"text": " — both validated on write.", "size": 8.6}]},
-        {"text": [{"text": "Our record: ", "size": 8.8, "bold": True,
-                   "colour": ORANGE},
+    eyebrow(s6, X(6), 5.08, SPAN(6), "standards, policy, and our own record")
+    textbox(s6, X(6), 5.30, SPAN(6), 1.50, [
+        {"text": [{"text": "Geospatial Data Guidelines, DST 2021", "size": 8.4,
+                   "bold": True, "font": SEMI},
+                  {"text": " and the National Geospatial Policy 2022: why processing "
+                           "is pinned to an Indian region.   ", "size": 8.2,
+                   "colour": MUTED},
+                  {"text": "ASPRS LAS 1.4", "size": 8.4, "bold": True, "font": SEMI},
+                  {"text": " pf3 and ", "size": 8.2, "colour": MUTED},
+                  {"text": "Khronos glTF 2.0", "size": 8.4, "bold": True,
+                   "font": SEMI},
+                  {"text": ": both validated on write.", "size": 8.2,
+                   "colour": MUTED}]},
+        {"text": [{"text": "Our record   ", "size": 8.4, "bold": True, "colour": NAVY,
+                   "font": SEMI},
                   {"text": "an SRS baselined line-by-line against the PS PDF, plus "
                            "architecture, test plan, a quality analysis that diagnoses "
                            "the resolution ceiling with controls, and a deployment "
                            "study. Both charts and every headline number here are read "
-                           "at build time from the JSON the runs wrote — the build "
-                           "fails rather than print a stale figure.", "size": 8.6}],
-         "space": 4},
-        {"text": [{"text": "Note: ", "size": 8.8, "bold": True, "colour": ORANGE},
+                           "at build time from the JSON the runs wrote; the build "
+                           "fails rather than print a stale figure.", "size": 8.2,
+                   "colour": MUTED}], "space": 5},
+        {"text": [{"text": "Note   ", "size": 8.4, "bold": True, "colour": RUST,
+                   "font": SEMI},
                   {"text": "the portal listing for SIH26158 still carries the editorial "
                            "placeholder “Add 'Desired Output' and 'Evaluation Criteria' "
                            "table here”. The binding targets exist only in the linked "
                            "PDF, which we read as images and traced one by one.",
-                   "size": 8.6}], "space": 4},
-    ], line=0.95)
+                   "size": 8.2, "colour": MUTED}], "space": 5},
+    ], line=1.18)
 
     drop_slide(prs, 6)          # the template's own Important Instructions slide
     prs.save(OUT_PPTX)
