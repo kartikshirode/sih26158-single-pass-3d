@@ -1,0 +1,516 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>__TITLE__</title>
+<meta name="description" content="__DESC__">
+<meta name="robots" content="noindex, nofollow">
+<meta property="og:type" content="website">
+<meta property="og:title" content="__TITLE__">
+<meta property="og:description" content="__DESC__">
+<meta property="og:image" content="__OGIMG__">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' fill='%2306080a'/><path d='M16 4 28 26 4 26Z' fill='none' stroke='%23e8a84a' stroke-width='2.5' stroke-linejoin='round'/><path d='M16 4V26M9 15h14' stroke='%23e8a84a' stroke-width='1.2' opacity='.7'/></svg>">
+<style>__DS_CSS__
+/* ---------------------------------------------------------------------------
+   GALLERY-SPECIFIC LAYOUT. Everything above this line is tools/design_system.css,
+   inlined at build time. Only rules that are genuinely unique to this page's
+   one-screen video|3D split belong here, and every value below is a token.
+   --------------------------------------------------------------------------- */
+
+/* One screen, no page scroll: the video and the model must be visible at the
+   same instant or the comparison this page exists to make does not land. */
+html,body{height:100%}
+body{overflow:hidden; display:flex; flex-direction:column}
+.topbar,.banner,.strip{flex:none}
+
+/* Example tabs. Sits between brand and nav in the top bar. */
+.tabs{display:flex; gap:var(--sp-1); flex-wrap:wrap}
+.tabs .fail{color:var(--bad); margin-left:var(--sp-1); font-size:var(--t-xs)}
+
+.stage-row{
+  flex:1 1 auto; min-height:54vh; display:flex; gap:var(--sp-4);
+  padding:var(--sp-4) var(--sp-4) 0;
+}
+.vpane{flex:none; display:flex; flex-direction:column; min-width:0}
+.vbox{
+  flex:1; min-height:0; display:flex; align-items:center; justify-content:center;
+  background:var(--bg); border:1px solid var(--line);
+  border-radius:var(--r-md); overflow:hidden;
+}
+.vbox video{max-height:100%; width:auto; height:auto}
+.vcap{
+  flex:none; padding:var(--sp-2) 0 0; display:flex;
+  justify-content:space-between; gap:var(--sp-3);
+  font-size:var(--t-xs); color:var(--fg-3);
+}
+.vcap .hl{color:var(--fg-2)}
+.mpane{flex:1; min-width:0; border:1px solid var(--line)}
+
+/* Baseline / MVS switch. A segmented control with a second line under each
+   label, so .btn's single-line rhythm is relaxed here and only here. */
+.methods .btn{flex-direction:column; align-items:flex-start; gap:0; line-height:1.3}
+.methods .sub{font-weight:400; font-size:var(--t-xs); color:var(--fg-3); letter-spacing:.04em}
+.methods .btn[aria-current="true"] .sub{color:var(--accent)}
+
+/* Comparison table strip under the stage. */
+.strip{flex:0 1 auto; min-height:0; padding:var(--sp-3) var(--sp-4) var(--sp-4); overflow:auto}
+.table{min-width:640px}
+.table thead th.b{color:var(--bad)}
+.table thead th.m{color:var(--ok)}
+.table td{font-family:var(--mono); font-variant-numeric:tabular-nums; color:var(--fg-2)}
+.table td:first-child{font-family:var(--sans); color:var(--fg-3)}
+.table td.win{font-weight:600}
+.src{margin:var(--sp-3) 0 0; line-height:1.55}
+
+@media (max-width:900px){
+  .topbar{gap:var(--sp-3) var(--sp-4)}
+  .tabs{order:3; width:100%}
+  .sitenav{order:2}
+  /* Model first: on a phone the video is context and the geometry is the point,
+     so the thing people came to rotate must not sit below a fold. */
+  .stage-row{flex-direction:column; padding:var(--sp-3) var(--sp-3) 0; overflow-y:auto}
+  .vpane{width:auto !important; flex:none; max-height:34vh}
+  .vbox{min-height:150px}
+  .mpane{flex:1 0 auto; min-height:52vh}
+  .hud{display:none}
+  .strip{padding:var(--sp-3)}
+}
+</style>
+
+<div class="topbar">
+  <div class="brand">
+    <span class="nm">Every clip we reconstructed</span>
+    <span class="tag">SIH26158 &middot; NTRO</span>
+  </div>
+  <nav class="tabs" id="tabs" aria-label="Example"></nav>
+  <nav class="sitenav" aria-label="Pages">
+    <a href="../index.html">Walkthrough</a>
+    <a href="index.html" aria-current="page">Gallery</a>
+    <a href="../qa/index.html">Q&amp;A</a>
+  </nav>
+  <span class="replay">Replay</span>
+</div>
+
+<div class="banner">
+  <b>Real outputs, replayed.</b>
+  Each model below was reconstructed ahead of time from the clip beside it. Every number
+  on this page is read out of that run's own files. Nothing is simulated.
+</div>
+
+<div class="stage-row">
+  <div class="vpane" id="vpane">
+    <div class="vbox"><video id="vid" controls preload="metadata" playsinline muted></video></div>
+    <div class="vcap"><span id="vcapl"></span><span id="vcapr"></span></div>
+  </div>
+  <div class="mpane stage">
+    <canvas id="gl"></canvas>
+    <svg id="ovl"></svg>
+    <div class="loading" id="loading">loading geometry&hellip;</div>
+    <div class="seg methods at-tl" id="methods" role="group" aria-label="Reconstruction method"></div>
+    <div class="hud at-tr" id="hud"></div>
+    <div class="mtip" id="mtip"></div>
+    <div class="dock at-bl">
+      <button class="btn btn--sm" id="bMesh" aria-pressed="true">mesh</button>
+      <button class="btn btn--sm" id="bPts" aria-pressed="false">points</button>
+      <span class="sep"></span>
+      <button class="btn btn--sm" data-view="plan">plan</button>
+      <button class="btn btn--sm" data-view="oblique">oblique</button>
+      <button class="btn btn--sm" data-view="low">low angle</button>
+      <span class="sep"></span>
+      <button class="btn btn--sm" id="bMeasure" aria-pressed="false">measure</button>
+      <button class="btn btn--sm" id="bClear">clear</button>
+    </div>
+  </div>
+</div>
+
+<div class="strip">
+  <table class="table" id="ctable"></table>
+  <p class="src" id="srcnote"></p>
+</div>
+
+<script>
+"use strict";
+var EX = __EXAMPLES__, NOTE = __NOTE__;
+var cur = 0, curModel = 0, shownEx = -1;
+
+/* ================= WebGL ================= */
+var cv = document.getElementById('gl');
+var gl = cv.getContext('webgl2', {antialias:true, alpha:false});
+var pM, pP, uM, uP, curMVP = null, curW = 1, curH = 1;
+var az = 0.55, el = 0.80, dist = 2.6, panx = 0, pany = 0, target = null;
+var PRESETS = {plan:[0,1.5605,2.30], oblique:[0.55,0.80,2.60], low:[1.25,0.26,2.50]};
+var showMesh = true, showPts = false;
+var cache = {}, active = null;
+
+function prog(vs, fs){
+  var c = function(t, s){ var o = gl.createShader(t); gl.shaderSource(o, s);
+    gl.compileShader(o);
+    if(!gl.getShaderParameter(o, gl.COMPILE_STATUS)) console.error(gl.getShaderInfoLog(o));
+    return o; };
+  var p = gl.createProgram();
+  gl.attachShader(p, c(gl.VERTEX_SHADER, vs));
+  gl.attachShader(p, c(gl.FRAGMENT_SHADER, fs));
+  gl.linkProgram(p); return p;
+}
+/* uScale/uOffset put every model of an example into ONE metric frame, so switching
+   between the baseline and the MVS rebuild compares geometry and not normalisation. */
+var HEAD = ['#version 300 es','uniform float uScale; uniform vec3 uOffset;'].join('\n');
+var VS_M = [HEAD,
+ 'in vec3 aPos; in vec3 aCol; in vec3 aNrm; uniform mat4 uMVP;',
+ 'out vec3 vCol; out vec3 vN;',
+ 'void main(){ vCol=aCol; vN=aNrm;',
+ '  gl_Position=uMVP*vec4(aPos*uScale-uOffset,1.0); }'].join('\n');
+var FS_M = ['#version 300 es','precision highp float;',
+ 'in vec3 vCol; in vec3 vN; out vec4 o; uniform vec3 uLight;',
+ 'void main(){ float d=0.40+0.60*abs(dot(normalize(vN),normalize(uLight)));',
+ '  o=vec4(vCol*d,1.0); }'].join('\n');
+var VS_P = [HEAD,
+ 'in vec3 aPos; in vec3 aCol; uniform mat4 uMVP; uniform float uSize;',
+ 'out vec3 vCol;',
+ 'void main(){ vCol=aCol; gl_Position=uMVP*vec4(aPos*uScale-uOffset,1.0);',
+ '  gl_PointSize=uSize; }'].join('\n');
+var FS_P = ['#version 300 es','precision highp float; in vec3 vCol; out vec4 o;',
+ 'void main(){ o=vec4(vCol,1.0); }'].join('\n');
+
+pM = prog(VS_M, FS_M); pP = prog(VS_P, FS_P);
+uM = {mvp:gl.getUniformLocation(pM,'uMVP'), light:gl.getUniformLocation(pM,'uLight'),
+      scale:gl.getUniformLocation(pM,'uScale'), off:gl.getUniformLocation(pM,'uOffset')};
+uP = {mvp:gl.getUniformLocation(pP,'uMVP'), size:gl.getUniformLocation(pP,'uSize'),
+      scale:gl.getUniformLocation(pP,'uScale'), off:gl.getUniformLocation(pP,'uOffset')};
+
+var un = function(s){ var b = atob(s), u = new Uint8Array(b.length);
+  for(var i=0;i<b.length;i++) u[i] = b.charCodeAt(i); return u; };
+
+function build(key, D, viewScale){
+  var VP = new Int16Array(un(D.vpos).buffer), VC = un(D.vcol);
+  var IX = new Uint32Array(un(D.idx).buffer);
+  var PP = new Int16Array(un(D.ppos).buffer), PC = un(D.pcol);
+  var NR = new Float32Array(VP.length);
+  for(var t=0;t<IX.length;t+=3){
+    var i0=IX[t]*3, i1=IX[t+1]*3, i2=IX[t+2]*3;
+    var ux=VP[i1]-VP[i0], uy=VP[i1+1]-VP[i0+1], uz=VP[i1+2]-VP[i0+2];
+    var vx=VP[i2]-VP[i0], vy=VP[i2+1]-VP[i0+1], vz=VP[i2+2]-VP[i0+2];
+    var nx=uy*vz-uz*vy, ny=uz*vx-ux*vz, nz=ux*vy-uy*vx;
+    NR[i0]+=nx; NR[i0+1]+=ny; NR[i0+2]+=nz;
+    NR[i1]+=nx; NR[i1+1]+=ny; NR[i1+2]+=nz;
+    NR[i2]+=nx; NR[i2+1]+=ny; NR[i2+2]+=nz;
+  }
+  for(var i=0;i<NR.length;i+=3){
+    var L=Math.hypot(NR[i],NR[i+1],NR[i+2])||1;
+    NR[i]/=L; NR[i+1]/=L; NR[i+2]/=L;
+  }
+  var buf = function(d, tg){ var t = tg || gl.ARRAY_BUFFER, b = gl.createBuffer();
+    gl.bindBuffer(t,b); gl.bufferData(t,d,gl.STATIC_DRAW); return b; };
+  var bVP=buf(VP), bVC=buf(VC), bNR=buf(NR), bPP=buf(PP), bPC=buf(PC);
+  var bIX=buf(IX, gl.ELEMENT_ARRAY_BUFFER);
+  var vaoM=gl.createVertexArray(), vaoP=gl.createVertexArray();
+  var bind = function(vao,p,pos,col,nrm){
+    gl.bindVertexArray(vao);
+    var at=function(n,b,sz,ty,nm){ var l=gl.getAttribLocation(p,n); if(l<0)return;
+      gl.bindBuffer(gl.ARRAY_BUFFER,b); gl.enableVertexAttribArray(l);
+      gl.vertexAttribPointer(l,sz,ty,nm,0,0); };
+    at('aPos',pos,3,gl.SHORT,true); at('aCol',col,3,gl.UNSIGNED_BYTE,true);
+    if(nrm) at('aNrm',nrm,3,gl.FLOAT,false);
+    gl.bindVertexArray(null);
+  };
+  bind(vaoM,pM,bVP,bVC,bNR); bind(vaoP,pP,bPP,bPC,null);
+  /* metres per raw shader unit, then divided by the example's shared view scale */
+  var mpu = D.scale * 32767 / 32000;
+  cache[key] = {vaoM:vaoM, vaoP:vaoP, bIX:bIX, nIdx:IX.length, PP:PP,
+                nt:D.nt, np:D.np,
+                uScale: mpu / viewScale,
+                uOff: D.centroid.map(function(c){ return c / viewScale; }),
+                viewScale: viewScale};
+  return cache[key];
+}
+
+/* ---- lazy load: a classic <script> tag, which works from file:// too ---- */
+function need(m, ex, cb){
+  if(cache[m.key]) return cb(cache[m.key]);
+  var L = document.getElementById('loading');
+  L.classList.remove('hide'); L.textContent = 'loading geometry…';
+  if(window.__MESH && window.__MESH[m.key])
+    return cb(build(m.key, window.__MESH[m.key], ex.viewScale));
+  var s = document.createElement('script');
+  s.src = m.file;
+  s.onload = function(){
+    if(window.__MESH && window.__MESH[m.key]) cb(build(m.key, window.__MESH[m.key], ex.viewScale));
+    else fail(m);
+  };
+  s.onerror = function(){ fail(m); };
+  document.head.appendChild(s);
+}
+function fail(m){
+  var L = document.getElementById('loading');
+  L.classList.remove('hide');
+  L.innerHTML = '<span class="err">could not load ' + m.file + '</span><br>' +
+    'Keep the <code>mesh/</code> folder next to this page.<br>' +
+    'If you opened this from a file and your browser blocks local scripts, ' +
+    'serve the folder instead:<br><code>python -m http.server</code>';
+}
+
+var mul = function(a,b){ var o=new Float32Array(16);
+  for(var i=0;i<4;i++)for(var j=0;j<4;j++){var s=0;
+    for(var k=0;k<4;k++)s+=a[k*4+j]*b[i*4+k]; o[i*4+j]=s;} return o; };
+var persp = function(f,ar,n,fa){ var t=1/Math.tan(f/2); return new Float32Array(
+  [t/ar,0,0,0, 0,t,0,0, 0,0,(fa+n)/(n-fa),-1, 0,0,2*fa*n/(n-fa),0]); };
+var look = function(e,c,u){
+  var nz=function(v){var L=Math.hypot(v[0],v[1],v[2])||1;return[v[0]/L,v[1]/L,v[2]/L];};
+  var cr=function(a,b){return[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]];};
+  var dt=function(a,b){return a[0]*b[0]+a[1]*b[1]+a[2]*b[2];};
+  var f=nz([c[0]-e[0],c[1]-e[1],c[2]-e[2]]), r=nz(cr(f,u)), v=cr(r,f);
+  return new Float32Array([r[0],v[0],-f[0],0, r[1],v[1],-f[1],0, r[2],v[2],-f[2],0,
+    -dt(r,e),-dt(v,e),dt(f,e),1]); };
+function xform(m,x,y,z){
+  return [m[0]*x+m[4]*y+m[8]*z+m[12], m[1]*x+m[5]*y+m[9]*z+m[13],
+          m[2]*x+m[6]*y+m[10]*z+m[14], m[3]*x+m[7]*y+m[11]*z+m[15]];
+}
+function toScreen(m,x,y,z,w,h){
+  var c = xform(m,x,y,z);
+  if(c[3] <= 1e-6) return null;
+  return [(c[0]/c[3]*0.5+0.5)*w, (1-(c[1]/c[3]*0.5+0.5))*h, c[2]/c[3]];
+}
+
+function draw(){
+  if(target){
+    az += (target[0]-az)*0.16; el += (target[1]-el)*0.16; dist += (target[2]-dist)*0.16;
+    if(Math.abs(target[0]-az)+Math.abs(target[1]-el)+Math.abs(target[2]-dist) < 2e-3)
+      target = null;
+  }
+  var dpr = Math.min(window.devicePixelRatio||1, 2);
+  var w = Math.max(1, cv.clientWidth*dpr|0), h = Math.max(1, cv.clientHeight*dpr|0);
+  if(cv.width!==w || cv.height!==h){ cv.width=w; cv.height=h; }
+  gl.viewport(0,0,w,h);
+  gl.clearColor(0.043,0.055,0.063,1);
+  gl.enable(gl.DEPTH_TEST);
+  gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
+
+  var eye=[Math.cos(el)*Math.sin(az)*dist+panx, Math.sin(el)*dist+pany,
+           Math.cos(el)*Math.cos(az)*dist];
+  var mvp = mul(persp(0.85, w/h, 0.02, 60), look(eye,[panx,pany,0],[0,1,0]));
+  curMVP = mvp; curW = w; curH = h;
+
+  var A = active;
+  if(A){
+    if(showMesh){
+      gl.useProgram(pM); gl.bindVertexArray(A.vaoM);
+      gl.uniformMatrix4fv(uM.mvp,false,mvp);
+      gl.uniform3f(uM.light,0.36,0.78,0.51);
+      gl.uniform1f(uM.scale, A.uScale);
+      gl.uniform3f(uM.off, A.uOff[0], A.uOff[1], A.uOff[2]);
+      gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, A.bIX);
+      gl.drawElements(gl.TRIANGLES, A.nIdx, gl.UNSIGNED_INT, 0);
+    }
+    if(showPts){
+      gl.useProgram(pP); gl.bindVertexArray(A.vaoP);
+      gl.uniformMatrix4fv(uP.mvp,false,mvp);
+      gl.uniform1f(uP.size, Math.max(1.0,1.7*dpr));
+      gl.uniform1f(uP.scale, A.uScale);
+      gl.uniform3f(uP.off, A.uOff[0], A.uOff[1], A.uOff[2]);
+      gl.drawArrays(gl.POINTS, 0, A.PP.length/3);
+    }
+    gl.bindVertexArray(null);
+    document.getElementById('hud').textContent =
+      'az ' + (az*57.2958).toFixed(0) + '°   el ' + (el*57.2958).toFixed(0) +
+      '°   ' + (showMesh ? A.nt.toLocaleString()+' tri' : '') +
+      (showMesh && showPts ? '  +  ' : '') +
+      (showPts ? A.np.toLocaleString()+' pts' : '');
+  }
+  drawOverlay(dpr);
+  requestAnimationFrame(draw);
+}
+
+/* ---------------- interaction ---------------- */
+var down=false, lx=0, ly=0, panning=false, moved=0;
+cv.addEventListener('pointerdown', function(e){
+  down=true; panning=e.shiftKey||e.button===2; lx=e.clientX; ly=e.clientY; moved=0;
+  cv.classList.add('drag'); cv.setPointerCapture(e.pointerId); target=null; });
+cv.addEventListener('pointerup', function(e){
+  down=false; cv.classList.remove('drag');
+  if(measuring && moved < 5) pick(e); });
+cv.addEventListener('pointermove', function(e){
+  if(!down) return;
+  var dx=e.clientX-lx, dy=e.clientY-ly; lx=e.clientX; ly=e.clientY;
+  moved += Math.abs(dx)+Math.abs(dy);
+  if(panning){ panx-=dx*0.0022*dist; pany+=dy*0.0022*dist; }
+  else { az-=dx*0.0062; el=Math.max(-1.52,Math.min(1.52, el+dy*0.0062)); } });
+cv.addEventListener('contextmenu', function(e){ e.preventDefault(); });
+cv.addEventListener('wheel', function(e){ e.preventDefault();
+  dist=Math.max(0.35,Math.min(9, dist*(1+Math.sign(e.deltaY)*0.09))); target=null;
+}, {passive:false});
+
+function toggle(id, fn){
+  var b = document.getElementById(id);
+  b.onclick = function(){ var v = b.getAttribute('aria-pressed')!=='true';
+    b.setAttribute('aria-pressed', String(v)); fn(v); };
+  return b;
+}
+toggle('bMesh', function(v){ showMesh=v; });
+toggle('bPts', function(v){ showPts=v; });
+document.querySelectorAll('[data-view]').forEach(function(b){
+  b.onclick = function(){ target = PRESETS[b.dataset.view].slice(); }; });
+
+/* ---------------- measurement ---------------- */
+var measuring=false, marks=[], tipTimer=null;
+var mtip = document.getElementById('mtip'), ovl = document.getElementById('ovl');
+function flash(msg){ mtip.innerHTML = msg; clearTimeout(tipTimer);
+  tipTimer = setTimeout(setTip, 1800); }
+function setTip(){
+  clearTimeout(tipTimer);
+  mtip.innerHTML = marks.length===0 ? 'Click a surface point to start measuring.'
+    : marks.length===1 ? 'Click a second point.'
+    : 'Distance shown. Click again to start over.<br><span style="color:var(--muted)">' +
+      'Metric-relative: scale comes from the feed-forward prior, not ground control.</span>';
+}
+toggle('bMeasure', function(v){ measuring=v;
+  document.body.classList.toggle('measuring', v); if(!v) marks=[]; setTip(); });
+document.getElementById('bClear').onclick = function(){ marks=[]; setTip(); };
+
+function pick(e){
+  if(!active || !curMVP) return;
+  var r = cv.getBoundingClientRect();
+  var dpr = Math.min(window.devicePixelRatio||1, 2);
+  var mx=(e.clientX-r.left)*dpr, my=(e.clientY-r.top)*dpr;
+  var A = active, PP = A.PP, n = PP.length/3;
+  var best=-1, bestD=1e9, bestZ=2, rad=14*dpr, rad2=rad*rad;
+  for(var i=0;i<n;i++){
+    var x = PP[i*3]/32767*A.uScale - A.uOff[0];
+    var y = PP[i*3+1]/32767*A.uScale - A.uOff[1];
+    var z = PP[i*3+2]/32767*A.uScale - A.uOff[2];
+    var s = toScreen(curMVP, x, y, z, curW, curH);
+    if(!s) continue;
+    var dx=s[0]-mx, dy=s[1]-my, d2=dx*dx+dy*dy;
+    if(d2 > rad2) continue;
+    if(s[2] < bestZ-1e-6 || (Math.abs(s[2]-bestZ)<1e-6 && d2<bestD)){
+      bestZ=s[2]; bestD=d2; best=i;
+    }
+  }
+  if(best < 0){ flash('No surface point there. Aim at the model.'); return; }
+  if(marks.length >= 2) marks = [];
+  marks.push([PP[best*3]/32767*A.uScale - A.uOff[0],
+              PP[best*3+1]/32767*A.uScale - A.uOff[1],
+              PP[best*3+2]/32767*A.uScale - A.uOff[2]]);
+  setTip();
+}
+function drawOverlay(dpr){
+  if(!marks.length || !curMVP){ if(ovl.innerHTML) ovl.innerHTML=''; return; }
+  var pts = marks.map(function(p){ return toScreen(curMVP,p[0],p[1],p[2],curW,curH); });
+  if(pts.some(function(p){ return !p; })){ ovl.innerHTML=''; return; }
+  var s = pts.map(function(p){ return [p[0]/dpr, p[1]/dpr]; });
+  /* Colours come from #ovl's classes in the design system, never from fill=""
+     attributes here: a hex in a JS string is invisible to the stylesheet and
+     was how the old amber survived a palette change. */
+  var h = '';
+  if(s.length === 2)
+    h += '<line class="m-line" x1="'+s[0][0]+'" y1="'+s[0][1]+
+         '" x2="'+s[1][0]+'" y2="'+s[1][1]+'"/>';
+  s.forEach(function(p){
+    h += '<circle class="m-ring" cx="'+p[0]+'" cy="'+p[1]+'" r="5"/>'+
+         '<circle class="m-dot" cx="'+p[0]+'" cy="'+p[1]+'" r="1.5"/>';
+  });
+  if(marks.length === 2){
+    var a=marks[0], b=marks[1];
+    /* world units are the example's view scale, so this is metres */
+    var d = Math.hypot(a[0]-b[0],a[1]-b[1],a[2]-b[2]) * active.viewScale;
+    var mx=(s[0][0]+s[1][0])/2, my=(s[0][1]+s[1][1])/2;
+    var lab = d.toFixed(2)+' m', wpx = lab.length*7.6+14;
+    h += '<rect class="m-box" x="'+(mx-wpx/2)+'" y="'+(my-24)+'" width="'+wpx+
+         '" height="19" rx="3"/>'+
+         '<text class="m-txt" x="'+mx+'" y="'+(my-10.5)+'">'+lab+'</text>';
+  }
+  ovl.innerHTML = h;
+}
+
+/* ================= examples ================= */
+function fmt(v, unit, dp){
+  if(v === null || v === undefined) return '—';
+  return (typeof v === 'number' ? v.toFixed(dp===undefined?2:dp) : v) + (unit||'');
+}
+function sizeVideoPane(){
+  var ex = EX[cur];
+  /* .stage-row, not .stage: .stage is now the canvas pane (it owns the
+     positioning context for the dock and HUD), so querying it here would
+     measure the 3D pane against itself. */
+  var stage = document.querySelector('.stage-row'), vp = document.getElementById('vpane');
+  if(window.innerWidth <= 900){ vp.style.width = ''; return; }
+  var h = stage.clientHeight - 24, w = stage.clientWidth;
+  /* size the pane from the clip's own aspect: the portrait clip is the hard case,
+     and a fixed split would either crush it or waste half the screen on the wide one */
+  vp.style.width = Math.round(Math.max(230, Math.min(w*0.46, ex.aspect*h))) + 'px';
+}
+window.addEventListener('resize', sizeVideoPane);
+
+function renderTabs(){
+  document.getElementById('tabs').innerHTML = EX.map(function(e,i){
+    return '<button class="btn btn--sm" data-i="'+i+'" aria-current="'+(i===cur)+'">'+
+      e.tab + (e.failed ? '<span class="fail">▲</span>' : '')+'</button>';
+  }).join('');
+  document.querySelectorAll('#tabs button').forEach(function(b){
+    b.onclick = function(){ show(+b.dataset.i, 0); };
+  });
+}
+function renderMethods(){
+  var ex = EX[cur];
+  document.getElementById('methods').innerHTML = ex.models.map(function(m,i){
+    return '<button class="btn btn--sm" data-m="'+i+'" aria-current="'+(i===curModel)+'">'+
+      m.label + '<span class="sub">'+m.sub+'</span></button>';
+  }).join('');
+  document.querySelectorAll('#methods button').forEach(function(b){
+    b.onclick = function(){ show(cur, +b.dataset.m); };
+  });
+}
+function renderTable(){
+  var ex = EX[cur], t = document.getElementById('ctable');
+  if(!ex.rows || !ex.rows.length){ t.innerHTML = ''; }
+  else {
+    t.innerHTML =
+      '<thead><tr><th>' + ex.tableHead[0] + '</th>' +
+      '<th class="b">' + ex.tableHead[1] + '</th>' +
+      (ex.tableHead[2] ? '<th class="m">' + ex.tableHead[2] + '</th>' : '') +
+      '</tr></thead><tbody>' +
+      ex.rows.map(function(r){
+        return '<tr><td>' + r[0] + '</td><td class="' + (r[3]||'') + '">' + r[1] +
+          '</td>' + (r[2] !== undefined && r[2] !== null
+                     ? '<td class="' + (r[4]||'') + '">' + r[2] + '</td>' : '') + '</tr>';
+      }).join('') + '</tbody>';
+  }
+  document.getElementById('srcnote').innerHTML = ex.note;
+}
+
+function show(i, mi){
+  var first = (i !== shownEx);
+  cur = i; curModel = mi || 0; shownEx = i;
+  var ex = EX[cur], m = ex.models[curModel];
+  renderTabs(); renderMethods(); renderTable();
+  document.body.setAttribute('data-ex', ex.key);
+
+  if(first){
+    var v = document.getElementById('vid');
+    v.poster = ex.poster; v.src = ex.video; v.load();
+    document.getElementById('vcapl').innerHTML =
+      '<span class="hl">' + ex.clipName + '</span> &middot; ' + ex.clipMeta;
+    document.getElementById('vcapr').textContent = ex.span;
+    marks = []; setTip();
+  }
+  sizeVideoPane();
+  need(m, ex, function(A){
+    active = A;
+    document.getElementById('loading').classList.add('hide');
+  });
+}
+
+/* keyboard, for driving this from a lectern */
+document.addEventListener('keydown', function(e){
+  var t = e.target.tagName;
+  if(t==='INPUT'||t==='TEXTAREA'||e.metaKey||e.ctrlKey||e.altKey) return;
+  var k = e.key.toLowerCase();
+  if(k >= '1' && k <= String(Math.min(9, EX.length))){ show(+k-1, 0); e.preventDefault(); return; }
+  if(k === 'b'){ if(EX[cur].models[1]) show(cur, curModel ? 0 : 1); e.preventDefault(); return; }
+  var map = {m:'bMeasure', c:'bClear', p:'bPts', v:'bMesh'};
+  if(map[k]){ document.getElementById(map[k]).click(); e.preventDefault(); }
+});
+
+document.getElementById('mtip').title = 'shortcuts: 1-3 clip, b baseline/MVS, m measure';
+show(0, 0);
+setTip();
+draw();
+</script>

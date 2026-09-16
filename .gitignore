@@ -16,3 +16,6 @@ data/cand/
 data/*.zip
 out/kf_kolu_1280/
 out/kf_kolu_up/
+
+# Vercel
+.vercel

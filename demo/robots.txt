@@ -1,0 +1,3 @@
+# Competition material. Shareable by link, not by search.
+User-agent: *
+Disallow: /

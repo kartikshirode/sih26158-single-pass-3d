@@ -1,0 +1,397 @@
+/* =============================================================================
+   SIH26158 demo - design system
+   ONE source of truth for /, /gallery/ and /qa/. Inlined into each page at build
+   time by tools/design_system.py, because the pages must open from file:// with
+   no server, so they cannot <link> a stylesheet.
+
+   WHY THIS EXISTS. Measured before writing it, across the three templates:
+     18 distinct font-sizes | 51 distinct paddings | 4 radii | 22 colours
+     against 15 declared tokens | demo-vs-gallery CSS 60% duplicated, drifting
+   and two WCAG failures that were shipping:
+     --faint  #5b666d  ->  2.91:1 on the lightest surface   FAIL AA
+     --muted  #78848b  ->  4.47:1 on the lightest surface   FAIL AA body
+   Surface steps were 1.06-1.07, i.e. the "elevated" panels were not visibly
+   elevated at all. tools/check_design.py asserts every one of those numbers
+   back down and fails the build if a page reintroduces an off-scale value.
+
+   THE FILE IS IN TWO LAYERS, split on the sentinel comment below:
+     LAYER BASE    tokens + text + controls + surfaces + tables   (all 3 pages)
+     LAYER VIEWER  WebGL canvas chrome, dock, HUD, measurement    (/, /gallery/)
+   The Q&A page inlines BASE only. Keep BASE under ~15 KB; if it grows past
+   that, split again rather than shipping viewer rules to a page with no canvas.
+   ============================================================================= */
+
+:root{
+  /* ---- surface ramp -------------------------------------------------------
+     Three steps, each >=1.15 contrast from the last so elevation is actually
+     visible on a projector. Measured: bg->s1 1.156, s1->s2 1.163.            */
+  --bg:#06080a;          /* page ground                                       */
+  --s1:#151b21;          /* panel, card, table body                           */
+  --s2:#202830;          /* raised: row hover, active control, inset well     */
+
+  /* ---- text ramp ----------------------------------------------------------
+     Three levels, ALL clearing 4.5:1 AA body on the LIGHTEST surface (--s2),
+     with ~1.6x luminance between steps so the hierarchy still reads.
+     Worst case measured on --s2:  fg 12.53 | fg-2 8.14 | fg-3 5.26           */
+  --fg:#e7ecef;          /* primary                                           */
+  --fg-2:#b6c1c8;        /* secondary: captions, table body                   */
+  --fg-3:#909ba3;        /* tertiary: source citations, units, ordinals.
+                            Replaces --faint (2.91, failed) and --muted (4.47,
+                            failed). There is no fourth level: a fourth could
+                            not clear AA, and an illegible level is not
+                            hierarchy, it is just unreadable text.            */
+
+  /* ---- lines --------------------------------------------------------------
+     Structural only, never text. --line-2 for controls that must be found.   */
+  --line:#252e36;
+  --line-2:#36424b;
+
+  /* ---- accent + status ----------------------------------------------------
+     One accent, locked page-wide (COLOR CONSISTENCY LOCK). Amber is the
+     existing signature and carries the "this is a replay" meaning, so it is
+     preserved; nudged 3 steps lighter than the old #e3a13c so it clears AA
+     body on --s2 (7.20) as well as on the ground (9.40).                     */
+  --accent:#e8a84a;
+  --accent-hi:#f0b75f;   /* hover only                                        */
+  --ok:#57c2a9;
+  --bad:#e0705a;
+  --on-accent:#06080a;   /* text ON an accent fill: 9.40:1                    */
+
+  /* ---- type scale ---------------------------------------------------------
+     7 steps replacing 18 ad-hoc sizes. Floor is 11px: the old scale reached
+     down to 8.5px, which is a coin toss across a lecture hall. Uppercase
+     tracked labels sit at --t-xs and read larger than their px because of the
+     tracking, which is how the small end survived the cut.                   */
+  --t-xs:11px;    --t-sm:12.5px;  --t-md:14px;    --t-lg:16px;
+  --t-xl:19px;    --t-2xl:23px;   --t-3xl:28px;
+
+  --lh-tight:1.2; --lh-body:1.55;
+
+  /* ---- spacing scale ------------------------------------------------------
+     8 steps replacing 51 distinct padding values.                            */
+  --sp-1:4px;  --sp-2:6px;  --sp-3:8px;  --sp-4:12px;
+  --sp-5:16px; --sp-6:22px; --sp-7:32px; --sp-8:48px;
+
+  /* ---- shape --------------------------------------------------------------
+     SHAPE CONSISTENCY LOCK, documented rule, two values only:
+       --r-sm  controls, chips, inputs, thumbnails
+       --r-md  panels, cards, anything that contains other things
+     Nothing is a pill, nothing is square. Was 1px/2px/3px/4px, unruled.      */
+  --r-sm:3px;
+  --r-md:6px;
+
+  /* ---- motion -------------------------------------------------------------
+     Two durations. Anything longer reads as lag during a live demo.          */
+  --dur-1:90ms;   /* state flip: hover, press, toggle */
+  --dur-2:180ms;  /* layout: panel in/out, act change */
+  --ease:cubic-bezier(.2,.6,.2,1);
+
+  /* ---- elevation ----------------------------------------------------------
+     Tinted to the ground hue, never pure black.                              */
+  --sh-1:0 1px 2px rgba(2,4,6,.5);
+  --sh-2:0 6px 20px rgba(2,4,6,.6);
+
+  /* ---- z scale ------------------------------------------------------------ */
+  --z-base:1; --z-dock:10; --z-hud:20; --z-tip:30; --z-nav:40;
+
+  /* ---- fonts --------------------------------------------------------------
+     System stacks on purpose: no @font-face, no network, so the pages open
+     identically from file:// on a venue laptop with no internet.             */
+  --mono:"Consolas",ui-monospace,SFMono-Regular,Menlo,monospace;
+  --sans:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+}
+
+/* ---- reset ---------------------------------------------------------------- */
+*,*::before,*::after{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{
+  margin:0; background:var(--bg); color:var(--fg);
+  font:var(--t-md)/var(--lh-body) var(--sans);
+  -webkit-font-smoothing:antialiased;
+}
+img,video,canvas,svg{display:block; max-width:100%}
+
+/* ---- focus ----------------------------------------------------------------
+   ONE focus rule for the whole suite. Never removed, never restyled per
+   component: an operator tabbing to a control at a lectern must see where
+   they are, on every page, without exception.                                */
+:where(a,button,[tabindex],summary,input,select):focus-visible{
+  outline:2px solid var(--accent); outline-offset:2px; border-radius:var(--r-sm);
+}
+
+/* =========================== TYPE ========================================== */
+.h1,.h2,.h3{margin:0; font-weight:600; line-height:var(--lh-tight); color:var(--fg)}
+.h1{font-size:var(--t-2xl); letter-spacing:-.01em}
+.h2{font-size:var(--t-xl);  letter-spacing:-.005em}
+.h3{font-size:var(--t-lg)}
+.lede{margin:0; font-size:var(--t-lg); line-height:var(--lh-body); color:var(--fg-2); max-width:78ch}
+.p{margin:0; color:var(--fg-2)}
+.sm{font-size:var(--t-sm)}
+.xs{font-size:var(--t-xs)}
+.big{font-size:var(--t-3xl); font-weight:600; line-height:1; letter-spacing:-.02em}
+
+/* Section label. A functional field label in an instrument panel, not a
+   marketing eyebrow - it names the data underneath it.                       */
+.label{
+  margin:0; font:600 var(--t-xs)/1.3 var(--sans);
+  letter-spacing:.09em; text-transform:uppercase; color:var(--fg-3);
+}
+
+/* Numerics. Tabular figures so columns of measurements line up and do not
+   jitter as the replay counts.                                               */
+.num{font-family:var(--mono); font-variant-numeric:tabular-nums; font-feature-settings:"tnum" 1}
+.u{color:var(--fg-3)}            /* unit suffix after a number */
+.fg-ok{color:var(--ok)} .fg-bad{color:var(--bad)} .fg-acc{color:var(--accent)}
+.fg-1{color:var(--fg)} .fg-2{color:var(--fg-2)} .fg-3{color:var(--fg-3)}
+
+/* =========================== SURFACES ====================================== */
+.panel{background:var(--s1); border:1px solid var(--line); border-radius:var(--r-md)}
+.panel-pad{padding:var(--sp-5)}
+.well{background:var(--bg); border:1px solid var(--line); border-radius:var(--r-sm)}
+.rule{height:1px; background:var(--line); border:0; margin:0}
+
+/* Card that is also a control (clip picker, example tile).                   */
+.card{
+  display:block; width:100%; text-align:left; cursor:pointer;
+  background:var(--s1); color:var(--fg);
+  border:1px solid var(--line); border-radius:var(--r-md); padding:var(--sp-4);
+  font:inherit;
+  transition:background var(--dur-1) var(--ease),border-color var(--dur-1) var(--ease);
+}
+.card:hover{background:var(--s2); border-color:var(--line-2)}
+.card:active{transform:translateY(1px)}
+.card[aria-pressed="true"]{border-color:var(--accent); background:var(--s2)}
+
+/* =========================== CONTROLS ======================================
+   ONE button. Variants change colour and weight, never shape or rhythm.
+   Replaces .act-btn / .ghost / .dock button / .tabs button / .methods button /
+   .stepper button, which had drifted to 5 paddings and 3 radii between them.  */
+.btn{
+  display:inline-flex; align-items:center; gap:var(--sp-2);
+  padding:var(--sp-3) var(--sp-5); border-radius:var(--r-sm);
+  font:600 var(--t-sm)/1 var(--sans); letter-spacing:.01em;
+  background:var(--s1); color:var(--fg); border:1px solid var(--line-2);
+  cursor:pointer; white-space:nowrap;
+  transition:background var(--dur-1) var(--ease),border-color var(--dur-1) var(--ease),
+             color var(--dur-1) var(--ease);
+}
+.btn:hover:not(:disabled){background:var(--s2); border-color:var(--fg-3)}
+.btn:active:not(:disabled){transform:translateY(1px)}
+.btn:disabled{opacity:.42; cursor:not-allowed}
+.btn--primary{background:var(--accent); color:var(--on-accent); border-color:var(--accent)}
+.btn--primary:hover:not(:disabled){background:var(--accent-hi); border-color:var(--accent-hi)}
+.btn--quiet{background:transparent; border-color:var(--line)}
+.btn--quiet:hover:not(:disabled){background:var(--s1); border-color:var(--line-2)}
+.btn--sm{padding:var(--sp-2) var(--sp-3); font-size:var(--t-xs)}
+.btn[aria-pressed="true"],.btn[aria-current="true"]{
+  background:var(--s2); border-color:var(--accent); color:var(--accent);
+}
+
+/* Text input. One shape and one focus treatment, matching .btn so a search box
+   and the buttons beside it sit on the same baseline and the same rhythm.     */
+.input{
+  font:var(--t-sm)/1 var(--mono); color:var(--fg);
+  background:var(--s2); border:1px solid var(--line-2); border-radius:var(--r-sm);
+  padding:var(--sp-3) var(--sp-4);
+  transition:border-color var(--dur-1) var(--ease);
+}
+.input::placeholder{color:var(--fg-3)}
+.input:focus{outline:none; border-color:var(--accent)}
+
+/* Segmented control: view presets, baseline/MVS toggle, tier tabs.           */
+.seg{
+  display:inline-flex; background:var(--s1); border:1px solid var(--line);
+  border-radius:var(--r-sm); padding:2px; gap:2px;
+}
+.seg .btn{border:1px solid transparent; background:transparent}
+.seg .btn[aria-current="true"],.seg .btn[aria-pressed="true"]{
+  background:var(--s2); color:var(--accent); border-color:var(--accent);
+}
+
+/* =========================== CHIPS =========================================
+   Provenance vocabulary from docs/architecture-prompt.md section 4. These are
+   load-bearing honesty markers, so they are a component, not an ad-hoc span.  */
+.chip{
+  display:inline-flex; align-items:center; gap:var(--sp-1);
+  padding:2px var(--sp-2); border-radius:var(--r-sm);
+  font:600 var(--t-xs)/1.5 var(--sans); letter-spacing:.05em; text-transform:uppercase;
+  border:1px solid var(--line-2); color:var(--fg-2); background:var(--s1);
+}
+.chip--ok{color:var(--ok);      border-color:color-mix(in srgb,var(--ok) 45%,transparent)}
+.chip--bad{color:var(--bad);    border-color:color-mix(in srgb,var(--bad) 45%,transparent)}
+.chip--acc{color:var(--accent); border-color:color-mix(in srgb,var(--accent) 45%,transparent)}
+
+/* =========================== TABLES ========================================
+   Dense by intent (VISUAL_DENSITY 8). Zebra striping is off; row separation is
+   a single hairline, which is quieter and survives a projector better than
+   alternating fills at these contrast ratios.                                */
+.table{width:100%; border-collapse:collapse; font-size:var(--t-sm)}
+.table th,.table td{
+  padding:var(--sp-3) var(--sp-4); text-align:right; border-bottom:1px solid var(--line);
+}
+.table th:first-child,.table td:first-child{text-align:left}
+.table thead th{
+  font:600 var(--t-xs)/1.3 var(--sans); letter-spacing:.08em; text-transform:uppercase;
+  color:var(--fg-3); background:var(--bg); border-bottom:1px solid var(--line-2);
+}
+.table tbody tr:hover{background:var(--s2)}
+.table tbody tr:last-child td{border-bottom:0}
+.table td.win{color:var(--ok)} .table td.lose{color:var(--fg-3)}
+.table .num{font-size:var(--t-sm)}
+
+/* Key/value list.                                                            */
+/* 1fr auto, not auto 1fr: the label is the part that wraps on a narrow rail,
+   and the value must stay pinned to the right edge to keep the column of
+   figures readable top to bottom. */
+.kv{
+  margin:0; display:grid; grid-template-columns:1fr auto;
+  gap:var(--sp-2) var(--sp-4); font-size:var(--t-sm);
+}
+.kv dt{color:var(--fg-3)}
+.kv dd{
+  margin:0; text-align:right; color:var(--fg);
+  font-family:var(--mono); font-variant-numeric:tabular-nums;
+}
+
+/* =========================== NOTES / PROVENANCE ============================ */
+.note{
+  padding:var(--sp-3) var(--sp-4); border-left:2px solid var(--line-2);
+  background:var(--s1); border-radius:0 var(--r-sm) var(--r-sm) 0;
+  font-size:var(--t-sm); color:var(--fg-2);
+}
+.note b{color:var(--fg); font-weight:600}
+.note--acc{border-left-color:var(--accent)}
+.note--bad{border-left-color:var(--bad)}
+/* Source citation. Was --faint (2.91:1, illegible); now --fg-3 (5.26:1).     */
+.src{font-size:var(--t-xs); color:var(--fg-3); font-family:var(--mono)}
+.src b{color:var(--fg-2); font-weight:600}
+
+/* =========================== SITE CHROME =================================== */
+.topbar{
+  position:sticky; top:0; z-index:var(--z-nav);
+  display:flex; align-items:center; gap:var(--sp-5); flex-wrap:wrap;
+  padding:var(--sp-3) var(--sp-5);
+  background:var(--bg); border-bottom:1px solid var(--line);
+}
+.brand{display:flex; align-items:baseline; gap:var(--sp-3); min-width:0}
+.brand .nm{font:600 var(--t-md)/1 var(--sans); letter-spacing:.02em; color:var(--fg)}
+.brand .tag{font-size:var(--t-xs); color:var(--fg-3); white-space:nowrap}
+
+/* Cross-page nav. Deliberately NOT shaped like the in-page stepper: the
+   stepper is progress through one clip (1 -> 2 -> 3), this is navigation
+   between three separate artifacts. Underline-on-current, no boxes, no
+   numbers - so the two never read as the same kind of control in one bar.    */
+.sitenav{display:flex; gap:var(--sp-1); margin-left:auto}
+.sitenav a{
+  padding:var(--sp-2) var(--sp-3); border-radius:var(--r-sm);
+  font:500 var(--t-sm)/1 var(--sans); color:var(--fg-3); text-decoration:none;
+  border-bottom:2px solid transparent;
+  transition:color var(--dur-1) var(--ease),border-color var(--dur-1) var(--ease);
+}
+.sitenav a:hover{color:var(--fg)}
+.sitenav a[aria-current="page"]{color:var(--fg); border-bottom-color:var(--accent)}
+
+/* The honesty badge. Static: the word REPLAY is what is load-bearing, and a
+   pulsing dot is decoration that also reads worse on a projector.            */
+.replay{
+  display:inline-flex; align-items:center; gap:var(--sp-2);
+  padding:var(--sp-1) var(--sp-3); border-radius:var(--r-sm);
+  background:color-mix(in srgb,var(--accent) 12%,transparent);
+  border:1px solid color-mix(in srgb,var(--accent) 40%,transparent);
+  font:600 var(--t-xs)/1.5 var(--sans); letter-spacing:.07em; text-transform:uppercase;
+  color:var(--accent); white-space:nowrap;
+}
+/* Full-width restatement of the same claim, once per page.                   */
+.banner{
+  padding:var(--sp-3) var(--sp-5); background:var(--s1);
+  border-bottom:1px solid var(--line); font-size:var(--t-sm); color:var(--fg-2);
+}
+.banner b{color:var(--fg); font-weight:600}
+
+.wrap{max-width:1400px; margin:0 auto; padding:var(--sp-6) var(--sp-5)}
+.stack{display:flex; flex-direction:column; gap:var(--sp-5)}
+.row{display:flex; align-items:center; gap:var(--sp-3); flex-wrap:wrap}
+
+/* =========================== MOTION ======================================== */
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{
+    animation-duration:.01ms !important; animation-iteration-count:1 !important;
+    transition-duration:.01ms !important; scroll-behavior:auto !important;
+  }
+}
+
+/* ============================================================== LAYER:VIEWER
+   Everything below is WebGL chrome. Inlined only into / and /gallery/.
+   ========================================================================== */
+
+#gl{width:100%; height:100%; display:block; cursor:grab; touch-action:none}
+#gl.drag{cursor:grabbing}
+body.measuring #gl{cursor:crosshair}
+
+/* Canvas stage. position:relative is load-bearing - every overlay below is
+   absolutely positioned against it.                                          */
+.stage{position:relative; overflow:hidden; background:var(--bg); border-radius:var(--r-md)}
+
+/* The measurement overlay. Sized explicitly because an inline <svg> otherwise
+   lays out at its 300x150 intrinsic size and silently clips correct geometry.
+   Colours live here rather than in fill="" attributes so that the design
+   audit can prove no off-token hex ships.                                    */
+#ovl{
+  position:absolute; inset:0; width:100%; height:100%;
+  pointer-events:none; z-index:var(--z-hud);
+}
+#ovl .m-line{stroke:var(--accent); stroke-width:1.5; stroke-dasharray:5 3; fill:none}
+#ovl .m-ring{stroke:var(--accent); stroke-width:1.5; fill:none}
+#ovl .m-dot{fill:var(--accent)}
+#ovl .m-box{fill:var(--bg); stroke:var(--accent); stroke-width:1}
+#ovl .m-txt{fill:var(--accent); font-family:var(--mono); font-size:var(--t-sm); text-anchor:middle}
+
+/* Canvas overlay placement. The two viewer pages put the dock and the readout
+   in opposite corners - the demo docks top-right over a tall stage, the gallery
+   bottom-left beside the video - so placement is a modifier and the component
+   itself carries only its treatment. Without this split both pages re-declare
+   position, which is exactly how the two stylesheets drifted apart before.    */
+.at-tl{position:absolute; left:var(--sp-4);  top:var(--sp-4)}
+.at-tr{position:absolute; right:var(--sp-4); top:var(--sp-4)}
+.at-bl{position:absolute; left:var(--sp-4);  bottom:var(--sp-4)}
+.at-br{position:absolute; right:var(--sp-4); bottom:var(--sp-4)}
+
+/* Camera/state readout.                                                      */
+.hud{
+  z-index:var(--z-hud);
+  padding:var(--sp-2) var(--sp-3); border-radius:var(--r-sm);
+  background:color-mix(in srgb,var(--bg) 82%,transparent);
+  border:1px solid var(--line); backdrop-filter:blur(6px);
+  font:var(--t-xs)/1.5 var(--mono); font-variant-numeric:tabular-nums; color:var(--fg-3);
+  pointer-events:none;
+}
+/* Tool prompt, top-centre: tells the operator what a click will do next.      */
+.mtip{
+  position:absolute; left:50%; top:var(--sp-4); transform:translateX(-50%);
+  z-index:var(--z-tip); display:none;
+  padding:var(--sp-2) var(--sp-4); border-radius:var(--r-sm);
+  background:color-mix(in srgb,var(--accent) 14%,var(--bg));
+  border:1px solid color-mix(in srgb,var(--accent) 45%,transparent);
+  font:600 var(--t-xs)/1.5 var(--sans); letter-spacing:.04em; color:var(--accent);
+}
+body.measuring .mtip{display:block}
+
+/* Floating control dock over the canvas. Pair with .at-tr / .at-bl.           */
+.dock{
+  z-index:var(--z-dock);
+  display:flex; flex-wrap:wrap; align-items:center; gap:var(--sp-1);
+  padding:var(--sp-2); border-radius:var(--r-sm); max-width:calc(100% - var(--sp-7));
+  background:color-mix(in srgb,var(--bg) 82%,transparent);
+  border:1px solid var(--line); backdrop-filter:blur(6px); box-shadow:var(--sh-1);
+}
+.dock .sep{width:1px; align-self:stretch; background:var(--line); margin:0 var(--sp-1)}
+
+/* Mesh loading / failure state.                                               */
+.loading{
+  position:absolute; inset:0; z-index:var(--z-hud); display:grid; place-content:center;
+  gap:var(--sp-3); text-align:center; background:var(--bg);
+  font-size:var(--t-sm); color:var(--fg-3);
+  transition:opacity var(--dur-2) var(--ease);
+}
+.loading.hide{opacity:0; pointer-events:none}
+.loading .err{color:var(--bad)}
