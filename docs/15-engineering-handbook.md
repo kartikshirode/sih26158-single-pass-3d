@@ -72,7 +72,7 @@ out/             every run artefact — gitignored, regenerable
 | MapAnything (S3) | `gcloud run jobs execute sih26158-mapanything --region=asia-south1` (inputs under `gs://sih26158-mumbai/mapanything/<run>_input/`) | Cloud Run |
 | BA + MVS + export | `gcloud run jobs execute sih26158-mvs --region=asia-south1` with `KF_PREFIX`, `MA_PREFIX`, `OUT_PREFIX` | Cloud Run |
 | Pull, render, viewer | `RUN=kolu GCS_PREFIX=mvs/kolu_out BASELINE=kolu3d python tools/finish_mvs.py` | local (needs open3d) |
-| Exports only | `python src/pipeline/export_formats.py out/<run>mvs3d --cameras out/<run>_raw/cameras.npy` | local |
+| Exports only | `python src/pipeline/export_formats.py out/<run>mvs3d --cameras out/<run>_raw/cameras.npy` — applies the run's calibration if one exists; `--no-scale` for model units | local (needs open3d; Blender or assimp for FBX) |
 | MVS vs baseline | `python src/analysis/compare_mvs.py --baseline … --mvs … --json out/ppt/measure_<run>.json` | local |
 | Scale audit | `python src/experiments/exp14_scale_audit.py` | local, ~1 min |
 | Demo, all pages | `python tools/build_all.py` | local |
@@ -181,7 +181,7 @@ rediscovering any of these.
 | **Scale "validated" by a plausibility band** | Kolu shipped 5.5× too small (`docs/08`) | External ruler or GNSS only (ADR-014) |
 | **`metric_scaling_factor` not saved** | The one channel a scale audit needs is gone | GAP C-4 |
 | **Priors never passed to MapAnything** | Scale and intrinsics left to the model | GAP C-5 |
-| **"ENU" that is not east–north** | A GIS user trusts a heading that does not exist | Call it LLF (`docs/09` §1.1) |
+| **"ENU" that is not east–north** | A GIS user trusts a heading that does not exist | The manifest now says `frame: "LLF"` (`docs/09` §1.1) |
 | **Figure re-grep ≠ correctness** | A wrong source keeps a wrong number "verified" | Claims ledger (`docs/14` §4) |
 | VGGT AUP bans military/espionage | Core model illegal for NTRO | MapAnything Apache (ADR-002) |
 | Apache MapAnything trained on 6 datasets, not 13 | Probably weaker | EXP-02 |

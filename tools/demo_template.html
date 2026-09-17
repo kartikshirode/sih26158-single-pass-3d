@@ -693,7 +693,7 @@ var DETAILS = {
           '<span class="en">' + e.file + '</span>' +
           '<span class="ez">' + mb(e.bytes) + '</span></div>'; }).join('') + '</div>';},
     n:'All six formats the problem statement asks for, written and read back in one ' +
-      'shared local frame, in the model\'s units. <b>No CRS is attached</b>: the clip ' +
+      'shared local frame, ' + R.export_units + '. <b>No CRS is attached</b>: the clip ' +
       'carries no GNSS, and a plausible-looking wrong one would silently reproject ' +
       'downstream.'}
 };

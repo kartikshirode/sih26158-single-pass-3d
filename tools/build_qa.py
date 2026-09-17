@@ -75,10 +75,9 @@ QA = [
 
     Q("settled", "What comes out, and in what formats?",
       "A textured mesh and a dense point cloud, written to <b>6 of 6</b> required formats: "
-      "OBJ, PLY, LAS 1.4, GeoTIFF DSM, glB/glTF and FBX, all in one shared local frame. "
-      "The files are still in the model's units: the scale calibration is applied in the "
-      "viewer and has not yet been written into them. Each is written and read back as a "
-      "check. FBX comes via assimp (BSD-3), "
+      "OBJ, PLY, LAS 1.4, GeoTIFF DSM, glB/glTF and FBX, all in one shared local frame "
+      "and, on the Kolu clip, in <b>calibrated metres</b> (x5.54, written into the files "
+      "themselves). Each is written and read back as a check. FBX comes via assimp (BSD-3), "
       "so every format has a permissive route.",
       T_MEAS, "out/kolumvs3d/export/export_manifest.json"),
 
@@ -220,8 +219,8 @@ QA = [
     Q("mechanism", "Where does the vertical direction come from?",
       "A ground plane fitted to the cloud, cross-checked against the gimbal roll-zero "
       "constraint. The export manifest records the residual roll as 0.24 deg and the camera "
-      "height above ground as 10.59 model units - about 58 m once the scale calibration is "
-      "applied. Note the manifest also records "
+      "height above ground as 58.67 m (10.59 in the model's own units, before the scale "
+      "calibration). Note the manifest also records "
       "<code>heading_degenerate: true</code> - a single straight pass does not constrain "
       "heading. See the Exposed tier for how far to trust the vertical.",
       T_MEAS, "out/kolumvs3d/export/export_manifest.json"),
@@ -335,8 +334,7 @@ QA = [
       "It is a deliberate refusal. The clip carries no GNSS, so any CRS we attached would be "
       "a guess, and a GeoTIFF with a plausible-looking wrong CRS is <b>worse than one with "
       "none</b> - downstream GIS will silently reproject it and the error becomes invisible. "
-      "So the DSM ships with a real geotransform (in model units until the scale "
-      "calibration reaches the files), "
+      "So the DSM ships with a real geotransform in calibrated metres, "
       "<code>crs: null</code>, and <code>reason_no_crs: \"source clip has no GNSS\"</code> "
       "recorded in the manifest. Give us a GNSS-tagged clip and the CRS is populated.",
       T_MEAS, "out/kolumvs3d/export/export_manifest.json"),
@@ -443,7 +441,8 @@ QA = [
       "Both give the same factor. A third check is a floor: Estonian road norms require "
       "<b>5.0 m</b> of clearance under an overpass, the arch crown reads 1.30 model units, "
       "so the factor is at least 3.85 - a simple 2x fix would leave a 2.6 m underpass. The "
-      "viewer now applies x5.54 on Kolu. The factor is a property of one run, so it is "
+      "viewer and the exported files now carry x5.54 on Kolu. The factor is a property of "
+      "one run, so it is "
       "never applied to another clip.",
       T_MEAS, "docs/08-measurement-validation.md, research/calibration/kolu.json"),
 
@@ -787,7 +786,8 @@ CHECKS = [
     ("3,445,735", "out/kolumvs3d/viewer_stats.json"),
     ("1,952,962", "out/kolumvs3d/viewer_stats.json"),
     ("0.24", "out/kolumvs3d/export/export_manifest.json"),
-    ("10.59", "out/kolumvs3d/export/export_manifest.json"),
+    ("58.67", "out/kolumvs3d/export/export_manifest.json"),
+    ('"units": "metres"', "out/kolumvs3d/export/export_manifest.json"),
     ("heading_degenerate", "out/kolumvs3d/export/export_manifest.json"),
     ("source clip has no GNSS", "out/kolumvs3d/export/export_manifest.json"),
     ("2.3297", "out/ppt/measure_kolu.json"),

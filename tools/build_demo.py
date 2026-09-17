@@ -109,6 +109,13 @@ def main():
     # measures in calibrated metres only because a calibration file names this run.
     cal = scale_cal.load(os.path.basename(RUN_DIR))
     scale_k = cal["factor"]
+    # The files say for themselves what units they are in; the page repeats that
+    # rather than assuming it. A manifest from before the calibration has no field.
+    file_units = man.get("units", "model units")
+    files_scaled = file_units == "metres" and man.get("scale", {}).get("factor") == scale_k
+    units_phrase = (f"in calibrated metres (x{scale_k:.2f})" if files_scaled
+                    else "in the model's units; the scale calibration is applied in "
+                         "this viewer only")
 
     clip_path = os.path.join(OUT_DIR, CLIP_REL.replace("/", os.sep))
     if not os.path.exists(clip_path):
@@ -208,8 +215,7 @@ def main():
                    "ground coverage."},
         {"name": "Output Formats", "met": True,
          "detail": "OBJ, PLY, LAS, GeoTIFF, glb/gltf and FBX, all written and read "
-                   "back in one shared local frame. The files are still in the "
-                   "model's units; the scale calibration is applied in this viewer."},
+                   f"back in one shared local frame, {units_phrase}."},
         {"name": "Visualization", "met": True,
          "detail": "This viewer. Runs from a file, needs no server, and measures."},
     ]
@@ -236,16 +242,16 @@ def main():
         "exports": exports,
         "verdict": verdict,
         "scale": scale_cal.for_page(cal),
+        "export_units": units_phrase,
         # The manifest's own note says "metres"; the files predate the calibration and
         # are in model units, so the page says that rather than repeating the file.
         "manifest_note": f'<b>georeferenced: false</b>. No CRS is attached because the '
-                         f"clip carries no GNSS. The exported files are in the model's "
-                         f'units: the scale correction (x{scale_k:.2f}) is applied in this '
-                         f'viewer, not yet in the files. The DSM is '
-                         f'{man["dem"]["width"]} x {man["dem"]["height"]} cells of '
-                         f'{man["dem"]["gsd_m"]} model units (about '
-                         f'{man["dem"]["gsd_m"] * scale_k:.2f} m), '
-                         f'{man["dem"]["filled_fraction"]:.0%} filled.',
+                         f'clip carries no GNSS. The exported files are {units_phrase}. '
+                         f'The DSM is {man["dem"]["width"]} x {man["dem"]["height"]} cells of '
+                         + (f'{man["dem"]["gsd_m"]} m, ' if files_scaled else
+                            f'{man["dem"]["gsd_m"]} model units (about '
+                            f'{man["dem"]["gsd_m"] * scale_k:.2f} m), ')
+                         + f'{man["dem"]["filled_fraction"]:.0%} filled.',
         "thumbs": thumbs(KF_DIR),
         # keyframe 0 is frame 781, which is exactly where the clip was cut, so
         # this poster is the video's own first frame rather than a stand-in

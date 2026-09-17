@@ -71,7 +71,7 @@ Priorities: **P0** blocks the submission · **P1** before M1 · **P2** M2–M3 �
 | ID | P | Item | Source | Owner | Size |
 |---|---|---|---|---|---|
 | **B-01** | P0 | Correct or relabel every invalidated figure in the deck, Field 9 (`docs/07` §4), the Q&A page and `docs/05`; let `build_qa.py`'s re-grep flag stale ones | `docs/14` §4 | Product | M |
-| **B-02** | P0 | Kolu calibration applied to viewer measurement, labels, gallery tables and the Q&A — **done 2026-09-17**. **Still open:** write the factor into the exported files (S2) | `docs/08` S1–S3, ledger 16–17b | Geo/ML | M |
+| ~~B-02~~ | P0 | Kolu calibration applied to viewer measurement, labels, gallery tables, the Q&A and all seven exported files — **done 2026-09-17** | `docs/08` S1–S3, ledger 16–22 | Geo/ML | M |
 | ~~B-03~~ | P0 | Decide the correction to ship — **decided 2026-09-17**: the measured ×5.54, not ×2. The ×2 came from a road-to-bridge reading that the 5.0 m clearance norm shows ×2 cannot fix | `docs/08` §3.6, §7 | Lead + requester | decision |
 | ~~B-04~~ | P0 | `demo/README.md`: remove the circular DSM "corroboration" and the 24.5 m figure — **done 2026-09-16** | `docs/14` item 17 | Product | S |
 | **B-05** | P0 | Village footage on the public gallery: obtain permission or remove | `docs/16` F-4 | Product | S |
@@ -83,7 +83,7 @@ Priorities: **P0** blocks the submission · **P1** before M1 · **P2** M2–M3 �
 | B-11 | P1 | Whole EGM2008 grid in the image, `PROJ_NETWORK=OFF`; bake DINOv2; `HF_HUB_OFFLINE=1`; T-NF-03 | `docs/16` F-1, F-2 | Platform | M |
 | B-12 | P1 | CI workflow (commit gate) | `docs/14` §2.1 | Platform | S |
 | B-13 | P1 | Python 3.12 environment with open3d; `finish_mvs.py` uses `sys.executable` | `docs/15` §1.1 | Platform | S |
-| B-14 | P1 | Rename F5 to LLF (C-1); scale status in manifest and viewers (C-2, C-7, C-9); run manifest (C-8) | `docs/09` | Lead | M |
+| B-14 | P1 | Run manifest (C-8). *C-1, C-2, C-7 and C-9 closed 2026-09-17* | `docs/09` | Lead | M |
 | B-15 | P1 | EXP-15 independent scale witness, after its licence check | `docs/12`, ADR-024 | Geo/ML | M |
 | B-16 | P1 | Decide the project's own licence | `docs/16` L-9 | Lead | decision |
 | B-17 | P1 | `THIRD_PARTY_NOTICES`; image digests; SBOM | `docs/16` | Platform | S |
