@@ -43,10 +43,10 @@ F6 ─(PROJ pipeline, allow_ballpark=False)─▶ F7      georef.json: epsg, geo
 - **F5 is not ENU.** `export_manifest.json` currently calls it "a local gravity-aligned ENU
   frame". Its horizontal axes are an arbitrary orthonormal pair (`gravity.frame()`), not east
   and north. Calling it ENU invites a GIS user to trust a heading that does not exist.
-  **Rename to LLF** in the manifest and the DSM tags. (**GAP C-1**)
+  **Rename to LLF** in the manifest and the DSM tags. (**GAP C-1 — closed 2026-09-17**: the manifest writes `frame: "LLF"`.)
 - **"Model units" are not metres** until a scale status says so (§2). Every surface that
   prints "m" must read `scale.status` first. (**GAP C-2** — the viewers and the DSM print
-  "m" unconditionally.)
+  "m" unconditionally. Closed 2026-09-17 for the viewers and the DSM, which now read the status.)
 
 ---
 
@@ -174,7 +174,7 @@ The stage numbers follow `docs/02` §3, with S3b added for bundle adjustment.
 | Out | `model.ply`, `model.obj`, `model.glb`, `model.gltf (+ buffers)`, `model.fbx`, `cloud.las`, `dem.tif`, `export_manifest.json` |
 | Frame | **one frame for every file**: F5, or F7 when georeferenced |
 | `export_manifest.json` | `formats{ply,obj,glb,gltf,las,geotiff,fbx: bool}`, `dem{width,height,gsd_m,filled_fraction,crs,reason_no_crs}`, `gravity{up, heading_spread, heading_degenerate, ground_correction_deg, residual_roll_deg, residual_roll_max_deg, camera_above_ground_m, horiz_track_m, altitude_spread_m}`, `georeferenced`, `note` |
-| Must add | `frame: "LLF"\|"EPSG:…"`, `scale{factor, status, method}` (**GAP C-7**) |
+| Adds (2026-09-17) | `frame: "LLF"`, `units: "metres"\|"model units"`, `scale{factor, status, basis, source}`; gravity lengths are in the files' units (**GAP C-7 closed**) |
 | Rule | a format counts only if a **third-party reader** opens it (T-EXPORT-03); the FBX check is the `Kaydara FBX Binary` header |
 
 ---

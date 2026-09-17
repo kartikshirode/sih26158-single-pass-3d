@@ -162,7 +162,8 @@ Every figure the project states in public, its source, its gate, and its status 
 | 17 | Scene ~24.5 m across; the DSM "corroborates independently" (`demo/README.md`, now corrected) | — | — | **Invalid** and circular: the DSM cell size is a chosen parameter in the same units |
 | 17a | Demo "scene extent" readout (`demo_template.html`) | `D.scale` | — | **Fixed 2026-09-17**: now `2·D.scale·factor` = 132 m; was 24.5 m, wrong by the factor and by a +2.4% arithmetic slip |
 | 17b | Gallery Kolu table and note | `measure_kolu.json` × factor | G1 | **Valid** since 2026-09-17: footprint, relief, thresholds and residual radii in calibrated metres; Village rows marked `*` as model units |
-| 18 | Camera 10.59 m above ground (Q&A) | `export_manifest.json` | — | **Relabelled** in the Q&A 2026-09-17: 10.59 model units, about 58 m calibrated |
+| 18 | Camera height above ground (Q&A) | `export_manifest.json` | G1 | **Corrected** 2026-09-17: the manifest now records 58.67 m (calibrated); 10.59 was model units |
+| 22 | Exported files in metres | `export_manifest.json` (`units`, `scale`) | G1 | **Valid on Kolu** since 2026-09-17: all seven files carry ×5.54; LAS extent ratio 5.54 by readback |
 | 19 | Intrinsics fit residual 0.22 px | `mvs_result.json` | G1 | **Valid** |
 | 20 | ≤ 1 m spatial accuracy | — | — | **Unvalidated**: no GNSS clip (EXP-21) |
 | 21 | Village relief/footprint 0.037, 1.34% above ground | `yt3d/viewer_stats.json` | G1 | **Valid** as ratios; any metre label unvalidated |

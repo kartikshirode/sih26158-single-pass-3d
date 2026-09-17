@@ -132,7 +132,7 @@ def write_las(out, xyz, C, log=print):
     log(f"  cloud.las  {len(xyz):,} points, {os.path.getsize(out+'/cloud.las')/1e6:.1f} MB")
 
 
-def write_dem(out, xyz, gsd=0.10, log=print):
+def write_dem(out, xyz, gsd=0.10, units="metres", log=print):
     """
     Digital surface model as a GeoTIFF: max height per cell, in local metres.
 
@@ -161,7 +161,8 @@ def write_dem(out, xyz, gsd=0.10, log=print):
                        transform=from_origin(0.0, ht * gsd, gsd, gsd),
                        compress="deflate") as ds:
         ds.write(dem, 1)
-        ds.update_tags(VERTICAL="local gravity-aligned, metres above cloud centroid",
+        ds.update_tags(VERTICAL=f"local gravity-aligned, {units} above cloud centroid",
+                       UNITS=units,
                        CRS_STATUS="NONE - not georeferenced, no GNSS in source clip",
                        GSD_M=str(gsd))
     log(f"  dem.tif  {w}x{ht} at {gsd*100:.0f} cm/px, {filled:.0%} of cells filled, "
@@ -170,25 +171,42 @@ def write_dem(out, xyz, gsd=0.10, log=print):
             "crs": None, "reason_no_crs": "source clip has no GNSS"}
 
 
-def export_all(out, points, colors, V, F, C, cams=None, gsd=0.10, log=print):
+GRAVITY_LENGTHS = ("camera_above_ground_m", "horiz_track_m", "altitude_spread_m")
+
+
+def export_all(out, points, colors, V, F, C, cams=None, gsd=0.10, scale=None, log=print):
+    """
+    `scale` is a calibration from tools/scale_cal.py, or None. The reconstruction is in
+    the feed-forward model's units, which EXP-14 found 5.3-5.8x short on Kolu, so a
+    calibrated run is multiplied through HERE, once, before any file is written - the
+    files are the product, and a viewer-only correction would leave them disagreeing.
+    Without a calibration the files stay in model units and the manifest says so.
+    """
     os.makedirs(out, exist_ok=True)
     from gravity import estimate, frame
     g = estimate(cams, points, log=log) if cams is not None else None
     up = g["up"] if g else np.array([0.0, 1.0, 0.0])
+    scale = scale or {"factor": 1.0, "status": "unvalidated", "summary": None,
+                      "source": None}
+    k = float(scale["factor"])
 
     # ONE frame for every output. The first version rotated only the point-derived
     # products, so model.obj and cloud.las came out in different orientations - a file
     # set that looks complete and does not overlay.
     B = frame(up)
     origin = np.asarray(points, float).mean(0)
-    to_enu = lambda A: ((np.asarray(A, float) - origin) @ B.T)[:, [0, 2, 1]]
-    P_enu = to_enu(points)
-    V_enu = to_enu(V)
+    to_llf = lambda A: ((np.asarray(A, float) - origin) @ B.T)[:, [0, 2, 1]] * k
+    P_enu = to_llf(points)
+    V_enu = to_llf(V)
+    if k != 1.0:
+        log(f"  scale      x{k:.2f} ({scale['status']}, {scale['source']}) applied to every file")
 
     write_mesh_formats(out, V_enu, F, C, log=log)
     fbx = write_fbx(out, log=log)
     write_las(out, P_enu, colors, log=log)
-    dem = write_dem(out, P_enu, gsd=gsd, log=log)
+    dem = write_dem(out, P_enu, gsd=gsd,
+                    units="metres" if scale["status"] != "unvalidated" else "model units",
+                    log=log)
 
     manifest = {
         "formats": {f: os.path.exists(f"{out}/{n}") for f, n in
@@ -196,13 +214,24 @@ def export_all(out, points, colors, V, F, C, cams=None, gsd=0.10, log=print):
                      ("gltf", "model.gltf"), ("las", "cloud.las"),
                      ("geotiff", "dem.tif"), ("fbx", "model.fbx"))},
         "dem": dem,
-        "gravity": {k: (v.tolist() if isinstance(v, np.ndarray) else v)
-                    for k, v in (g or {}).items()},
+        # the gravity check ran in model units; its lengths are reported in the files' units
+        "gravity": {name: (val.tolist() if isinstance(val, np.ndarray)
+                           else round(val * k, 2) if name in GRAVITY_LENGTHS else val)
+                    for name, val in (g or {}).items()},
         "georeferenced": False,
-        "note": ("Coordinates are a local gravity-aligned ENU frame in metres, origin at "
-                 "the cloud centroid. No CRS is attached because the source clip carries "
-                 "no GNSS; attaching one would make the output look georeferenced and be "
-                 "wrong."),
+        # LLF, not ENU: the horizontal axes are an arbitrary orthonormal pair, not east
+        # and north (docs/09 section 1.1)
+        "frame": "LLF",
+        "scale": {"factor": k, "status": scale["status"],
+                  "basis": scale.get("summary"), "source": scale.get("source")},
+        "units": "metres" if scale["status"] != "unvalidated" else "model units",
+        "note": (("Coordinates are a local gravity-aligned level frame (LLF), origin at the "
+                  "cloud centroid, horizontal axes not tied to north. "
+                  + (f"Units are metres, calibrated x{k:.2f} from {scale['summary']}. "
+                     if scale["status"] != "unvalidated" else
+                     "Units are the reconstruction's own; its scale is unvalidated. ")
+                  + "No CRS is attached because the source clip carries no GNSS; attaching "
+                  "one would make the output look georeferenced and be wrong.")),
     }
     json.dump(manifest, open(f"{out}/export_manifest.json", "w"), indent=2)
     have = [k for k, v in manifest["formats"].items() if v]
@@ -219,12 +248,20 @@ if __name__ == "__main__":
     ap.add_argument("--cameras", default=None, help="cameras.npy for the gravity check")
     ap.add_argument("--out", default=None)
     ap.add_argument("--gsd", type=float, default=0.10)
+    ap.add_argument("--no-scale", action="store_true",
+                    help="write model units even when a calibration names this run")
     a = ap.parse_args()
     out = a.out or os.path.join(a.indir, "export")
+    cal = None
+    if not a.no_scale:
+        root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        sys.path.insert(0, os.path.join(root, "tools"))
+        import scale_cal
+        cal = scale_cal.load(os.path.basename(os.path.normpath(a.indir)))
     P = np.load(f"{a.indir}/points_fused.npy").astype(np.float64)
     C0 = np.load(f"{a.indir}/colors_fused.npy")
     V = np.load(f"{a.indir}/mesh_v.npy")
     F = np.load(f"{a.indir}/mesh_f.npy")
     Cv = np.load(f"{a.indir}/mesh_c.npy")
     cams = np.load(a.cameras) if a.cameras and os.path.exists(a.cameras) else None
-    export_all(out, P, C0, V, F, Cv, cams=cams, gsd=a.gsd)
+    export_all(out, P, C0, V, F, Cv, cams=cams, gsd=a.gsd, scale=cal)

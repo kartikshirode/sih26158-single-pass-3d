@@ -4,8 +4,8 @@ Version 1.1 — 2026-09-17 (1.0: 2026-09-16). Experiment EXP-14. Reproduce with
 `python src/experiments/exp14_scale_audit.py` (writes `research/exp14-results.txt` and the
 calibration file `research/calibration/kolu.json`).
 
-**Status: the calibration is applied** to measurement and labels on both viewer pages
-(×5.54 on Kolu). It is **not yet** written into the exported files (§6, S2).
+**Status: the calibration is applied** everywhere the Kolu run is delivered: measurement
+and labels on both viewer pages, and all seven exported files (×5.54 on Kolu, §6 S1–S3).
 
 ---
 
@@ -259,7 +259,7 @@ Ordered by dependency. Owners and dates are in `docs/18`.
 | # | Change | Why | Status |
 |---|---|---|---|
 | **S1** | Per-run calibration file, produced by EXP-14-style audits and read by every builder (`tools/scale_cal.py`) | One named, evidenced number per run. Never a global constant. | **Done 2026-09-17** — `research/calibration/kolu.json` |
-| **S2** | Apply S1 **at export**: scale points and mesh before writing, and record `scale_correction` in `export_manifest.json` | The files are the product. A viewer fix alone would leave the viewer and the files disagreeing. | Designed |
+| **S2** | Apply S1 **at export**: scale points and mesh before writing, and record the scale in `export_manifest.json` | The files are the product. A viewer fix alone would leave the viewer and the files disagreeing. | **Done 2026-09-17** — all seven Kolu files re-exported; LAS extent is exactly 5.54× the old one; the FBX opens in Blender at 105 × 132 × 34 m |
 | **S3** | Apply S1 in the viewers to **measurement and labels only** — `M_PER_UNIT` on `/`, the distance line on `/gallery/` — never to `mpu`/`uScale`, which drives rendering; fix the scene-extent readout to `2*D.scale*factor` | Scaling the renderer would double-apply the factor | **Done 2026-09-17** — Kolu in calibrated metres; Village tabs in model units, marked |
 | **S4** | A "scale: unvalidated / calibrated (method) / GNSS" badge on every metric readout | The page should say which kind of metre it is showing | **Partly done** — the walkthrough prints the scale label; both pages print units by status |
 | **S5** | Replace the plausibility band with a **footprint check**: implied ground footprint from the intrinsics and camera height, versus the detected content (lane pitch, vehicle length) | Would have caught this automatically | Research (`docs/12` R1) |
