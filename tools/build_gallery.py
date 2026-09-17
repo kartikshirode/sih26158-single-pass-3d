@@ -24,6 +24,7 @@ from __future__ import annotations
 import base64, glob, io, json, os, re, subprocess, sys
 
 from design_system import css as ds_css
+import scale_cal
 
 import numpy as np
 
@@ -136,23 +137,32 @@ def main():
         print(f"  {key:11} <- out/{run:10} {D['nt']:>7,} tri  {D['np']:>7,} pts  "
               f"half-extent {half:6.2f} m  ({os.path.getsize(p)/1e6:.1f} MB)")
 
-    def rows_pair(d, cov_note=True):
+    # compare_mvs.py measures in the model's units. A calibrated clip prints metres
+    # (every length, and every length-valued threshold, times the factor); an
+    # unvalidated one prints the raw numbers with an asterisk and says why.
+    def units(cal):
+        star = "" if cal["status"] != "unvalidated" else "*"
+        return cal["factor"], star
+
+    def rows_pair(d, cal, cov_note=True):
         b, m = d["baseline"], d["mvs"]
+        k, star = units(cal)
         r = [
             ["points in the cloud", f'{b["points"]:,}', f'{m["points"]:,}', "", "win"],
             ["footprint",
-             f'{b["footprint_m"][0]:.1f} x {b["footprint_m"][1]:.1f} m',
-             f'{m["footprint_m"][0]:.1f} x {m["footprint_m"][1]:.1f} m', "", ""],
+             f'{b["footprint_m"][0]*k:.1f} x {b["footprint_m"][1]*k:.1f} m{star}',
+             f'{m["footprint_m"][0]*k:.1f} x {m["footprint_m"][1]*k:.1f} m{star}', "", ""],
             ["relief above local ground, max",
-             f'{b["relief_m"]["max"]:.2f} m', f'{m["relief_m"]["max"]:.2f} m',
-             "lose", "win"],
-            ["points more than 1.5 m up",
+             f'{b["relief_m"]["max"]*k:.2f} m{star}',
+             f'{m["relief_m"]["max"]*k:.2f} m{star}', "lose", "win"],
+            [f"points more than {1.5*k:.1f} m{star} up",
              pct(b["fraction_above_m"]["1.5"]), pct(m["fraction_above_m"]["1.5"]), "", ""],
-            ["points more than 2.5 m up",
+            [f"points more than {2.5*k:.1f} m{star} up",
              pct(b["fraction_above_m"]["2.5"]), pct(m["fraction_above_m"]["2.5"]),
              "lose", "win"],
-            ["surface residual, 6 cm neighbourhood",
-             f'{at(b, 6.0):.2f} cm', f'{at(m, 6.0):.2f} cm', "lose", "win"],
+            [f"surface residual, {6*k:.0f} cm{star} neighbourhood",
+             f'{at(b, 6.0)*k:.2f} cm{star}', f'{at(m, 6.0)*k:.2f} cm{star}',
+             "lose", "win"],
         ]
         if cov_note:
             c = d["coverage"]["mvs_over_baseline"]
@@ -166,6 +176,16 @@ def main():
 
     sk, sv, sw = ing_k["stats"], ing_v["stats"], ing_w["stats"]
     kk, kv, kwf = ing_k["keyframes"], ing_v["keyframes"], ing_w["keyframes"]
+
+    cal_k = scale_cal.load("kolumvs3d")
+    if scale_cal.load("kolu3d") != cal_k:
+        sys.exit("the two Kolu models must share one calibration - they share a frame")
+    cal_v = scale_cal.load("ytdmvs3d")
+    cal_w = scale_cal.load("yt3d")
+    kk_ = cal_k["factor"]
+    STAR_NOTE = (" <b>*</b> Lengths marked * are in the model's own units: this clip has "
+                 "no external ruler yet, and on the Kolu clip those units turned out to "
+                 "be 5.3-5.8x too small (docs/08).")
 
     gain_k = at(mk["baseline"], 6.0) / at(mk["mvs"], 6.0)
     gain_v = at(ms["baseline"], 6.0) / at(ms["mvs"], 6.0)
@@ -187,16 +207,19 @@ def main():
             ],
             "tableHead": ["Kolu overpass, 45 keyframes",
                           "MapAnything, feed-forward", "OpenMVS rebuild"],
-            "rows": rows_pair(mk),
+            "scale": scale_cal.for_page(cal_k),
+            "rows": rows_pair(mk, cal_k),
             "note": (
                 f'The feed-forward model put <b>{pct(mk["baseline"]["fraction_above_m"]["2.5"])}</b> '
-                f'of its points more than 2.5 m above local ground, on a scene whose '
-                f'structures are visibly several metres tall. That is the "buildings are '
-                f'paint on a sheet" result, and it is why the rebuilt pipeline takes every '
-                f'delivered surface point from photometric MVS instead. At a 6 cm '
-                f'neighbourhood the rebuilt surface sits <b>{gain_k:.1f}x</b> tighter to a '
-                f'fitted plane; its finest resolved residual is '
-                f'{10*at(mk["mvs"], 3.0):.1f} mm at 3 cm. '
+                f'of its points more than {2.5*kk_:.0f} m above local ground, on an '
+                f'overpass whose deck stands several metres over the road. That is the '
+                f'"buildings are paint on a sheet" result, and it is why the rebuilt '
+                f'pipeline takes every delivered surface point from photometric MVS '
+                f'instead. At a {6*kk_:.0f} cm neighbourhood the rebuilt surface sits '
+                f'<b>{gain_k:.1f}x</b> tighter to a fitted plane; its finest resolved '
+                f'residual is {10*at(mk["mvs"], 3.0)*kk_:.0f} mm at {3*kk_:.0f} cm. '
+                f"Lengths are in metres calibrated against lane width and the ecoduct's "
+                f"published waist (x{kk_:.2f}; the model's own units were 5.3-5.8x short). "
                 f'Relief is measured in one shared vertical taken from the baseline by '
                 f'<code>src/analysis/compare_mvs.py</code>, so both columns are on the same '
                 f'axis. Wall clock for the rebuild: {mvs_k["total_seconds"]/60:.0f} min on '
@@ -218,19 +241,20 @@ def main():
             ],
             "tableHead": ["Village pass, 42 keyframes",
                           "MapAnything, feed-forward", "OpenMVS rebuild"],
-            "rows": rows_pair(ms),
+            "scale": scale_cal.for_page(cal_v),
+            "rows": rows_pair(ms, cal_v),
             "note": (
                 f'A portrait phone clip, and the second scene the pipeline was run on '
                 f'end to end. The detail gain is larger here than on Kolu '
-                f'(<b>{gain_v:.1f}x</b> tighter at 6 cm, finest residual '
-                f'{10*at(ms["mvs"], 3.0):.1f} mm at 3 cm) but <b>coverage goes the other '
+                f'(<b>{gain_v:.1f}x</b> tighter at 6 cm*, finest residual '
+                f'{10*at(ms["mvs"], 3.0):.1f} mm* at 3 cm*) but <b>coverage goes the other '
                 f'way</b>: the rebuild holds only '
                 f'{100*ms["coverage"]["mvs_over_baseline"]:.0f}% of the baseline\'s ground '
                 f'cells, because photometric MVS refuses surfaces it cannot match across '
                 f'three views while the feed-forward model will happily invent them. '
                 f'Both behaviours are the same trade, and only one of them is reported as '
                 f'a win on the deck. Wall clock: {mvs_v["total_seconds"]/60:.0f} min on '
-                f'8 vCPU.'),
+                f'8 vCPU.' + STAR_NOTE),
         },
         {
             "key": "wide", "tab": "Village pass, whole clip", "aspect": ww / wh,
@@ -241,6 +265,7 @@ def main():
                         f'{sw["keyframes_selected"]} keyframes',
             "span": f'the whole {wdur:.0f} s, {sw["shots_detected"]} shots',
             "viewScale": round(halves["wide_base"], 4),
+            "scale": scale_cal.for_page(cal_w),
             "models": [
                 {"key": "wide_base", "file": "mesh/wide_base.js",
                  "label": "baseline", "sub": "feed-forward"},
@@ -252,7 +277,8 @@ def main():
                  None, "lose", ""],
                 ["keyframes kept", f'{sw["keyframes_selected"]}', None, "", ""],
                 ["footprint",
-                 dict(vs_wide["geom"]).get("footprint", "—").replace("&times;", "x"),
+                 dict(vs_wide["geom"]).get("footprint", "—").replace("&times;", "x")
+                 .removesuffix(" m") + " m*",
                  None, "", ""],
                 ["relief / footprint",
                  dict(vs_wide["geom"]).get("relief / footprint", "—"), None, "lose", ""],
@@ -262,13 +288,13 @@ def main():
             "note": (
                 'The same source video as the Village pass, but ingested whole instead of '
                 'over the single moving pass. Keyframing detected <b>2 shots</b> here '
-                'against 1 in the run beside it, and spread 45 keyframes across a 115 x 58 m '
+                'against 1 in the run beside it, and spread 45 keyframes across a 115 x 58 m* '
                 'footprint. The result has a relief-to-footprint ratio of 0.037 and puts '
                 '1.34% of its points above local ground: a flat sheet with the scene '
                 'painted on it. It is kept here because it is the failure that motivates '
                 'adaptive keyframing, and because the fix was choosing the span, not '
                 'changing the model. There is no MVS column because this run was never '
-                'carried through the rebuild.'),
+                'carried through the rebuild.' + STAR_NOTE),
         },
     ]
 
@@ -276,7 +302,7 @@ def main():
     title = "SIH26158 - every clip we reconstructed"
     desc = ("Source drone video beside the interactive 3D model, for every clip the "
             "pipeline was run on. Feed-forward baseline against the MVS rebuild, in one "
-            "shared metric frame.")
+            "shared frame per clip.")
     note = ("Two further clips sit in <code>data/cand/</code> (bahai, toolse) that were "
             "shortlisted but never ingested, and a fourth (nicosia, 20 keyframes) was "
             "ingested but never reconstructed. Everything that reached a 3D model is on "

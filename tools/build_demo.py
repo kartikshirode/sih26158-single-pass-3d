@@ -19,6 +19,7 @@ from __future__ import annotations
 import base64, glob, io, json, os, re, subprocess, sys
 
 from design_system import css as ds_css
+import scale_cal
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 HERE = os.path.join(ROOT, "tools")
@@ -104,6 +105,10 @@ def main():
     man = jload(os.path.join(RUN_DIR, "export", "export_manifest.json"))
     vs = jload(os.path.join(RUN_DIR, "viewer_stats.json"))
     D = mesh_from_viewer(os.path.join(RUN_DIR, "viewer.html"))
+    # The model's own metres were 5.3-5.8x short on this clip (docs/08). The page
+    # measures in calibrated metres only because a calibration file names this run.
+    cal = scale_cal.load(os.path.basename(RUN_DIR))
+    scale_k = cal["factor"]
 
     clip_path = os.path.join(OUT_DIR, CLIP_REL.replace("/", os.sep))
     if not os.path.exists(clip_path):
@@ -203,7 +208,8 @@ def main():
                    "ground coverage."},
         {"name": "Output Formats", "met": True,
          "detail": "OBJ, PLY, LAS, GeoTIFF, glb/gltf and FBX, all written and read "
-                   "back in one shared ENU frame in metres."},
+                   "back in one shared local frame. The files are still in the "
+                   "model's units; the scale calibration is applied in this viewer."},
         {"name": "Visualization", "met": True,
          "detail": "This viewer. Runs from a file, needs no server, and measures."},
     ]
@@ -229,9 +235,16 @@ def main():
                    "dense_pct": dense_pct, "budget_s": 900},
         "exports": exports,
         "verdict": verdict,
-        "manifest_note": f'<b>georeferenced: false</b>. {man["note"]} The DSM is '
-                         f'{man["dem"]["width"]} x {man["dem"]["height"]} at '
-                         f'{man["dem"]["gsd_m"]} m GSD, '
+        "scale": scale_cal.for_page(cal),
+        # The manifest's own note says "metres"; the files predate the calibration and
+        # are in model units, so the page says that rather than repeating the file.
+        "manifest_note": f'<b>georeferenced: false</b>. No CRS is attached because the '
+                         f"clip carries no GNSS. The exported files are in the model's "
+                         f'units: the scale correction (x{scale_k:.2f}) is applied in this '
+                         f'viewer, not yet in the files. The DSM is '
+                         f'{man["dem"]["width"]} x {man["dem"]["height"]} cells of '
+                         f'{man["dem"]["gsd_m"]} model units (about '
+                         f'{man["dem"]["gsd_m"] * scale_k:.2f} m), '
                          f'{man["dem"]["filled_fraction"]:.0%} filled.',
         "thumbs": thumbs(KF_DIR),
         # keyframe 0 is frame 781, which is exactly where the clip was cut, so
@@ -263,7 +276,7 @@ def main():
         f.write(html)
 
     print(f"  mesh      {D['nt']:,} tri / {D['np']:,} pts, "
-          f"{D['scale'] * 2 * 32767 / 32000:.1f} m across")
+          f"{D['scale'] * 2 * scale_k:.0f} m across  (scale {cal['status']}, x{scale_k:.2f})")
     print(f"  keyframes {len(R['thumbs'])} thumbnails inlined")
     print(f"  og card   {og_bytes / 1e3:.0f} KB")
     print(f"  clip      {cut['duration_s']:.1f} s, "

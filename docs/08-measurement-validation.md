@@ -1,7 +1,11 @@
 # Measurement validation — is the metre a metre?
 
-Version 1.0 — 2026-09-16. Experiment EXP-14. Reproduce with
-`python src/experiments/exp14_scale_audit.py` (writes `research/exp14-results.txt`).
+Version 1.1 — 2026-09-17 (1.0: 2026-09-16). Experiment EXP-14. Reproduce with
+`python src/experiments/exp14_scale_audit.py` (writes `research/exp14-results.txt` and the
+calibration file `research/calibration/kolu.json`).
+
+**Status: the calibration is applied** to measurement and labels on both viewer pages
+(×5.54 on Kolu). It is **not yet** written into the exported files (§6, S2).
 
 ---
 
@@ -18,11 +22,16 @@ Two rulers that do not depend on the model agree:
 | Lane width, edge line to dashed centre line | **0.650** model m (0.64 and 0.66 either side) | 3.50–3.75 m | **5.38–5.77** |
 | Ecoduct waist, barrier crest to barrier crest | **3.95** model m (plateau median; min 3.70) | 21–22 m | **5.32–5.57** |
 
-And three consequences land where reality says they should:
+A third check gives a **floor**, not an estimate (§3.6): Estonian road norms require
+5.0 m of clearance under an overpass, and the arch crown reads **1.30** model m, so the
+factor is **at least 3.85**. It rules out ×2, which would make the underpass 2.6 m.
+
+And the consequences land where reality says they should:
 
 | Quantity | In the model | × 5.3–5.8 | Plausible? |
 |---|---:|---:|---|
-| Deck surface above the road | 1.40 m | 7.4–8.1 m | Yes — a highway overpass needs ≥ ~5 m clearance plus the deck |
+| Deck surface above the road | 1.40 m | 7.4–8.1 m | Yes — a highway overpass needs ≥ 5 m clearance plus the deck |
+| Arch crown above the road | 1.30 m | 6.9–7.5 m | Yes — above the 5.0 m legal minimum |
 | Camera above ground | 10.59 m | 56–61 m | Yes — the frame holds a four-lane highway, the ecoduct and both verges |
 | Scene extent | 19.1 × 24.1 m | ~106 × 133 m | Yes |
 | DSM cell, declared 0.10 m | — | 0.53–0.58 m on the ground | The shipped GeoTIFF geotransform is wrong by the same factor |
@@ -134,6 +143,46 @@ is the one the published figure describes. Plateau median **3.95**.
 
 No plausible reading of either ruler brings the factor near 2.
 
+### 3.6 Clearance floor — added 2026-09-17
+
+**Why it was added.** A teammate measured the road-to-bridge distance in the demo, got 2.8 m,
+and knew that was impossible for a highway overpass. That is a ruler too, and it can be
+made exact.
+
+**The norm.** Estonian road design norms, MKM regulation 106, §9: *"Tuleb tagada
+kõrgusgabariit 5,0 m … viadukti ja estakaadi all avades, kus on lubatud sõidukiliiklus"* —
+5.0 m of clearance under any overpass opening with vehicle traffic. The 1999 norms, under
+which the 2013 structure was designed, carry the same paragraph (§8). The same regulation's
+Table 2.4 sets 3.75 m lanes for this road class under an overpass, inside the lane bracket
+of §3.2.
+
+**What the model can and cannot show.** The underpass interior is **unobserved**: one point
+in the whole volume between the portals. The **portal face is observed**: an elevation of it
+shows both concrete arch rings over dark, sparsely reconstructed openings. Tracing the lowest
+dense, light band on the face across the road, against the median road surface just outside,
+gives the soffit. The trace rises to a crown and falls to the springings on both arches,
+which is the evidence that it is the arch and not the deck.
+
+| Arch | Crown clearance (model m) |
+|---|---:|
+| Left | 1.32–1.34 |
+| Right | ~1.29 |
+| **Used (median of the five highest slices)** | **1.30** |
+
+5.0 m ÷ 1.30 = **factor ≥ 3.85**. It is a floor because 5.0 m is a minimum and the crown is
+the highest point of the opening. It is consistent with the 5.3–5.8 bracket, and it
+excludes ×2 on its own.
+
+**What the 2.8 m reading was.** Not the ceiling: the ceiling inside the underpass does not
+exist in the cloud, so a click aimed at it lands on whatever surface the drone did see.
+From the road to the top of the structure measures **2.19 model m vertically and about
+2.7 diagonally** — the reading matches a pick on the parapet or deck. Calibrated, that is
+roughly 12–15 m, which is the top of the structure, not its underside.
+
+That exposes a second defect, separate from scale: **a pick into an unobserved region
+silently returns a different surface pair than the operator intended.** It is recorded as
+backlog item B-30 (`docs/18`).
+
 ---
 
 ## 4. What moves, and what does not
@@ -196,6 +245,7 @@ None of these is tested. They are listed so the research program can test them i
 | H2 | The Apache checkpoint (6 datasets) is weaker on scale than the CC-BY-NC one (13). | EXP-02, restricted to scale, on clips with a ruler. The NC checkpoint is for internal ablation only. |
 | H3 | The crop/resize to 518 × 294 changes the effective focal length the scale head sees. | Feed the model the true intrinsics as a prior (`intrinsics=`, `is_metric_scale`) and compare. |
 | H4 | Scale is fine per view but diluted by joint inference over 45 views. | Per-view `metric_scaling_factor` spread, from the saved outputs. |
+| H5 | The error is **anisotropic** — depth (roughly vertical here) scaled differently from the lateral axes — so one scalar is not the whole correction. Wrong intrinsics produce exactly that signature, and the intrinsics were fitted from the point maps rather than given (H3). | The two rulers are orthogonal *horizontal* lengths and agree, so the horizontal plane is consistent. The vertical checks here are weak (vegetation, thin structures, an unobserved underpass). Test with EXP-17: pass true intrinsics and compare horizontal and vertical factors separately. |
 
 H3 is the cheapest, and it matters for the design either way: MapAnything **accepts
 intrinsics and metric priors** (`docs/02` §2). The pipeline has never passed them.
@@ -208,10 +258,10 @@ Ordered by dependency. Owners and dates are in `docs/18`.
 
 | # | Change | Why | Status |
 |---|---|---|---|
-| **S1** | Per-run `scale_calibration.json`: `{run, factor, bracket, method, references, measured_by, date}`, produced by EXP-14-style audits and read by every builder | One named, evidenced number per run. Never a global constant. | Designed |
+| **S1** | Per-run calibration file, produced by EXP-14-style audits and read by every builder (`tools/scale_cal.py`) | One named, evidenced number per run. Never a global constant. | **Done 2026-09-17** — `research/calibration/kolu.json` |
 | **S2** | Apply S1 **at export**: scale points and mesh before writing, and record `scale_correction` in `export_manifest.json` | The files are the product. A viewer fix alone would leave the viewer and the files disagreeing. | Designed |
-| **S3** | Apply S1 in the viewers to **measurement and labels only** — `M_PER_UNIT` on `/`, the distance line on `/gallery/` — never to `mpu`/`uScale`, which drives rendering. In the same change, fix the scene-extent readout to `2*D.scale*factor` (it is 2.4% high today) | Scaling the renderer would double-apply the factor | Designed |
-| **S4** | A "scale: unvalidated / calibrated (method) / GNSS" badge on every metric readout | The page should say which kind of metre it is showing | Designed |
+| **S3** | Apply S1 in the viewers to **measurement and labels only** — `M_PER_UNIT` on `/`, the distance line on `/gallery/` — never to `mpu`/`uScale`, which drives rendering; fix the scene-extent readout to `2*D.scale*factor` | Scaling the renderer would double-apply the factor | **Done 2026-09-17** — Kolu in calibrated metres; Village tabs in model units, marked |
+| **S4** | A "scale: unvalidated / calibrated (method) / GNSS" badge on every metric readout | The page should say which kind of metre it is showing | **Partly done** — the walkthrough prints the scale label; both pages print units by status |
 | **S5** | Replace the plausibility band with a **footprint check**: implied ground footprint from the intrinsics and camera height, versus the detected content (lane pitch, vehicle length) | Would have caught this automatically | Research (`docs/12` R1) |
 | **S6** | Pass true intrinsics and any SRT altitude to MapAnything as priors (H3) | Cheapest possible fix at the source | Research (`docs/12` R1) |
 | **S7** | Re-label `docs/05`, the Q&A page and the deck from S1, so every absolute number is either corrected or flagged | The build's figure re-grep will catch any number that no longer appears in its source | Blocked on S1 |
@@ -219,10 +269,15 @@ Ordered by dependency. Owners and dates are in `docs/18`.
 
 ---
 
-## 7. The ×2 request
+## 7. The ×2 request — resolved 2026-09-17
+
+**Resolution.** The reference behind the request was a road-to-bridge measurement that
+could not be right for a highway overpass. §3.6 confirms that judgement against the
+governing norm, and shows that ×2 would still leave a 2.6 m underpass. The measured factor
+(×5.54) is applied instead. The original reasoning follows.
 
 A ×2 correction was requested on the evidence that a 1.4 m distance should read 2.8 m. It
-has **not** been applied, for two reasons.
+was **not** applied, for two reasons.
 
 1. **On Kolu, the measured factor is 5.3–5.8.** ×2 would move every number towards the truth
    and leave all of them wrong.

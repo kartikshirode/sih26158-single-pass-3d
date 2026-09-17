@@ -157,11 +157,12 @@ Every figure the project states in public, its source, its gate, and its status 
 | 12 | MapAnything 0.42–0.55 s/view on T4; 600 views fits the geometry budget | EXP-11, EXP-12 | G2 | **Valid** — extrapolation labelled |
 | 13 | Consumer GNSS gives ~4.1 m absolute; RTK 0.097 m | EXP-05 | Simulation | **Valid as simulation**; not field-validated |
 | 14 | Effective resolution 30–50 cm | `docs/05` §2 | G2 | **Relabel/Invalid**: model units; Kolu 2.7–3.0 m corrected. The **14× ratio is Valid** |
-| 15 | "Metric scale with zero GCPs" (Q&A, deck) | `docs/02` §2 | — | **Invalid** as a capability: scale 5.5× off on Kolu |
-| 16 | "Measurement in metres" (demo) | demo | — | **Invalid** until `docs/08` S1–S3 land |
+| 15 | "Metric scale with zero GCPs" (Q&A, deck) | `docs/02` §2 | — | **Invalid** as a model capability: scale 5.5× off on Kolu. Q&A rewritten 2026-09-17 (scale from GNSS, then known objects, else unvalidated); **deck still to fix** |
+| 16 | "Measurement in metres" (demo, gallery) | `research/calibration/kolu.json` | G1 | **Valid on Kolu** since 2026-09-17 (calibrated ×5.54); Village measures in model units, labelled |
 | 17 | Scene ~24.5 m across; the DSM "corroborates independently" (`demo/README.md`, now corrected) | — | — | **Invalid** and circular: the DSM cell size is a chosen parameter in the same units |
-| 17a | Demo "scene extent" readout (`demo_template.html`) | `D.scale` | — | **Invalid twice**: the scale factor, plus a +2.4% arithmetic bug (`×32767/32000` applied to an extent that is exactly `2·D.scale`) |
-| 18 | Camera 10.59 m above ground (Q&A) | `export_manifest.json` | — | **Relabel**: model units; 56–61 m corrected |
+| 17a | Demo "scene extent" readout (`demo_template.html`) | `D.scale` | — | **Fixed 2026-09-17**: now `2·D.scale·factor` = 132 m; was 24.5 m, wrong by the factor and by a +2.4% arithmetic slip |
+| 17b | Gallery Kolu table and note | `measure_kolu.json` × factor | G1 | **Valid** since 2026-09-17: footprint, relief, thresholds and residual radii in calibrated metres; Village rows marked `*` as model units |
+| 18 | Camera 10.59 m above ground (Q&A) | `export_manifest.json` | — | **Relabelled** in the Q&A 2026-09-17: 10.59 model units, about 58 m calibrated |
 | 19 | Intrinsics fit residual 0.22 px | `mvs_result.json` | G1 | **Valid** |
 | 20 | ≤ 1 m spatial accuracy | — | — | **Unvalidated**: no GNSS clip (EXP-21) |
 | 21 | Village relief/footprint 0.037, 1.34% above ground | `yt3d/viewer_stats.json` | G1 | **Valid** as ratios; any metre label unvalidated |

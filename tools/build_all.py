@@ -9,7 +9,7 @@ build is what makes it a constraint. Any non-zero step fails the whole run.
 
   build_demo.py     /            the one-clip walkthrough
   build_gallery.py  /gallery/    every clip, video beside 3D, baseline vs MVS
-  build_qa.py       /qa/         52 Q&As; re-greps all 54 figures against sources
+  build_qa.py       /qa/         the Q&A page; re-greps every figure against sources
   check_design.py                scales, tokens and WCAG contrast
   check_wiring.py                every scripted element still exists
 """

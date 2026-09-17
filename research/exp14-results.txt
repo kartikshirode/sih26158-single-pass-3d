@@ -18,8 +18,16 @@ real lane 3.5-3.75 m  ->  scale factor 5.38 - 5.77
 narrowest 3.70 model m; waist plateau (slices within 10% of it) median 3.95 model m
 real waist 21-22 m  ->  scale factor 5.32 - 5.57
 
+--- 3. Floor: arch clearance against the 5.0 m legal minimum ---
+points inside the underpass volume: 1 (the interior is unobserved;
+the arch rings on the portal face are not)
+crown clearance on the portal face  1.30 model m
+a real crown must clear 5.0 m  ->  factor >= 3.85
+at x2 the crown would stand 2.60 m - below the legal minimum
+
 --- 3. What the factor implies (sanity, not evidence) ---
 deck surface above road      1.40 model m  ->  7.4-8.1 m   (a highway overpass needs >= ~5 m clearance plus the deck)
+arch crown clearance         1.30 model m  ->  6.9-7.5 m
 camera above ground          10.59 model m  ->  56-61 m
 scene extent                 19.1 x 24.1 model m  ->  106 x 133 m at the central factor
 DSM cell (declared 0.10 m)   ->  actually 0.53-0.58 m on the ground

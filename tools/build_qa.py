@@ -75,8 +75,10 @@ QA = [
 
     Q("settled", "What comes out, and in what formats?",
       "A textured mesh and a dense point cloud, written to <b>6 of 6</b> required formats: "
-      "OBJ, PLY, LAS 1.4, GeoTIFF DSM, glB/glTF and FBX, all in one shared local ENU frame "
-      "in metres. Each is written and read back as a check. FBX comes via assimp (BSD-3), "
+      "OBJ, PLY, LAS 1.4, GeoTIFF DSM, glB/glTF and FBX, all in one shared local frame. "
+      "The files are still in the model's units: the scale calibration is applied in the "
+      "viewer and has not yet been written into them. Each is written and read back as a "
+      "check. FBX comes via assimp (BSD-3), "
       "so every format has a permissive route.",
       T_MEAS, "out/kolumvs3d/export/export_manifest.json"),
 
@@ -130,12 +132,14 @@ QA = [
       T_MEAS, "out/kolumvs3d/viewer_stats.json"),
 
     Q("settled", "Can you measure on the model, and in what units?",
-      "Yes - two clicks in the viewer give a straight-line distance in <b>metres</b>, "
-      "picked against the dense cloud so the measurement is anchored to real measured "
-      "surface points rather than interpolated geometry. The frame is a local "
-      "gravity-aligned ENU in metres. The scale is real but relative; see the accuracy "
-      "questions in the Exposed tier.",
-      T_MEAS, "demo/gallery"),
+      "Yes - two clicks in the viewer give a straight-line distance, picked against the "
+      "dense cloud so it is anchored to real measured surface points. On the Kolu clip it "
+      "is in <b>calibrated metres</b>: the model's own units were <b>5.3–5.8x too small</b>, "
+      "measured against the lane width and the ecoduct's published 21–22 m waist, and the "
+      "viewer applies that factor. The Village clips have no ruler yet, so they measure in "
+      "model units and say so. Picks only land on surfaces the drone saw - the underpass "
+      "interior is empty, so a click aimed at the ceiling lands on the arch face or the deck.",
+      T_MEAS, "docs/08-measurement-validation.md"),
 
     Q("settled", "What hardware produced these results?",
       "<b>8 vCPU, no GPU</b>, on Cloud Run in asia-south1. Every component is permissive "
@@ -205,17 +209,19 @@ QA = [
       T_MEAS, "docs/02, docs/06"),
 
     Q("mechanism", "How do you get metric scale with zero ground control points?",
-      "From the feed-forward model's own <code>metric_scaling_factor</code>, which is a "
-      "native output rather than something bolted on. That is what makes zero-GCP metric "
-      "work possible at all, and it directly answers PS challenge (viii). The honest limit "
-      "is in the Exposed tier: the scale is asserted by the model and has not been "
-      "validated against a measured length.",
-      T_MEAS, "docs/02 §2"),
+      "Not from the model alone - we tested that and it failed. MapAnything's "
+      "<code>metric_scaling_factor</code> put the Kolu clip <b>5.3–5.8x too small</b>. So "
+      "scale now comes, in order, from GNSS when the clip has it, from objects of known "
+      "size in the scene (lane markings, published structure dimensions), and otherwise "
+      "the result is labelled unvalidated. No ground control points are needed; a ruler "
+      "the scene already contains is. That is our answer to PS challenge (viii).",
+      T_MEAS, "docs/08-measurement-validation.md"),
 
     Q("mechanism", "Where does the vertical direction come from?",
       "A ground plane fitted to the cloud, cross-checked against the gimbal roll-zero "
       "constraint. The export manifest records the residual roll as 0.24 deg and the camera "
-      "height above ground as 10.59 m. Note the manifest also records "
+      "height above ground as 10.59 model units - about 58 m once the scale calibration is "
+      "applied. Note the manifest also records "
       "<code>heading_degenerate: true</code> - a single straight pass does not constrain "
       "heading. See the Exposed tier for how far to trust the vertical.",
       T_MEAS, "out/kolumvs3d/export/export_manifest.json"),
@@ -229,7 +235,7 @@ QA = [
 
     Q("mechanism", "What is 'relief above local ground' and why measure that?",
       "Height above a per-cell locally fitted ground plane, taking the 5th percentile "
-      "within each 1 m cell as ground. It is the metric that <b>cannot be faked by noise</b>: "
+      "within each 1-unit cell as ground (about 5.5 m on the calibrated Kolu clip). It is the metric that <b>cannot be faked by noise</b>: "
       "buildings either have vertical extent or they are paint on a sheet. Point counts and "
       "small-scale roughness can both be gamed - a noisier cloud scores higher on roughness "
       "and a smoother one wins on point count - so relief is the discriminator.",
@@ -240,7 +246,9 @@ QA = [
       "residual. Lower means a tighter, better-resolved surface. Baseline 1.38 cm against "
       "the rebuild's 0.76 cm on Kolu (<b>1.8x</b>), and 1.29 cm against 0.35 cm on the "
       "second clip (<b>3.6x</b>) - that pair is where the deck's '1.8-3.6x finer' comes "
-      "from. Finest resolved residual at a 3 cm ball is 1.9 mm.",
+      "from. Finest resolved residual at a 3 cm ball is 1.9 mm. These lengths are in the "
+      "model's units; on Kolu, calibrated, the 6 cm ball is about 33 cm. The ratios do not "
+      "depend on scale.",
       T_MEAS, "out/ppt/measure_kolu.json, measure_short.json"),
 
     Q("mechanism", "How are occluded surfaces handled?",
@@ -327,7 +335,8 @@ QA = [
       "It is a deliberate refusal. The clip carries no GNSS, so any CRS we attached would be "
       "a guess, and a GeoTIFF with a plausible-looking wrong CRS is <b>worse than one with "
       "none</b> - downstream GIS will silently reproject it and the error becomes invisible. "
-      "So the DSM ships with a real geotransform in metres, "
+      "So the DSM ships with a real geotransform (in model units until the scale "
+      "calibration reaches the files), "
       "<code>crs: null</code>, and <code>reason_no_crs: \"source clip has no GNSS\"</code> "
       "recorded in the manifest. Give us a GNSS-tagged clip and the CRS is populated.",
       T_MEAS, "out/kolumvs3d/export/export_manifest.json"),
@@ -418,25 +427,36 @@ QA = [
 
     Q("exposed", "How much do you trust the '30-50 cm' effective-resolution figure?",
       "The <b>ratio of 14 is solid</b> - it is scale-free, confirmed three ways, with the "
-      "competing hypothesis tested and rejected. The <b>absolute centimetres are only as "
-      "good as the model's asserted scale</b>. Those metre labels come from "
-      "<code>metric_scaling_factor</code>, checked only against a plausibility band: implied "
-      "camera speeds of 1.6-3.0 m/s and altitudes of 6.4-11.4 m. A <b>30% scale error sits "
-      "comfortably inside that band</b>. So quote the ratio confidently and the centimetres "
-      "with the caveat attached.",
-      T_OPEN, "docs/05 §2"),
+      "competing hypothesis tested and rejected. <b>The centimetres were wrong.</b> They came "
+      "from <code>metric_scaling_factor</code>, checked only against a plausibility band "
+      "(implied camera speeds of 1.6-3.0 m/s, altitudes of 6.4-11.4 m), and that band passed "
+      "a 5.5x error. Calibrated, Kolu's 51.2 cm patch is about 2.7-3.0 m on the ground - "
+      "so the feed-forward geometry alone misses the 1 m target even in relative terms, "
+      "which is the case for the MVS stage. The Village figures have no ruler yet.",
+      T_MEAS, "docs/05 §2, docs/08"),
+
+    Q("exposed", "Your measurements were wrong. By how much, and how do you know now?",
+      "By <b>5.3–5.8x</b> on Kolu - distances read far too short. A teammate measured the "
+      "road-to-bridge distance and knew it could not be that low; they were right. We then "
+      "measured the model against things of published size: <b>lane width</b> (0.650 model "
+      "units against 3.5–3.75 m) and the <b>ecoduct's waist</b> (3.95 against 21–22 m). "
+      "Both give the same factor. A third check is a floor: Estonian road norms require "
+      "<b>5.0 m</b> of clearance under an overpass, the arch crown reads 1.30 model units, "
+      "so the factor is at least 3.85 - a simple 2x fix would leave a 2.6 m underpass. The "
+      "viewer now applies x5.54 on Kolu. The factor is a property of one run, so it is "
+      "never applied to another clip.",
+      T_MEAS, "docs/08-measurement-validation.md, research/calibration/kolu.json"),
 
     Q("exposed", "Is the vertical direction trustworthy?",
-      "Only partly, and this propagates. Across three runs the cloud's thin PCA axis and the "
-      "scene-to-camera direction <b>disagreed by 40-57 deg</b>, which makes plan views, "
-      "height colouring and relief statistics all suspect in the general case. The export "
-      "manifest also records <code>heading_degenerate: true</code> - a single straight pass "
-      "does not constrain heading. Our comparison numbers survive this because "
-      "<code>compare_mvs.py</code> deliberately measures both clouds against <b>one shared "
-      "vertical taken from the baseline</b>, so the comparison is internally consistent even "
-      "if the axis itself is imperfect. Fixing it properly needs telemetry - DJI SRT gimbal "
-      "pitch.",
-      T_OPEN, "src/analysis/compare_mvs.py, docs/05"),
+      "To about two degrees, and that is now checked rather than assumed. We once reported "
+      "a 40-57 deg disagreement; that compared two quantities that are not both verticals, "
+      "and it was withdrawn. The check that holds: a gimballed camera keeps roll near zero, "
+      "so the ground-plane vertical must leave every camera's right axis horizontal. It "
+      "does, to 0.21-0.68 deg median, and the two estimates agree to 1.7-2.5 deg. What "
+      "stays weak is heading: the manifest records <code>heading_degenerate: true</code>, "
+      "because a single straight pass does not constrain it. Telemetry - DJI SRT gimbal "
+      "pitch - would close that.",
+      T_MEAS, "docs/05 §6, src/pipeline/gravity.py"),
 
     Q("exposed", "Your own documents quote 1,963 s and 2,078.7 s for the same clip. Which is it?",
       "Both are real and they are on different bases; they have not been reconciled, and "
@@ -794,6 +814,14 @@ CHECKS = [
     ("51.2 cm", "docs/05-quality-analysis.md"),
     ("1.6-3.0 m/s", "docs/05-quality-analysis.md"),
     ("6.4-11.4 m", "docs/05-quality-analysis.md"),
+    ("5.3–5.8", "docs/08-measurement-validation.md"),
+    ("0.650", "docs/08-measurement-validation.md"),
+    ("21–22 m", "docs/08-measurement-validation.md"),
+    ('"factor": 5.54', "research/calibration/kolu.json"),
+    ('"implies_factor_at_least": 3.85', "research/calibration/kolu.json"),
+    ("kõrgusgabariit 5,0 m", "docs/08-measurement-validation.md"),
+    ("0.21, 0.68 and 0.23 degrees", "docs/05-quality-analysis.md"),
+    ("1.66, 2.14 and 2.47 degrees", "docs/05-quality-analysis.md"),
     ("50.56", "docs/05-quality-analysis.md"),
     ("2098", "docs/06-gcp-deployment.md"),
     ("1963", "docs/06-gcp-deployment.md"),

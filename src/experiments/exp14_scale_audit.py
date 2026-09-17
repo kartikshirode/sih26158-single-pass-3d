@@ -19,7 +19,14 @@ carries two independent rulers, neither of which depends on the model:
        et.wikipedia "Okodukt": "ehitati Kolu sild selle kitsaimas kohas 22 meetri laiuseks"
        21 m is reported elsewhere; the bracket carries both.
 
-Both are measured in the export's own gravity-aligned ENU frame - the frame every shipped
+A third check is one-sided. Estonian road design norms require 5.0 m of clearance under
+any overpass open to vehicles ("Tuleb tagada korgusgabariit 5,0 m ... viadukti ja estakaadi
+all avades, kus on lubatud soidukiliiklus" - MKM regulation 106, par. 9, and the same
+paragraph in the 1999 norms the 2013 structure was built under). The arch rings are
+reconstructed on the portal face, so the crown clearance is measurable there - the
+underpass interior is not - and it gives a FLOOR on the factor, not an estimate.
+
+Both rulers are measured in the export's own gravity-aligned frame - the frame every shipped
 file (OBJ/PLY/LAS/GeoTIFF/glTF/FBX) and both viewer pages use - so the factor found here
 applies to the artefacts, not to some intermediate.
 
@@ -45,6 +52,8 @@ from gravity import frame  # noqa: E402
 RUN = os.path.join(ROOT, "out", "kolumvs3d")
 LANE_REAL = (3.50, 3.75)        # m, design basis .. ministry 2+2 minimum
 WAIST_REAL = (21.0, 22.0)       # m, the two published figures
+CLEARANCE_MIN = 5.0             # m, Estonian minimum under an overpass with traffic
+CAL_OUT = os.path.join(ROOT, "research", "calibration", "kolu.json")
 
 out = io.StringIO()
 
@@ -161,6 +170,38 @@ def waist_width(E, theta):
     return rows, float(near.min()), float(np.median(near)), deck - road
 
 
+def portal_clearance(E, C, theta):
+    """Arch crown height above the road, traced on the left portal face.
+
+    The drone never sees inside the underpass, but it does see the portal: the arch
+    rings are light concrete over a dark, sparsely reconstructed opening. Per 10 cm
+    across the road, the soffit is the lowest dense, light band on the face, and the
+    road is the median surface just outside it. The crown is where that gap peaks.
+    """
+    w = np.cos(theta) * E[:, 0] + np.sin(theta) * E[:, 1]
+    v = -np.sin(theta) * E[:, 0] + np.cos(theta) * E[:, 1]
+    h = E[:, 2]
+    lum = C.mean(1)
+    face = (w > -3.3) & (w < -2.55)
+    road = (w > -4.6) & (w < -3.3)
+    inside = ((w > -2.4) & (w < 1.2) & (v > -0.7) & (v < 0.55)
+              & (h > -1.1) & (h < -0.2)).sum()
+    clear = []
+    for v0 in np.arange(-2.6, 4.0, 0.1):
+        b = (v >= v0) & (v < v0 + 0.1)
+        rz = h[b & road]
+        if len(rz) < 30:
+            continue
+        for z in np.arange(-1.2, 0.6, 0.025):
+            sl = b & face & (h >= z) & (h < z + 0.025)
+            if sl.sum() >= 12 and np.median(lum[sl]) > 70:
+                clear.append(z - float(np.median(rz)))
+                break
+    clear = np.array(clear)
+    crown = float(np.median(np.sort(clear)[-5:]))    # the five highest slices
+    return crown, int(inside)
+
+
 def main():
     E, C, man = load_enu()
     say("=" * 84)
@@ -196,13 +237,23 @@ def main():
     say(f"real waist {WAIST_REAL[0]:.0f}-{WAIST_REAL[1]:.0f} m  ->  scale factor "
         f"{k_waist[0]:.2f} - {k_waist[1]:.2f}")
 
+    crown, inside = portal_clearance(E, C, theta)
+    floor = CLEARANCE_MIN / crown
+    say("\n--- 3. Floor: arch clearance against the 5.0 m legal minimum ---")
+    say(f"points inside the underpass volume: {inside} (the interior is unobserved;")
+    say("the arch rings on the portal face are not)")
+    say(f"crown clearance on the portal face  {crown:.2f} model m")
+    say(f"a real crown must clear {CLEARANCE_MIN} m  ->  factor >= {floor:.2f}")
+    say(f"at x2 the crown would stand {2 * crown:.2f} m - below the legal minimum")
+
     lo = min(k_waist[0], k_lane[0]) if k_lane else k_waist[0]
     hi = max(k_waist[1], k_lane[1]) if k_lane else k_waist[1]
     mid = float(np.sqrt(lo * hi))
     g = man["gravity"]
-    say("\n--- 3. What the factor implies (sanity, not evidence) ---")
+    say("\n--- 4. What the factor implies (sanity, not evidence) ---")
     say(f"deck surface above road      {clear:.2f} model m  ->  {clear*lo:.1f}-{clear*hi:.1f} m"
         "   (a highway overpass needs >= ~5 m clearance plus the deck)")
+    say(f"arch crown clearance         {crown:.2f} model m  ->  {crown*lo:.1f}-{crown*hi:.1f} m")
     say(f"camera above ground          {g['camera_above_ground_m']:.2f} model m  ->  "
         f"{g['camera_above_ground_m']*lo:.0f}-{g['camera_above_ground_m']*hi:.0f} m")
     say(f"scene extent                 {ext[0]:.1f} x {ext[1]:.1f} model m  ->  "
@@ -228,6 +279,36 @@ def main():
 
     with open(os.path.join(ROOT, "research", "exp14-results.txt"), "w", encoding="utf-8") as f:
         f.write(out.getvalue())
+
+    # The contract file every builder reads (docs/09 section 2). The MVS cloud inherits
+    # the feed-forward model's frame - bundle adjustment refines poses, it does not
+    # re-frame them - so one factor covers both Kolu reconstructions.
+    cal = {
+        "schema": "sih26158/scale-calibration/1",
+        "runs": ["kolumvs3d", "kolu3d"],
+        "factor": round(mid, 2),
+        "bracket": [round(lo, 2), round(hi, 2)],
+        "status": "calibrated",
+        "method": "known-object",
+        "summary": "lane width and the ecoduct's published 21-22 m waist",
+        "references": [
+            {"object": "lane width", "model_m": round((best[2] + best[3]) / 2, 3) if best else None,
+             "real_m": list(LANE_REAL), "source": "ERR 650086; ERR news 1608116446; MKM 106 table 2.4"},
+            {"object": "ecoduct waist", "model_m": round(wmed, 3),
+             "real_m": list(WAIST_REAL), "source": "et.wikipedia Okodukt"},
+        ],
+        "floor_checks": [
+            {"object": "arch crown clearance", "model_m": round(crown, 3),
+             "min_real_m": CLEARANCE_MIN, "implies_factor_at_least": round(floor, 2),
+             "source": "MKM 106 par. 9; 1999 road design norms par. 8"},
+        ],
+        "measured_by": "src/experiments/exp14_scale_audit.py",
+        "date": "2026-09-17",
+    }
+    os.makedirs(os.path.dirname(CAL_OUT), exist_ok=True)
+    with open(CAL_OUT, "w", encoding="utf-8") as f:
+        json.dump(cal, f, indent=2)
+    print(f"\nwrote {os.path.relpath(CAL_OUT, ROOT)}  (factor {cal['factor']}, bracket {cal['bracket']})")
 
 
 if __name__ == "__main__":

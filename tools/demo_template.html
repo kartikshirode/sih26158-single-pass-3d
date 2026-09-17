@@ -636,7 +636,10 @@ var DETAILS = {
         ['principal point', PO.cx.toFixed(1) + ', ' + PO.cy.toFixed(1)],
         ['intrinsics fit residual', PO.residual_px.toFixed(4) + ' px']
       ]); },
-    n:'The feed-forward model supplies <b>pose and metric scale only</b>. Its ' +
+    n:'The feed-forward model supplies <b>pose and a metric scale prior only</b>. ' +
+      'On this clip that prior was 5.3–5.8× too small, so the scale is ' +
+      'calibrated separately against lane width and the ecoduct\'s published ' +
+      'waist. Its ' +
       'geometry is discarded: it samples depth on a ' + PO.model_grid[0] + '×' +
       PO.model_grid[1] + ' grid against a ' + PO.full_frame[0] + '×' +
       PO.full_frame[1] + ' frame, so it cannot carry the detail the delivered ' +
@@ -690,8 +693,9 @@ var DETAILS = {
           '<span class="en">' + e.file + '</span>' +
           '<span class="ez">' + mb(e.bytes) + '</span></div>'; }).join('') + '</div>';},
     n:'All six formats the problem statement asks for, written and read back in one ' +
-      'shared ENU frame in metres. <b>No CRS is attached</b>: the clip carries no ' +
-      'GNSS, and a plausible-looking wrong one would silently reproject downstream.'}
+      'shared local frame, in the model\'s units. <b>No CRS is attached</b>: the clip ' +
+      'carries no GNSS, and a plausible-looking wrong one would silently reproject ' +
+      'downstream.'}
 };
 
 function kvHTML(rows){
@@ -779,7 +783,12 @@ document.getElementById('r3geom').innerHTML = [
   ['mesh triangles', DN.triangles.toLocaleString()],
   ['shown here', D.nt.toLocaleString() + ' tri / ' + D.np.toLocaleString() + ' pts'],
   ['reproj, after BA', SP.reproj_ba.toFixed(3) + ' px'],
-  ['scene extent', (D.scale*2*32767/32000).toFixed(1) + ' m']
+  /* the extent is exactly 2*D.scale model units; the old 32767/32000 factor
+     belongs to shader units, not to this */
+  ['scene extent', R.scale.status === 'unvalidated'
+      ? (D.scale*2).toFixed(1) + ' model units'
+      : (D.scale*2*R.scale.factor).toFixed(0) + ' m'],
+  ['metric scale', R.scale.label]
 ].map(function(r){ return '<dt>'+r[0]+'</dt><dd>'+r[1]+'</dd>'; }).join('');
 document.getElementById('r3exp').innerHTML = R.exports.map(function(e){
   return '<div class="erow"><span class="ef">'+e.fmt+'</span>' +
@@ -795,8 +804,12 @@ var IX = new Uint32Array(un(D.idx).buffer);
 var PP = new Int16Array(un(D.ppos).buffer), PC = un(D.pcol);
 
 /* metres per shader unit: positions were quantised to +/-32000 about the centre
-   over a half-extent of D.scale metres, then normalised by the GPU over 32767. */
-var M_PER_UNIT = D.scale * 32767 / 32000;
+   over a half-extent of D.scale model units, then normalised by the GPU over 32767.
+   SCALE.factor turns model units into metres. It comes from this run's calibration
+   file and is 1 when there is none - it is never a global correction. It scales the
+   measurement only; rendering never sees it. */
+var SCALE = R.scale;
+var M_PER_UNIT = D.scale * 32767 / 32000 * SCALE.factor;
 
 var NR = new Float32Array(VP.length);
 for(var t=0; t<IX.length; t+=3){
@@ -985,7 +998,7 @@ document.querySelectorAll('[data-view]').forEach(function(b){
 /* ---------------- measurement ----------------
    Picks against the dense point cloud: those are real measured surface points,
    which is what a distance on this model should be anchored to. Two clicks give a
-   straight-line distance in metres of the reconstruction's own metric frame. */
+   straight-line distance, in calibrated metres when this run has a calibration. */
 var measuring = false, marks = [];
 var mtip = document.getElementById('mtip');
 var tipTimer = null;
@@ -1001,9 +1014,13 @@ function setTip(){
     : marks.length === 1
       ? 'Click a second point.'
       : 'Distance shown. Click again to start a new measurement.<br>' +
-        '<span class="fg-3">Metric-relative: scale comes from the ' +
-        'feed-forward prior, not from ground control. Absolute accuracy is ' +
-        'unvalidated on this clip.</span>';
+        '<span class="fg-3">' + (SCALE.status === 'unvalidated'
+          ? 'Model units: this clip has no external ruler, so its scale is unvalidated.'
+          : 'Scale ' + SCALE.label + ' from ' + SCALE.basis + ': about ±5% on ' +
+            'horizontal lengths; vertical ones are less certain. ' +
+            'Picks land only on surfaces ' +
+            'the drone saw: the underpass interior is empty, so a click aimed at ' +
+            'the ceiling lands on the arch face or the deck.') + '</span>';
 }
 toggle('bMeasure', function(v){
   measuring = v;
@@ -1060,7 +1077,8 @@ function drawOverlay(dpr){
     var a = marks[0], b = marks[1];
     var d = Math.hypot(a[0]-b[0], a[1]-b[1], a[2]-b[2]) * M_PER_UNIT;
     var mx = (s[0][0]+s[1][0])/2, my = (s[0][1]+s[1][1])/2;
-    var lab = d.toFixed(2) + ' m';
+    var lab = SCALE.status === 'unvalidated' ? d.toFixed(2) + ' units'
+                                             : d.toFixed(1) + ' m';
     var wpx = lab.length * 7.6 + 14;
     h += '<rect class="m-box" x="'+(mx-wpx/2)+'" y="'+(my-24)+'" width="'+wpx+
          '" height="19" rx="3"/>' +

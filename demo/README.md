@@ -81,7 +81,7 @@ This demo walks one clip end to end. The gallery shows all three and what separa
 
 ## The Q&A
 
-`qa/index.html` (live at `/qa/`) is 52 technical questions with answers, built by
+`qa/index.html` (live at `/qa/`) is the technical Q&A, built by
 `tools/build_qa.py`. They are ordered by **how exposed we are when asked**, not by how
 technical the topic is — so "do you meet the processing-time target?" (no, by 2.3×) sits
 in the last tier where it gets rehearsed, rather than in the middle where it gets skipped.
