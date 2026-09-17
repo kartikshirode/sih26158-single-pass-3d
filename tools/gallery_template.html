@@ -213,7 +213,7 @@ function build(key, D, viewScale){
     gl.bindVertexArray(null);
   };
   bind(vaoM,pM,bVP,bVC,bNR); bind(vaoP,pP,bPP,bPC,null);
-  /* metres per raw shader unit, then divided by the example's shared view scale */
+  /* model units per raw shader unit, then divided by the example's shared view scale */
   var mpu = D.scale * 32767 / 32000;
   cache[key] = {vaoM:vaoM, vaoP:vaoP, bIX:bIX, nIdx:IX.length, PP:PP,
                 nt:D.nt, np:D.np,
@@ -358,8 +358,13 @@ function setTip(){
   clearTimeout(tipTimer);
   mtip.innerHTML = marks.length===0 ? 'Click a surface point to start measuring.'
     : marks.length===1 ? 'Click a second point.'
-    : 'Distance shown. Click again to start over.<br><span style="color:var(--muted)">' +
-      'Metric-relative: scale comes from the feed-forward prior, not ground control.</span>';
+    : 'Distance shown. Click again to start over.<br><span class="fg-3">' +
+      (EX[cur].scale.status === 'unvalidated'
+        ? 'Model units: this clip has no external ruler, so its scale is unvalidated.'
+        : 'Scale ' + EX[cur].scale.label + ' from ' + EX[cur].scale.basis +
+          ': about ±5% on horizontal lengths; vertical ones are less certain. ' +
+          'Picks land only on ' +
+          'surfaces the drone saw.') + '</span>';
 }
 toggle('bMeasure', function(v){ measuring=v;
   document.body.classList.toggle('measuring', v); if(!v) marks=[]; setTip(); });
@@ -409,10 +414,14 @@ function drawOverlay(dpr){
   });
   if(marks.length === 2){
     var a=marks[0], b=marks[1];
-    /* world units are the example's view scale, so this is metres */
-    var d = Math.hypot(a[0]-b[0],a[1]-b[1],a[2]-b[2]) * active.viewScale;
+    /* world units times the view scale are model units; the clip's calibration
+       factor (1 when it has none) turns those into metres. Measurement only:
+       mpu/uScale, which draw the model, never see the factor. */
+    var sc = EX[cur].scale;
+    var d = Math.hypot(a[0]-b[0],a[1]-b[1],a[2]-b[2]) * active.viewScale * sc.factor;
     var mx=(s[0][0]+s[1][0])/2, my=(s[0][1]+s[1][1])/2;
-    var lab = d.toFixed(2)+' m', wpx = lab.length*7.6+14;
+    var lab = sc.status === 'unvalidated' ? d.toFixed(2)+' units' : d.toFixed(1)+' m';
+    var wpx = lab.length*7.6+14;
     h += '<rect class="m-box" x="'+(mx-wpx/2)+'" y="'+(my-24)+'" width="'+wpx+
          '" height="19" rx="3"/>'+
          '<text class="m-txt" x="'+mx+'" y="'+(my-10.5)+'">'+lab+'</text>';

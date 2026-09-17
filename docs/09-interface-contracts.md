@@ -55,26 +55,37 @@ F6 ─(PROJ pipeline, allow_ballpark=False)─▶ F7      georef.json: epsg, geo
 `docs/08` measured the Kolu model at **5.3–5.8× too small**. So scale is a first-class,
 per-run, evidenced value, never an implicit property of the coordinates.
 
-### 2.1 `scale_calibration.json` (one per run)
+### 2.1 Calibration files — `research/calibration/<clip>.json`
+
+One file per clip, naming every run that shares that clip's frame. It lives under
+`research/` rather than `out/` because it is evidence and must be version-controlled;
+`tools/scale_cal.py` is the only reader, and every builder goes through it. The live file:
 
 ```json
 {
   "schema": "sih26158/scale-calibration/1",
-  "run": "kolumvs3d",
-  "factor": 5.5,
-  "bracket": [5.3, 5.8],
+  "runs": ["kolumvs3d", "kolu3d"],
+  "factor": 5.54,
+  "bracket": [5.32, 5.77],
   "status": "calibrated",
   "method": "known-object",
+  "summary": "lane width and the ecoduct's published 21-22 m waist",
   "references": [
-    {"object": "lane width", "model_m": 0.650, "real_m": [3.50, 3.75],
-     "source": "ERR 650086; ERR news 1608116446"},
-    {"object": "ecoduct waist", "model_m": 3.95, "real_m": [21.0, 22.0],
-     "source": "et.wikipedia Ökodukt"}
+    {"object": "lane width", "model_m": 0.65, "real_m": [3.5, 3.75], "source": "…"},
+    {"object": "ecoduct waist", "model_m": 3.95, "real_m": [21.0, 22.0], "source": "…"}
+  ],
+  "floor_checks": [
+    {"object": "arch crown clearance", "model_m": 1.298, "min_real_m": 5.0,
+     "implies_factor_at_least": 3.85, "source": "MKM 106 par. 9"}
   ],
   "measured_by": "src/experiments/exp14_scale_audit.py",
-  "date": "2026-09-16"
+  "date": "2026-09-17"
 }
 ```
+
+A run may appear in at most one file. The feed-forward baseline and its MVS rebuild share a
+frame (bundle adjustment refines, it does not re-frame), so they share a file; the gallery
+builder refuses to build if they ever disagree.
 
 `status` is one of:
 
@@ -213,8 +224,11 @@ Both 3-D pages read geometry that the builders lift out of the per-run `viewer.h
 | `/gallery/` | `uScale = mpu / viewScale`, with `mpu = D.scale × 32767 / 32000` — **do not scale** | distance line × `viewScale` × **`scale.factor`** |
 
 Scaling `mpu` would double-apply the factor on the gallery, because it already drives the
-shared metric frame the A/B toggle relies on. **GAP C-9**: neither page reads a scale factor
-or a scale status yet.
+shared metric frame the A/B toggle relies on. **GAP C-9 — closed 2026-09-17** for the
+viewers: both pages read `R.scale` / `EX[i].scale` (`factor`, `status`, `label`, `basis`),
+print metres only when the status allows it, and print "units" otherwise. A headless-browser
+test clicks two points on each page and checks the label against the math, and checks that
+`uScale` is unchanged. The exported files do not carry the factor yet (`docs/08` S2).
 
 ---
 

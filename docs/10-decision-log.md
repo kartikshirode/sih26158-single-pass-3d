@@ -195,6 +195,13 @@ factor is a per-run model output, so it cannot transfer between clips.
 **Consequences.** Every absolute figure on the Village clips is unvalidated until EXP-14b
 gives them a ruler. The plausibility band is retired as a validation method.
 **Status.** Accepted. Implementation tracked as S1–S8 in `docs/08` §6.
+**Implemented 2026-09-17** for the viewers: `research/calibration/kolu.json` (×5.54, bracket
+5.32–5.77), read through `tools/scale_cal.py`. The ×2 request was resolved against the
+reference behind it — a road-to-bridge reading — and the Estonian 5.0 m clearance norm,
+which ×2 would still violate (`docs/08` §3.6, §7).
+**Caveat shipped with it.** The factor is one scalar. Both rulers are horizontal and agree;
+the vertical evidence is weak, and an anisotropic error (hypothesis H5) would need a
+per-axis correction. EXP-17 decides.
 
 ## ADR-015 · One frame for every export; assimp for FBX
 

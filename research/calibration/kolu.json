@@ -1,0 +1,46 @@
+{
+  "schema": "sih26158/scale-calibration/1",
+  "runs": [
+    "kolumvs3d",
+    "kolu3d"
+  ],
+  "factor": 5.54,
+  "bracket": [
+    5.32,
+    5.77
+  ],
+  "status": "calibrated",
+  "method": "known-object",
+  "summary": "lane width and the ecoduct's published 21-22 m waist",
+  "references": [
+    {
+      "object": "lane width",
+      "model_m": 0.65,
+      "real_m": [
+        3.5,
+        3.75
+      ],
+      "source": "ERR 650086; ERR news 1608116446; MKM 106 table 2.4"
+    },
+    {
+      "object": "ecoduct waist",
+      "model_m": 3.95,
+      "real_m": [
+        21.0,
+        22.0
+      ],
+      "source": "et.wikipedia Okodukt"
+    }
+  ],
+  "floor_checks": [
+    {
+      "object": "arch crown clearance",
+      "model_m": 1.298,
+      "min_real_m": 5.0,
+      "implies_factor_at_least": 3.85,
+      "source": "MKM 106 par. 9; 1999 road design norms par. 8"
+    }
+  ],
+  "measured_by": "src/experiments/exp14_scale_audit.py",
+  "date": "2026-09-17"
+}

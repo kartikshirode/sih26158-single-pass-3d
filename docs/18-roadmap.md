@@ -71,8 +71,8 @@ Priorities: **P0** blocks the submission · **P1** before M1 · **P2** M2–M3 �
 | ID | P | Item | Source | Owner | Size |
 |---|---|---|---|---|---|
 | **B-01** | P0 | Correct or relabel every invalidated figure in the deck, Field 9 (`docs/07` §4), the Q&A page and `docs/05`; let `build_qa.py`'s re-grep flag stale ones | `docs/14` §4 | Product | M |
-| **B-02** | P0 | Kolu `scale_calibration.json`; apply at export and to viewer measurement and labels only (never `mpu`); fix the +2.4% scene-extent readout to `2*D.scale*factor` in the same change | `docs/08` S1–S3, ledger 17a | Geo/ML | M |
-| **B-03** | P0 | **Decide the correction to ship:** the requested ×2, or EXP-14's measured 5.3–5.8× — and which two points and reference produced the ×2 | `docs/08` §7 | Lead + requester | decision |
+| **B-02** | P0 | Kolu calibration applied to viewer measurement, labels, gallery tables and the Q&A — **done 2026-09-17**. **Still open:** write the factor into the exported files (S2) | `docs/08` S1–S3, ledger 16–17b | Geo/ML | M |
+| ~~B-03~~ | P0 | Decide the correction to ship — **decided 2026-09-17**: the measured ×5.54, not ×2. The ×2 came from a road-to-bridge reading that the 5.0 m clearance norm shows ×2 cannot fix | `docs/08` §3.6, §7 | Lead + requester | decision |
 | ~~B-04~~ | P0 | `demo/README.md`: remove the circular DSM "corroboration" and the 24.5 m figure — **done 2026-09-16** | `docs/14` item 17 | Product | S |
 | **B-05** | P0 | Village footage on the public gallery: obtain permission or remove | `docs/16` F-4 | Product | S |
 | **B-06** | P0 | Commit `demo/` and the design-system tools | `docs/16` F-3 | Platform | S |
@@ -99,6 +99,7 @@ Priorities: **P0** blocks the submission · **P1** before M1 · **P2** M2–M3 �
 | B-27 | P3 | EXP-22, EXP-27: observable completeness and inferred-geometry labels | `docs/12` R5 | Geospatial | L |
 | B-28 | P3 | EXP-02, EXP-18: model track | `docs/12` R7 | Geo/ML | M |
 | B-29 | P3 | COPC via Potree; 3D Tiles | `docs/11` | Product | M |
+| **B-30** | P1 | **Warn on picks near unobserved regions.** A click aimed at a surface the drone never saw (the underpass ceiling) silently lands on a different one. Flag picks whose nearest point is far from the cursor ray, or that sit on the rim of a hole | `docs/08` §3.6 | Product | M |
 
 ### 4.1 Definition of done
 
