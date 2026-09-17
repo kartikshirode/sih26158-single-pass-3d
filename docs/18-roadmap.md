@@ -16,8 +16,9 @@ confirm them with the SPOC.**
 | November 2026 | Shortlist announced | Secondary reporting |
 | December 2026 | Grand finale, 36 hours, dataset supplied on the day | Secondary reporting |
 
-**Two weeks to submission.** The deck currently carries metric figures that `docs/08` has
-invalidated (`docs/14` §4, items 5, 7, 14–17). Fixing them comes before anything else.
+**Two weeks to submission.** The deck's metric figures were corrected on 2026-09-17
+(`docs/14` §4). What remains for M0 is B-05 (footage rights) and B-07 (team fields,
+deadline confirmation, submission).
 
 ---
 
@@ -70,7 +71,7 @@ Priorities: **P0** blocks the submission · **P1** before M1 · **P2** M2–M3 �
 
 | ID | P | Item | Source | Owner | Size |
 |---|---|---|---|---|---|
-| **B-01** | P0 | Correct or relabel every invalidated figure in the deck, Field 9 (`docs/07` §4), the Q&A page and `docs/05`; let `build_qa.py`'s re-grep flag stale ones | `docs/14` §4 | Product | M |
+| ~~B-01~~ | P0 | Correct or relabel every invalidated figure in the deck, Field 9 (`docs/07` §4), the Q&A page and `docs/05` — **done 2026-09-17**; the deck also lost a wrong "Apache-2.0 / BSD" licence claim | `docs/14` §4 | Product | M |
 | ~~B-02~~ | P0 | Kolu calibration applied to viewer measurement, labels, gallery tables, the Q&A and all seven exported files — **done 2026-09-17** | `docs/08` S1–S3, ledger 16–22 | Geo/ML | M |
 | ~~B-03~~ | P0 | Decide the correction to ship — **decided 2026-09-17**: the measured ×5.54, not ×2. The ×2 came from a road-to-bridge reading that the 5.0 m clearance norm shows ×2 cannot fix | `docs/08` §3.6, §7 | Lead + requester | decision |
 | ~~B-04~~ | P0 | `demo/README.md`: remove the circular DSM "corroboration" and the 24.5 m figure — **done 2026-09-16** | `docs/14` item 17 | Product | S |

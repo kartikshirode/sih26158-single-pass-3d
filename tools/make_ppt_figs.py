@@ -175,23 +175,37 @@ def accuracy():
     from matplotlib.ticker import FixedLocator, FuncFormatter
     fmt = FuncFormatter(lambda v, _: ("%g" % v))
     (kb, km), (sb, sm) = series("kolu"), series("short")
+
+    # The measurements are in the model's units. Kolu has a calibration (docs/08), so
+    # its panel is in real centimetres; Village has none, so its panel says model units
+    # and prints no absolute claim. The SHAPE of each curve is scale-free either way.
+    import scale_cal
+    cal = scale_cal.load("kolumvs3d")
+    kk = cal["factor"] if cal["status"] != "unvalidated" else 1.0
+    kb = [(r * kk, v * kk) for r, v in kb]
+    km = [(r * kk, v * kk) for r, v in km]
+    panels = (
+        (kb, km, "Kolu survey pass · 45 views · calibrated", kk, "cm",
+         [20, 50, 100, 200, 500], [1, 2, 5, 10, 20, 50]),
+        (sb, sm, "Village pass · 42 views · scale unvalidated", 1.0, "model cm",
+         [3, 6, 12, 25, 50, 100], [0.2, 0.5, 1, 2, 5, 10]),
+    )
     w, h = FIG["accuracy"]
     fig, axes = plt.subplots(1, 2, figsize=(w, h))
-    for ax, (bl, mv, name) in zip(axes, ((kb, km, "Kolu survey pass · 45 views"),
-                                         (sb, sm, "Village pass · 42 views"))):
+    for ax, (bl, mv, name, sk, unit, xt, yt) in zip(axes, panels):
         for data, c in ((bl, RUST), (mv, NAVY)):
             ax.plot([d[0] for d in data], [d[1] for d in data], "o-",
                     color=c, lw=1.9, ms=3.6, mew=0, zorder=3)
         ax.set_xscale("log")
         ax.set_yscale("log")
-        ax.set_xlim(2.4, 130)
-        ax.set_ylim(0.13, 12)
-        ax.set_xlabel("window radius, cm", fontsize=7.4, labelpad=2)
+        ax.set_xlim(2.4 * sk, 130 * sk)
+        ax.set_ylim(0.13 * sk, 12 * sk)
+        ax.set_xlabel(f"window radius, {unit}", fontsize=7.4, labelpad=2)
         ax.set_title(name, fontsize=8.2, color=INK, pad=5, loc="left", **SEMI)
         ax.grid(alpha=.55, which="major")
         ax.set_axisbelow(True)
-        ax.xaxis.set_major_locator(FixedLocator([3, 6, 12, 25, 50, 100]))
-        ax.yaxis.set_major_locator(FixedLocator([0.2, 0.5, 1, 2, 5, 10]))
+        ax.xaxis.set_major_locator(FixedLocator(xt))
+        ax.yaxis.set_major_locator(FixedLocator(yt))
         for a in (ax.xaxis, ax.yaxis):
             a.set_minor_locator(FixedLocator([]))
             a.set_major_formatter(fmt)
@@ -201,6 +215,7 @@ def accuracy():
         for sp in ("top", "right"):
             ax.spines[sp].set_visible(False)
     axes[0].set_ylabel("median |residual|, cm", fontsize=7.4, labelpad=2)
+    axes[1].set_ylabel("model cm", fontsize=7.4, labelpad=2)
 
     # Named in place, on the panel that establishes the comparison. The right panel
     # inherits the meaning from the colour and stays clean.
@@ -208,15 +223,15 @@ def accuracy():
     axes[0].plot([bx], [by], "o", color=RUST, ms=6.5, mfc=PAPER, mew=1.6, zorder=4)
     axes[0].annotate("feed-forward point maps stop here:"
                      f"\na {by:.1f} cm floor, nothing below it",
-                     xy=(bx, by), xytext=(2.68, 5.2), fontsize=7.2, color=RUST,
+                     xy=(bx, by), xytext=(2.68 * kk, 5.2 * kk), fontsize=7.2, color=RUST,
                      linespacing=1.35, va="bottom",
                      arrowprops=dict(arrowstyle="-", color=RUST, lw=0.8,
                                      shrinkA=2, shrinkB=5))
-    axes[0].text(2.68, 0.152, "full-resolution photometric MVS", fontsize=7.2,
+    axes[0].text(2.68 * kk, 0.152 * kk, "full-resolution photometric MVS", fontsize=7.2,
                  color=NAVY, **SEMI)
-    for ax, (mx, my) in ((axes[0], km[0]), (axes[1], sm[0])):
-        ax.annotate(f"{my * 10:.1f} mm", xy=(mx, my), xytext=(mx * 1.22, my * 0.80),
-                    fontsize=8, color=NAVY, family=MONO, weight="bold")
+    mx, my = km[0]
+    axes[0].annotate(f"{my:.1f} cm", xy=(mx, my), xytext=(mx * 1.22, my * 0.80),
+                     fontsize=8, color=NAVY, family=MONO, weight="bold")
     fig.subplots_adjust(left=.098, right=.995, top=.885, bottom=.155, wspace=.14)
     p = f"{OUT}/fig_accuracy.png"
     fig.savefig(p, dpi=DPI)

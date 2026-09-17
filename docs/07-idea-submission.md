@@ -120,7 +120,7 @@ Measured, not interpolated: accurate 3D from a single drone pass
 
 ```
 We convert one monocular drone pass — video, GPS and flight metadata — into a
-metrically scaled, textured 3D mesh and dense point cloud, exportable as OBJ, PLY,
+metrically calibrated, textured 3D mesh and dense point cloud, exportable as OBJ, PLY,
 LAS, GeoTIFF, glB/glTF and FBX, and inspectable in a browser viewer built for
 measurement rather than display.
 
@@ -128,18 +128,21 @@ The idea rests on a finding we measured rather than assumed. Modern feed-forward
 models are the reason a single pass is tractable at all: they recover camera pose and
 metric scale from one flight line, where classical structure-from-motion needs overlap
 it does not have. But their geometry has a hard ceiling. We measured a model sampling
-at 2.2 cm while carrying information only at 30-50 cm, set by its patch-14 vision
-backbone and its interpolating depth head. We confirmed this three ways and tested the
+depth per pixel while carrying information only per 14-pixel patch - about 2.8 m on
+the ground on our survey clip - set by its vision backbone and its interpolating depth
+head. We confirmed this three ways and tested the
 competing explanation, which failed. No downstream tuning can recover detail the patch
 grid never carried, which is why single-pass AI reconstructions look convincing from
 altitude and fall apart on inspection.
 
-So we use the feed-forward model strictly as a pose and metric-scale prior, refine it
-with global bundle adjustment, and take every delivered surface point from
-full-resolution per-pixel photometric multi-view stereo. Measured across two unrelated
-real clips: reprojection error 1.73 to 0.37 px, surface detail 1.8-3.6x finer and
-resolving to 1.9 mm, vertical structure ceiling lifted from 2.33 m to 3.58 m, and
-136% of the baseline's ground coverage on the survey clip. The whole pipeline is
+Its metric scale failed the same test: checked against lane markings and a structure
+of published size, it was 5.3-5.8x too small from the air. So we use the feed-forward
+model strictly as a pose prior, take scale from GNSS or from objects of known size in
+the scene, refine with global bundle adjustment, and take every delivered surface point
+from full-resolution per-pixel photometric multi-view stereo. Measured across two
+unrelated real clips: reprojection error 1.73 to 0.37 px, surface detail 1.8-3.6x finer,
+and on the calibrated survey clip a vertical structure ceiling lifted from 12.9 m to
+19.8 m and 136% of the baseline's ground coverage. The whole pipeline is
 containerised and runs on commodity CPU with no GPU dependency.
 
 Two of the six desired-output targets are not yet met and we say so. Processing takes
@@ -168,13 +171,12 @@ scaled, textured 3D mesh and dense point cloud, exported as OBJ, PLY, LAS, GeoTI
 glB/glTF and FBX with a browser viewer for measurement.
 
 The idea comes from a measurement. Feed-forward 3D models make a single pass tractable
-because they recover camera pose and metric scale where classical structure-from-motion
-lacks the overlap to. But their geometry is capped by a patch grid: we measured one
-sampling at 2.2 cm while carrying information only at 30-50 cm. So we use the model
-strictly as a pose and scale prior, refine it with global bundle adjustment, and take
-every delivered surface point from full-resolution per-pixel photometric multi-view
-stereo. Across two real clips: reprojection error 1.73 to 0.37 px, detail 1.8-3.6x
-finer, vertical structure ceiling 2.33 m to 3.58 m.
+because they recover camera pose where classical structure-from-motion lacks the
+overlap to. But their geometry is capped by a patch grid - about 2.8 m on our survey
+clip - and their scale was 5.3-5.8x too small from the air. So we use the model strictly
+as a pose prior, take scale from GNSS or objects of known size, and take every delivered
+surface point from full-resolution per-pixel photometric multi-view stereo. Across two
+real clips: reprojection error 1.73 to 0.37 px, detail 1.8-3.6x finer.
 
 Two of the six targets are open and stated: 15-minute processing is not met on CPU, and
 absolute accuracy is unvalidated because neither test clip has GNSS.
