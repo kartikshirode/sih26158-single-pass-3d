@@ -44,6 +44,7 @@ from pptx.util import Inches, Pt
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import deck_theme as th
+import scale_cal
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 FIG = os.path.join(ROOT, "out", "ppt")
@@ -69,6 +70,10 @@ IDEA_TITLE = "Measured, not interpolated: accurate 3D from a single drone pass"
 # 5/6 into a 6/7 and flatter us.
 REQUIRED_FORMATS = ("obj", "ply", "las", "geotiff", "glb+gltf", "fbx")
 
+# One 14-px patch on the Kolu survey pass, in the model's units (docs/05 section 2). The
+# deck multiplies it by the clip's calibration; it never prints the raw value as metres.
+PATCH_KOLU_MODEL = 0.512
+
 
 def _json(path):
     import json
@@ -91,6 +96,16 @@ def measurements():
     short = _json("out/ytd_mvs/mvs_result.json")
     ex = _json("out/kolumvs3d/export/export_manifest.json")["formats"]
     mk, ms = _json("out/ppt/measure_kolu.json"), _json("out/ppt/measure_short.json")
+
+    # compare_mvs.py measures in the model's units, which EXP-14 found 5.3-5.8x short on
+    # Kolu (docs/08). Every length on the slides is Kolu's, times its calibration. The
+    # Village clip has no ruler, so none of its absolute lengths reach a slide.
+    cal = scale_cal.load("kolumvs3d")
+    if cal["status"] == "unvalidated":
+        raise SystemExit("the deck prints Kolu lengths in metres; it needs "
+                         "research/calibration/kolu.json (src/experiments/exp14_scale_audit.py)")
+    k = cal["factor"]
+    lo, hi = cal["bracket"]
 
     tri = run["sparse_after_triangulation"]
     ba = run["sparse_after_bundle_adjustment"]
@@ -122,11 +137,16 @@ def measurements():
         "formats_need": len(REQUIRED_FORMATS),
         "resid_6cm": at(mk["mvs"], 6.0),
         "resid_6cm_base": at(mk["baseline"], 6.0),
-        "finest_mm": min(at(mk["mvs"], 3.0), at(ms["mvs"], 3.0)) * 10,
+        "finest_cm": at(mk["mvs"], 3.0) * k,
         "gain_lo": min(gain(mk), gain(ms)),
         "gain_hi": max(gain(mk), gain(ms)),
-        "relief_base": mk["baseline"]["relief_m"]["max"],
-        "relief_mvs": mk["mvs"]["relief_m"]["max"],
+        "relief_base": mk["baseline"]["relief_m"]["max"] * k,
+        "relief_mvs": mk["mvs"]["relief_m"]["max"] * k,
+        "patch_m": PATCH_KOLU_MODEL * k,
+        "scale_k": k,
+        "scale_lo": lo,
+        "scale_hi": hi,
+        "scale_pm": 100 * (hi - lo) / 2 / k,
     }
 
 
@@ -503,9 +523,10 @@ def build():
     # Indented, and the bodies say "its", so both rows read as halves of what the AI
     # returned rather than as the next two steps after it.
     for i, (word, body, note, col) in enumerate((
-            ("KEEP", "its camera pose and metric scale", "", NAVY),
-            ("DROP", "its geometry",
-             "sampled at 2.2 cm, but only carries 30–50 cm", RUST))):
+            ("KEEP", "its camera pose", "", NAVY),
+            ("DROP", "its geometry, and its unchecked scale",
+             f"geometry sampled per pixel but carried per 14-px patch, "
+             f"~{m['patch_m']:.1f} m on our survey clip", RUST))):
         y = 2.32 + i * 0.40
         keyline(s2, X(0) + 0.22, y, 0.28, col)
         textbox(s2, X(0) + 0.36, y, SPAN(6) - 0.36, 0.28, [
@@ -546,11 +567,11 @@ def build():
              "reconstructs from a single trajectory with no cross-strip overlap, which "
              "is the capture constraint the PS is built around"),
             ("Zero ground control points",
-             "metric scale comes from the feed-forward prior and the flight metadata, "
-             "not from surveyed markers"),
+             "scale comes from GNSS when present, else from objects of known size in "
+             f"the scene; the AI's own was {m['scale_lo']:.1f}–{m['scale_hi']:.1f}× off"),
             ("Georeferenced and measurable",
-             "one shared ENU frame across all six export formats, and a browser viewer "
-             "built for measurement rather than display"))):
+             "one shared local frame in calibrated metres across all six formats, and "
+             "a browser viewer built for measurement"))):
         y = 4.96 + i * 0.30
         textbox(s2, X(0), y, 1.62, 0.26,
                 [{"text": lab, "size": 8.4, "bold": True, "colour": INK, "font": SEMI}])
@@ -562,13 +583,15 @@ def build():
     textbox(s2, X(6), 4.96, SPAN(6), 0.60, [
         {"text": [{"text": "We measured the ceiling instead of assuming it. ",
                    "size": 8.6, "bold": True, "colour": INK, "font": SEMI},
-                  {"text": "A feed-forward model samples depth at 2.2 cm but carries "
-                           "information only at 30–50 cm, set by its patch-14 backbone "
-                           "and an interpolating depth head. Confirmed three ways, with "
-                           "the competing explanation tested and rejected.",
+                  {"text": "A feed-forward model samples depth per pixel but carries "
+                           "information only per 14-pixel patch, about "
+                           f"{m['patch_m']:.1f} m on the ground on our survey clip. "
+                           "Confirmed three ways, with the competing explanation tested "
+                           "and rejected. Its metric scale we checked against lane "
+                           f"markings: {m['scale_lo']:.1f}–{m['scale_hi']:.1f}× too small.",
                    "size": 8.6, "colour": MUTED}]}], line=1.14)
     textbox(s2, X(6), 5.62, SPAN(6), 0.44, [
-        {"text": [{"text": "So the AI is a pose and scale prior, nothing more. ",
+        {"text": [{"text": "So the AI is a pose prior, nothing more. ",
                    "size": 8.6, "bold": True, "colour": INK, "font": SEMI},
                   {"text": "Every delivered surface point is triangulated from real "
                            "pixels by full-resolution photometric MVS.",
@@ -578,7 +601,7 @@ def build():
     cells = ((m["registered"], "keyframes\nregistered"),
              (f'{m["reproj_ba"]:.2f} px', "reprojection\nerror"),
              (f'{m["dense_points"]/1e6:.2f} M', "measured\ndense points"),
-             (f'{m["finest_mm"]:.1f} mm', "finest detail\nresolved"),
+             (f'{m["finest_cm"]:.1f} cm', "finest detail,\ncalibrated"),
              (f'{m["gain_lo"]:.1f}–{m["gain_hi"]:.1f}×', "finer than\nthe AI alone"),
              (f'{m["formats_have"]} / {m["formats_need"]}', "export\nformats"))
     cw = SPAN(12) / len(cells)
@@ -596,9 +619,10 @@ def build():
         ("INGEST", "Mandatory in: 1080p/4K video, GPS, flight metadata. Optional: IMU, "
                    "barometric altitude, intrinsics, RTK/PPK; used when present, never "
                    "required. Auto-detects SRT, CSV, EXIF or flight log."),
-        ("POSE + METRIC SCALE", "MapAnything point maps, intrinsics by robust masked "
-                                f"fit at {m['intrinsics_px']:.2f} px, then COLMAP "
-                                "triangulation and global bundle adjustment."),
+        ("POSE + SCALE", "MapAnything point maps, intrinsics by robust masked "
+                         f"fit at {m['intrinsics_px']:.2f} px, then COLMAP "
+                         "triangulation and global bundle adjustment. Scale from GNSS "
+                         "or objects of known size, never the model alone."),
         ("DENSE GEOMETRY", "OpenMVS PatchMatch at full keyframe resolution. Geometric-"
                            "consistency filtering across three or more views also "
                            "rejects moving vehicles, people and animals."),
@@ -606,7 +630,8 @@ def build():
                             "Vertical from the ground plane, cross-checked against the "
                             "gimbal's roll-zero constraint."),
         ("EXPORT + VIEW", "OBJ, PLY, LAS 1.4, GeoTIFF DSM, glB/glTF and FBX in one "
-                          "shared ENU frame. Browser viewer built for measurement."),
+                          "shared frame, in calibrated metres. Browser viewer built for "
+                          "measurement."),
     ]
     gap = 0.34
     cw = (SPAN(12) - (len(stages) - 1) * gap) / len(stages)
@@ -660,9 +685,9 @@ def build():
          "Every component is permissive and runs on CPU. GPU is a speed upgrade, never "
          "a dependency for getting a result."),
         ("Honest by construction",
-         "With no GNSS in a clip the DEM ships with a real geotransform in metres and "
-         "no CRS at all, rather than a plausible-looking wrong one that downstream GIS "
-         "would silently reproject."),
+         "With no GNSS the DEM ships with no CRS rather than a plausible-looking wrong "
+         "one, and a length is printed in metres only when GNSS or an object of known "
+         "size backs it."),
     ]
     y = 3.66
     for i, (head, body) in enumerate(choices):
@@ -710,7 +735,7 @@ def build():
          "bounded geometric closure only, and every inferred face is tagged inferred",
          False),
         ("viii", "Metric accuracy without extensive GCPs",
-         "zero GCPs by design; scale from the AI prior; absolute accuracy unvalidated",
+         "zero GCPs; scale from known objects in the scene; absolute unvalidated",
          True),
     ]
     y = 1.99
@@ -731,16 +756,16 @@ def build():
     hair(s4, X(7), 1.92, SPAN(5), C(th.RULE_STRONG))
     criteria = [
         ("Reconstruction Accuracy", "30%",
-         f'{m["reproj_ba"]:.2f} px reprojection after bundle adjustment; ≤ 1 m absolute '
-         f'still unvalidated, no GNSS in either clip', True),
+         f'{m["reproj_ba"]:.2f} px reprojection; scale calibrated to '
+         f'±{m["scale_pm"]:.0f}%; ≤ 1 m absolute unvalidated, no GNSS in either clip', True),
         ("Model Completeness", "20%",
          f'{m["coverage"]:.0%} of the AI-only baseline\'s ground coverage', False),
         ("Processing Speed", "20%",
          f'{hms(m["seconds"])} for {m["n_views"]} views on 8 vCPU, against < 15 min',
          True),
         ("Innovation", "15%",
-         "the patch-grid ceiling measured rather than assumed; the AI is a pose and "
-         "scale prior only", False),
+         "the patch-grid ceiling and the AI's scale error both measured, not assumed",
+         False),
         ("Scalability", "10%",
          "CPU-only and containerised; fan-out measured at 1.42×", False),
         ("User Interface", "5%",
@@ -865,9 +890,9 @@ def build():
     hair(s5, X(0), 4.72, SPAN(12))
     eyebrow(s5, X(0), 4.84, SPAN(12), "measured benefit, on the two clips we have run")
     cells = ((f'{m["gain_lo"]:.1f}–{m["gain_hi"]:.1f}×',
-              "finer detail at 6 cm scale,\non two unrelated clips"),
-             (f'{m["relief_base"]:.2f} → {m["relief_mvs"]:.2f} m',
-              "vertical structure ceiling;\nbuildings stop being paint"),
+              "finer detail at matched scale,\non two unrelated clips"),
+             (f'{m["relief_base"]:.1f} → {m["relief_mvs"]:.1f} m',
+              "vertical structure ceiling,\nin calibrated metres"),
              (f'{m["coverage"]:.0%}',
               "of the AI-only baseline's\nground coverage"),
              (f'{m["reproj_gain"]:.1f}×',
@@ -923,15 +948,17 @@ def build():
          [("p", "assumes 70–80% overlap"), ("p", "needs GCPs or RTK"),
           ("y", ""), ("y", ""), ("n", "per-seat, closed")]),
         ("Feed-forward 3D", "DUSt3R, VGGT, MapAnything",
-         [("y", "this is what it solves"), ("y", "metric, from one pass"),
+         [("y", "this is what it solves"),
+          ("p", f"metric by design; {m['scale_k']:.1f}× off from the air"),
           ("n", "patch-limited ceiling"), ("p", "no LAS / GeoTIFF"),
           ("p", "VGGT barred by AUP")]),
         ("NeRF / 3D Gaussian splatting", "radiance-field reconstruction",
          [("n", "needs poses given"), ("n", ""), ("p", "appearance, not surface"),
           ("n", "renders, not products"), ("y", "")]),
-        ("This submission", "AI for pose and scale, MVS for every surface point",
-         [("y", ""), ("y", ""), ("y", f'{m["finest_mm"]:.1f} mm measured'),
-          ("y", "all six formats"), ("y", "Apache-2.0 / BSD")]),
+        ("This submission", "AI for pose, known objects for scale, MVS for every surface",
+         [("y", ""), ("y", "calibrated on scene objects"),
+          ("y", f'{m["finest_cm"]:.1f} cm, calibrated'),
+          ("y", "all six formats"), ("y", "Apache / BSD; AGPL run unmodified")]),
     ]
     y = 2.14
     for i, (name, sub_t, marks) in enumerate(rows):

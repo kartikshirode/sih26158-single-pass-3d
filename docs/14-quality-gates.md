@@ -146,29 +146,34 @@ Every figure the project states in public, its source, its gate, and its status 
 | 1 | Reprojection 1.73 → 0.37 px (deck, Q&A) | `kolu_mvs/mvs_result.json` | G2 | **Valid** |
 | 2 | 45 / 45 views registered | same | G2 | **Valid** |
 | 3 | 1.8–3.6× finer surface than feed-forward (deck, Q&A) | `measure_*.json` | G2 | **Valid** as a ratio |
-| 4 | "…at 6 cm" | same | — | **Relabel**: 6 model-cm. Kolu ≈ 33 cm corrected; Village unvalidated |
-| 5 | Finest detail 3.5 mm (Kolu) | `docs/05` §9 | G1 | **Invalid**: ~1.8–2.0 cm corrected |
-| 6 | Finest detail 1.9 mm (Village) | `docs/05` §8 | G1 | **Unvalidated** — no ruler yet (EXP-14b) |
-| 7 | Vertical ceiling 2.33 → 3.58 m (deck, Q&A) | `measure_kolu.json` | G1 | **Invalid** as metres: ~12–14 → ~19–21 m corrected; the 1.54× ratio is valid |
+| 4 | "…at 6 cm" | same | — | **Relabelled** 2026-09-17: the deck says "at matched scale"; the chart's Kolu panel is in calibrated cm, Village's in model cm |
+| 5 | Finest detail 3.5 mm (Kolu) | `docs/05` §9 | G1 | **Corrected** 2026-09-17: the deck prints 1.9 cm, calibrated |
+| 6 | Finest detail 1.9 mm (Village) | `docs/05` §8 | G1 | **Unvalidated**; **removed from the deck** 2026-09-17 (it had been the headline "1.9 mm") |
+| 7 | Vertical ceiling 2.33 → 3.58 m (deck, Q&A) | `measure_kolu.json` × calibration | G1 | **Corrected** 2026-09-17: the deck prints 12.9 → 19.8 m, calibrated |
 | 8 | Coverage 136% of baseline (deck) | `measure_kolu.json` | G1 | **Valid**, but show Village's 83% beside it |
 | 9 | 6 of 6 formats written and read back | `export_manifest.json` | G1 | **Valid** |
 | 10 | 34 min 38 s, 77% in dense MVS | `mvs_result.json` | G1 | **Valid** |
 | 11 | CPU fan-out 1.42× on densify | `docs/06` §7a | G1 | **Valid** |
 | 12 | MapAnything 0.42–0.55 s/view on T4; 600 views fits the geometry budget | EXP-11, EXP-12 | G2 | **Valid** — extrapolation labelled |
 | 13 | Consumer GNSS gives ~4.1 m absolute; RTK 0.097 m | EXP-05 | Simulation | **Valid as simulation**; not field-validated |
-| 14 | Effective resolution 30–50 cm | `docs/05` §2 | G2 | **Relabel/Invalid**: model units; Kolu 2.7–3.0 m corrected. The **14× ratio is Valid** |
-| 15 | "Metric scale with zero GCPs" (Q&A, deck) | `docs/02` §2 | — | **Invalid** as a model capability: scale 5.5× off on Kolu. Q&A rewritten 2026-09-17 (scale from GNSS, then known objects, else unvalidated); **deck still to fix** |
+| 14 | Effective resolution 30–50 cm | `docs/05` §2 | G2 | **Corrected** in the deck and Field 9 2026-09-17: "per 14-pixel patch, about 2.8 m on the survey clip". The **14× ratio is Valid** |
+| 15 | "Metric scale with zero GCPs" (Q&A, deck) | `docs/02` §2 | — | **Corrected** 2026-09-17 in the Q&A, the deck (slides 2, 3, 4, 6) and Field 9: scale from GNSS, else objects of known size; the model's own was 5.3–5.8× off |
 | 16 | "Measurement in metres" (demo, gallery) | `research/calibration/kolu.json` | G1 | **Valid on Kolu** since 2026-09-17 (calibrated ×5.54); Village measures in model units, labelled |
 | 17 | Scene ~24.5 m across; the DSM "corroborates independently" (`demo/README.md`, now corrected) | — | — | **Invalid** and circular: the DSM cell size is a chosen parameter in the same units |
 | 17a | Demo "scene extent" readout (`demo_template.html`) | `D.scale` | — | **Fixed 2026-09-17**: now `2·D.scale·factor` = 132 m; was 24.5 m, wrong by the factor and by a +2.4% arithmetic slip |
 | 17b | Gallery Kolu table and note | `measure_kolu.json` × factor | G1 | **Valid** since 2026-09-17: footprint, relief, thresholds and residual radii in calibrated metres; Village rows marked `*` as model units |
 | 18 | Camera height above ground (Q&A) | `export_manifest.json` | G1 | **Corrected** 2026-09-17: the manifest now records 58.67 m (calibrated); 10.59 was model units |
 | 22 | Exported files in metres | `export_manifest.json` (`units`, `scale`) | G1 | **Valid on Kolu** since 2026-09-17: all seven files carry ×5.54; LAS extent ratio 5.54 by readback |
+| 23 | "Apache-2.0 / BSD" as this submission's licences (deck slide 6) | `docs/11` §5 | — | **Was wrong** — OpenMVS is AGPL-3.0. Corrected 2026-09-17 to "Apache / BSD; AGPL run unmodified" |
 | 19 | Intrinsics fit residual 0.22 px | `mvs_result.json` | G1 | **Valid** |
 | 20 | ≤ 1 m spatial accuracy | — | — | **Unvalidated**: no GNSS clip (EXP-21) |
 | 21 | Village relief/footprint 0.037, 1.34% above ground | `yt3d/viewer_stats.json` | G1 | **Valid** as ratios; any metre label unvalidated |
 
-**Remediation.** Items 4–7, 14–18 and 17a are fixed by `docs/08` S7 in a single change: correct or
+**Status 2026-09-17: every item above is corrected, relabelled or removed** across the
+viewers, the exported files, the Q&A, the deck and the portal text, except 6 and 20, which
+stay unvalidated until their data exists.
+
+**Remediation (as originally planned).** Items 4–7, 14–18 and 17a are fixed by `docs/08` S7 in a single change: correct or
 relabel the source files, then let `build_qa.py`'s re-grep fail on every stale figure and fix
 each one. That is the re-grep working as designed — it checks that a figure *appears in*
 its source, so the source has to be corrected first.
