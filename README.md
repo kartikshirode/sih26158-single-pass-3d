@@ -93,9 +93,22 @@ done in local ENU and projected last.
 
 ```bash
 pip install -r requirements.txt
+
+python tesseract.py run synthetic --gnss rtk      # the whole pipeline, CPU, seconds
+python tesseract.py screen data/cand/*.webm       # admissibility, before any compute
+python tesseract.py run data/cand/kolu.webm     --adopt out/kolumvs3d --calibration-run kolumvs3d   # a real clip, geometry adopted
+python tesseract.py verify out/runs/kolu          # the run against its own contracts
+
+python src/tesseract/test_tesseract.py            # 44 checks
 python src/eval3d/test_metrics.py                 # 21 checks
-python src/pipeline/run_demo.py out/demo          # end-to-end, CPU, seconds
+python src/pipeline/run_demo.py out/demo          # the older single-file demo run
 ```
+
+`src/tesseract/` is the pipeline built to the engineering suite: typed contracts and a
+run manifest (`docs/09`), a scale service that decides what may be called a metre
+(`docs/08`), and a stage DAG with resume, a cost budget and a degradation ladder
+(`docs/13`). Every run writes `run_manifest.json` and a QA report saying what it may
+claim.
 
 Experiments (`research/*-results.txt` holds recorded output):
 

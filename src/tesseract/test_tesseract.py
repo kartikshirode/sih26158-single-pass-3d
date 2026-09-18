@@ -1,0 +1,319 @@
+"""
+Tests for the rebuilt pipeline: contracts, scale, orchestrator, and one end to end.
+
+Run:  python src/tesseract/test_tesseract.py
+
+Written in the same style as src/eval3d/test_metrics.py - plain asserts, no framework,
+and each check named for the behaviour it protects rather than the function it calls.
+The ones that matter most are the two that encode findings: a run may not print metres
+on an unvalidated scale (docs/08), and RTK reaches the accuracy target where consumer
+GNSS cannot (EXP-05).
+"""
+
+from __future__ import annotations
+
+import io
+import json
+import os
+import shutil
+import sys
+import tempfile
+
+import numpy as np
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, os.path.dirname(HERE))
+
+from tesseract import contracts as K                                    # noqa: E402
+from tesseract import scale as scale_svc                                # noqa: E402
+from tesseract.contracts import (Artefact, Code, Frame, StageError,     # noqa: E402
+                                 StageResult, Units)
+from tesseract.pipeline import BaseStage, Context, Pipeline             # noqa: E402
+from tesseract.report import render                                     # noqa: E402
+from tesseract.sources import SyntheticSource                           # noqa: E402
+from tesseract.stages import DEFAULT_STAGES                             # noqa: E402
+
+PASS = FAIL = SKIP = 0
+
+
+def check(name, cond, detail=""):
+    global PASS, FAIL
+    if cond:
+        PASS += 1
+        print(f"  [PASS] {name}" + (f"   {detail}" if detail else ""))
+    else:
+        FAIL += 1
+        print(f"  [FAIL] {name}   {detail}")
+
+
+def skip(name, why):
+    """
+    A skip is reported and counted, never silent.
+
+    `out/` is gitignored, so the checks that need a real run cannot run on a clean
+    checkout or in CI. That is acceptable; a skip that reads like a pass is not - it is
+    the sky_fraction-capped-at-0.60 failure in test form.
+    """
+    global SKIP
+    SKIP += 1
+    print(f"  [SKIP] {name}   {why}")
+
+
+def section(t):
+    print(f"\n=== {t} ===")
+
+
+# ---------------------------------------------------------------- a stage for testing
+class Toy(BaseStage):
+    def __init__(self, sid, produces=(), needs=(), cost=1.0, fail=None,
+                 levels=("L0", "L1", "L2", "L3", "L4", "L5"), version="1"):
+        super().__init__(id=sid, needs=tuple(needs), produces=tuple(produces),
+                         levels=tuple(levels), version=version)
+        self.cost, self.fail, self.calls = cost, fail, 0
+
+    def estimate(self, ctx):
+        return self.cost
+
+    def execute(self, ctx):
+        self.calls += 1
+        if self.fail:
+            raise self.fail
+        outs = {}
+        for p in self.produces:
+            path = ctx.path(f"{p}.txt")
+            with io.open(path, "w", encoding="utf-8") as f:
+                f.write(f"{self.id}:{p}")
+            outs[p] = Artefact(f"{p}.txt", "text").stamp(ctx.workdir)
+        return StageResult(self.id, 0.0, outputs=outs, facts={f"{self.id}_ran": True})
+
+
+def ctx_for(tmp, source=None, **kw):
+    return Context(run_id="t", workdir=tmp, source=source or SyntheticSource(n_frames=8),
+                   log=lambda *_: None, **kw)
+
+
+# ---------------------------------------------------------------- T1 contracts
+def t_contracts():
+    section("T1: the contracts say what a number means")
+    check("unvalidated scale means model units",
+          K.units_for("unvalidated") == Units.MODEL)
+    check("a calibrated scale means metres", K.units_for("calibrated") == Units.METRES)
+    check("an unknown status is refused",
+          _raises(lambda: K.units_for("probably-fine"), ValueError))
+
+    base = {"schema": K.SCHEMA_RUN_MANIFEST, "run_id": "r", "source": "s",
+            "stages": [{"id": "x"}], "level": "L0",
+            "scale": {"status": "calibrated"}, "units": "metres",
+            "frame": Frame.F5_LLF, "georeferenced": False}
+    check("a consistent manifest validates", K.validate_manifest(base) == [])
+
+    bad = dict(base, units=Units.METRES, scale={"status": "unvalidated"})
+    check("metres on an unvalidated scale is caught",
+          any("contradict" in p for p in K.validate_manifest(bad)),
+          K.validate_manifest(bad)[:1])
+
+    bad2 = dict(base, georeferenced=True)
+    check("georeferenced with a local frame is caught",
+          any("F6/F7" in p for p in K.validate_manifest(bad2)))
+
+    bad3 = dict(base, frame=Frame.F7_PROJECTED)
+    check("a projected frame that claims no georeferencing is caught",
+          any("georeferenc" in p for p in K.validate_manifest(bad3)))
+
+    check("the ladder steps down and then stops",
+          [K.step_down(x) for x in ("L0", "L4", "L5")] == ["L1", "L5", None])
+
+
+def _raises(fn, exc):
+    try:
+        fn()
+    except exc:
+        return True
+    except Exception:
+        return False
+    return False
+
+
+# ---------------------------------------------------------------- T2 scale service
+def t_scale():
+    section("T2: the scale service, and the check that would have caught EXP-14")
+    un = scale_svc.load("no-such-run-anywhere")
+    check("an unknown run is unvalidated at factor 1",
+          un["status"] == "unvalidated" and un["factor"] == 1.0)
+    check("an unvalidated run is labelled, not silently metric",
+          "model units" in scale_svc.for_page(un)["label"])
+
+    kolu = scale_svc.load("kolumvs3d")
+    if kolu["status"] == "unvalidated":
+        check("kolu calibration present", False, "research/calibration/kolu.json missing")
+        return
+    check("kolu resolves to its measured factor",
+          5.3 <= kolu["factor"] <= 5.8, f"x{kolu['factor']}")
+    check("the calibration names its evidence",
+          len(kolu.get("references", [])) >= 2 and kolu["source"],
+          kolu["source"])
+
+    # The real numbers: f=1450.5 px on a 1920 px frame, camera 10.59 model units up.
+    # The clip demonstrably shows a four-lane highway - far more than 40 m of ground.
+    pre = scale_svc.footprint_check(1450.547, 1920, 10.59, 1.0, content_span_m=40.0)
+    post = scale_svc.footprint_check(1450.547, 1920, 10.59, kolu["factor"],
+                                     content_span_m=40.0)
+    check("the footprint check rejects the pre-calibration scale", not pre["ok"],
+          f"{pre['footprint_m']:.1f} m of ground for a four-lane highway")
+    check("the footprint check passes the calibrated scale", post["ok"],
+          f"{post['footprint_m']:.1f} m")
+    implied = scale_svc.implied_factor(1450.547, 1920, 10.59, 40.0)
+    check("the implied factor from the footprint is in the right region",
+          2.5 <= implied <= 6.0, f"x{implied:.2f} for a 40 m span")
+
+    g = scale_svc.from_gnss(1.002, rtk=True, residual_m=0.09)
+    check("a GNSS fit yields a gnss+rtk status", g["status"] == "gnss+rtk")
+
+
+# ---------------------------------------------------------------- T3 orchestration
+def t_pipeline():
+    section("T3: the orchestrator caches, versions, budgets and degrades")
+    tmp = tempfile.mkdtemp(prefix="tess-")
+    try:
+        a, b = Toy("A", produces=("x",)), Toy("B", needs=("x",), produces=("y",))
+        p = Pipeline([a, b])
+        man = p.run(ctx_for(tmp))
+        check("a clean run executes every stage", (a.calls, b.calls) == (1, 1))
+        check("the manifest validates", K.validate_manifest(json.loads(
+            io.open(os.path.join(tmp, "run_manifest.json"), encoding="utf-8").read())
+        ) == [], "")
+
+        p.run(ctx_for(tmp))
+        check("a second run is a no-op", (a.calls, b.calls) == (1, 1))
+
+        a2 = Toy("A", produces=("x",), version="2")
+        Pipeline([a2, b]).run(ctx_for(tmp))
+        check("bumping a stage version re-runs it", a2.calls == 1)
+
+        # wiring
+        check("a stage needing what nothing produces is refused at construction",
+              _raises(lambda: Pipeline([Toy("Z", needs=("ghost",))]), ValueError))
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+    # budget -> ladder
+    tmp = tempfile.mkdtemp(prefix="tess-")
+    try:
+        cheap = Toy("cheap", produces=("x",), cost=1.0)
+        dear = Toy("dear", needs=("x",), cost=10_000.0, levels=("L0",))
+        man = Pipeline([cheap, dear]).run(ctx_for(tmp, budget_s=5.0))
+        check("an unaffordable stage steps the ladder down",
+              man.level != "L0" and Code.BUDGET in man.codes, f"level {man.level}")
+        check("the stage that could not be afforded did not run", dear.calls == 0)
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+    # failure -> ladder, and fatal -> stop
+    tmp = tempfile.mkdtemp(prefix="tess-")
+    try:
+        soft = Toy("soft", produces=("x",), fail=StageError(Code.MVS_RC, "rc=1"),
+                   levels=("L0",))
+        after = Toy("after", cost=0.1)
+        man = Pipeline([soft, after]).run(ctx_for(tmp))
+        check("a non-fatal stage failure degrades instead of crashing",
+              man.level == "L1" and Code.MVS_RC in man.codes, f"level {man.level}")
+        check("the run continues past the failure", after.calls == 1)
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+    tmp = tempfile.mkdtemp(prefix="tess-")
+    try:
+        fatal = Toy("fatal", fail=StageError(Code.REF_7DOF, "refused", fatal=True))
+        after = Toy("after", cost=0.1)
+        man = Pipeline([fatal, after]).run(ctx_for(tmp))
+        check("a fatal refusal stops the run", after.calls == 0)
+        check("the refusal is recorded as a code", Code.REF_7DOF in man.codes)
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
+# ---------------------------------------------------------------- T4 end to end
+def t_end_to_end():
+    section("T4: the whole chain on a scene whose truth we know")
+    out = {}
+    for gnss in ("rtk", "consumer"):
+        tmp = tempfile.mkdtemp(prefix=f"tess-{gnss}-")
+        try:
+            src = SyntheticSource(n_frames=60, gnss=gnss, seed=7)
+            ctx = Context(run_id=f"t-{gnss}", workdir=tmp, source=src,
+                          config={"dense_views": 40}, log=lambda *_: None)
+            man = Pipeline(DEFAULT_STAGES).run(ctx)
+            d = json.loads(io.open(os.path.join(tmp, "run_manifest.json"),
+                                   encoding="utf-8").read())
+            out[gnss] = (man, d, ctx)
+            check(f"{gnss}: the run reaches a georeferenced frame",
+                  d["georeferenced"] and d["frame"] == Frame.F7_PROJECTED,
+                  f"{d['frame']}, units {d['units']}")
+            check(f"{gnss}: the manifest satisfies the contracts",
+                  K.validate_manifest(d) == [], str(K.validate_manifest(d))[:120])
+            check(f"{gnss}: every export exists and is checksummed",
+                  all(os.path.exists(os.path.join(tmp, a["path"])) and a.get("sha256")
+                      for n, a in d["artefacts"].items() if n.startswith("export_")))
+            rep = render(d)
+            check(f"{gnss}: the report states the level and the scale",
+                  "Ladder level" in rep and "Scale" in rep and d["units"] in rep)
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+    # EXP-05, reproduced through the pipeline rather than asserted in prose
+    rtk_err = out["rtk"][0].stages
+    get = lambda man, k: next((s["facts"].get(k) for s in man.stages
+                               if k in (s.get("facts") or {})), None)
+    r, c = get(out["rtk"][0], "accuracy_absolute_rmse_m"), \
+        get(out["consumer"][0], "accuracy_absolute_rmse_m")
+    check("RTK reaches the 1 m target where consumer GNSS cannot",
+          r is not None and c is not None and r <= 1.0 < c,
+          f"rtk {r} m, consumer {c} m")
+    check("the verdicts follow the measurement, not the hope",
+          out["rtk"][0].verdicts["R-O3 spatial accuracy"] == "met"
+          and out["consumer"][0].verdicts["R-O3 spatial accuracy"] == "not met")
+    check("scale comes from the fit when there is GNSS",
+          out["rtk"][0].scale["status"] == "gnss+rtk")
+
+
+# ---------------------------------------------------------------- T5 a real run
+def t_real_run():
+    section("T5: the Kolu run, if it has been produced on this machine")
+    d = os.path.join(K.ROOT, "out", "runs", "kolu", "run_manifest.json")
+    if not os.path.exists(d):
+        skip("the Kolu run (6 checks)",
+             "out/runs/kolu absent - LOCAL ONLY: python tesseract.py run "
+             "data/cand/kolu.webm --adopt out/kolumvs3d --calibration-run kolumvs3d")
+        return
+    man = json.loads(io.open(d, encoding="utf-8").read())
+    check("the real run validates", K.validate_manifest(man) == [],
+          str(K.validate_manifest(man))[:160])
+    check("it is calibrated, not georeferenced",
+          man["scale"]["status"] == "calibrated" and not man["georeferenced"],
+          man["scale"]["label"])
+    check("the absence of GNSS is recorded as a code", Code.ING_NOGNSS in man["codes"])
+    lvl = next(s for s in man["stages"] if s["id"] == "S5b-level")
+    ext = lvl["facts"]["extent_m"]
+    check("the levelled extent matches the calibrated reference export",
+          abs(ext[0] - 105.9) < 1.0 and abs(ext[1] - 133.5) < 1.0, str(ext))
+    g = lvl["facts"]["gravity"]
+    check("the vertical was checked against the roll constraint, not assumed",
+          g.get("residual_roll_deg", 9) < 1.0, f"residual roll {g.get('residual_roll_deg')} deg")
+    check("camera height is reported in the files' own units",
+          50 < g.get("camera_above_ground_m", 0) < 70,
+          f"{g.get('camera_above_ground_m')} m")
+
+
+if __name__ == "__main__":
+    print("=" * 62)
+    print("tesseract - contracts, scale, orchestration, end to end")
+    print("=" * 62)
+    t_contracts()
+    t_scale()
+    t_pipeline()
+    t_end_to_end()
+    t_real_run()
+    print("\n" + "=" * 62)
+    print(f"{PASS} passed, {FAIL} failed, {SKIP} skipped")
+    print("=" * 62)
+    sys.exit(1 if FAIL else 0)

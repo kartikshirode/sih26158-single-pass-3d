@@ -82,20 +82,20 @@ Priorities: **P0** blocks the submission · **P1** before M1 · **P2** M2–M3 �
 | B-09 | P1 | EXP-14b: a ruler for the Village clip | `docs/12` | Geo/ML | S |
 | B-10 | P1 | EXP-23 telemetry fuzz suite; align SRT records to keyframes (C-3) | `docs/12`, `docs/09` | Geospatial | M |
 | B-11 | P1 | Whole EGM2008 grid in the image, `PROJ_NETWORK=OFF`; bake DINOv2; `HF_HUB_OFFLINE=1`; T-NF-03 | `docs/16` F-1, F-2 | Platform | M |
-| B-12 | P1 | CI workflow (commit gate) | `docs/14` §2.1 | Platform | S |
+| ~~B-12~~ | P1 | CI workflow (commit gate) — **done 2026-09-18**, plus a licence-register check | `docs/14` §2.1 | Platform | S |
 | B-13 | P1 | Python 3.12 environment with open3d; `finish_mvs.py` uses `sys.executable` | `docs/15` §1.1 | Platform | S |
 | B-14 | P1 | Run manifest (C-8). *C-1, C-2, C-7 and C-9 closed 2026-09-17* | `docs/09` | Lead | M |
 | B-15 | P1 | EXP-15 independent scale witness, after its licence check | `docs/12`, ADR-024 | Geo/ML | M |
 | B-16 | P1 | Decide the project's own licence | `docs/16` L-9 | Lead | decision |
 | B-17 | P1 | `THIRD_PARTY_NOTICES`; image digests; SBOM | `docs/16` | Platform | S |
 | B-18 | P2 | Baramati GPU path; EXP-16; ADR-023 decision | `docs/12` R2 | Photogr. | L |
-| B-19 | P2 | Orchestrator: stage DAG, resume, executors, ladder, keyframe planner | `docs/13` | Platform | L |
+| B-19 | P2 | Orchestrator: stage DAG, resume, ladder, keyframe planner — **built 2026-09-18** (`src/tesseract/`). **Open:** Slurm and Cloud Run executors | `docs/13` §10 | Platform | L |
 | B-20 | P2 | EXP-19 (SfM at 600 views), EXP-03 (dense-set size), T-PERF-04 | `docs/12` R2 | Photogr. | M |
 | B-21 | P2 | Acquire Held-out A (single pass + SRT + check points); EXP-21; EXP-07 | `docs/12` R3 | Geospatial | L |
 | B-22 | P2 | EXP-20 `TextureMesh`; EXP-26 coverage recovery | `docs/12` R4 | Photogr. | M |
-| B-23 | P2 | Viewer "calibrate from a known length" tool | `docs/08` S8 | Product | M |
-| B-24 | P2 | Per-run QA report generator | `docs/14` §3.3 | Product | M |
-| B-25 | P2 | Footprint check (automatic scale sanity) | `docs/08` S5 | Geo/ML | M |
+| B-23 | P2 | Viewer "calibrate from a known length" tool. *The CLI half exists: `tesseract calibrate`* | `docs/08` S8 | Product | M |
+| ~~B-24~~ | P2 | Per-run QA report generator — **done 2026-09-18**, written on every run | `docs/14` §3.3 | Product | M |
+| ~~B-25~~ | P2 | Footprint check (automatic scale sanity) — **done 2026-09-18**; a test asserts it rejects the pre-EXP-14 Kolu scale | `docs/08` S5 | Geo/ML | M |
 | B-26 | P2 | Field kit build, rehearsal, wipe procedure | `docs/16` §5, `docs/17` §4.1 | Platform | M |
 | B-27 | P3 | EXP-22, EXP-27: observable completeness and inferred-geometry labels | `docs/12` R5 | Geospatial | L |
 | B-28 | P3 | EXP-02, EXP-18: model track | `docs/12` R7 | Geo/ML | M |

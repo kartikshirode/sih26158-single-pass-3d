@@ -1,9 +1,14 @@
 # Target architecture (v2)
 
-Version 1.0 — 2026-09-16. Where the system goes from the v1 design in `docs/02` and the
-measured state in `docs/05`–`08`. It changes v1 in four places: a **scale service**, a
-**stage-DAG orchestrator** with pluggable executors, **separate pose and dense keyframe
-sets**, and a **GPU dense path** that is not a hard dependency.
+Version 1.1 — 2026-09-18 (1.0: 2026-09-16). Where the system goes from the v1 design in
+`docs/02` and the measured state in `docs/05`–`08`. It changes v1 in four places: a
+**scale service**, a **stage-DAG orchestrator** with pluggable executors, **separate pose
+and dense keyframe sets**, and a **GPU dense path** that is not a hard dependency.
+
+> **Built 2026-09-18 as `src/tesseract/`.** The orchestrator, the contracts, the scale
+> service, the levelling stage, the ladder, the QA report and the CLI are implemented and
+> tested (44 checks, `python src/tesseract/test_tesseract.py`). §10 records exactly what
+> is real, what is adopted from earlier runs, and what is still a design.
 
 ---
 
@@ -218,6 +223,26 @@ says whether it holds.
 | **Viewer** | replay demo, measurement | the same page, fed a live run; scale badge; inferred-geometry toggle; COPC via Potree for clouds beyond browser memory |
 | **Report** | Q&A page, deck | a per-run QA report: verdicts against the six PS targets, scale and georef status, the ladder level, and every figure's provenance |
 | **API** | — | job submit / status / artefacts, only when a web front end needs it. The CLI is the product |
+
+---
+
+## 10. What is built, and what is not (2026-09-18)
+
+| Piece | State |
+|---|---|
+| Contracts: frames, units, codes, artefacts, run manifest, validator | **Built** — `contracts.py`; `tesseract verify` checks a finished run against them |
+| Scale service: priority order, calibration files, footprint check | **Built** — `scale.py`; the footprint check rejects the pre-EXP-14 Kolu scale in a test |
+| Orchestrator: stage DAG, wiring check, content-addressed resume, stage versions, budget, ladder | **Built** — `pipeline.py` |
+| Keyframe planner: pose set vs dense set | **Built, simple** — even subsampling; EXP-03 has not run, so the dense-set size is still an allocation |
+| S0 screen, S1 ingest | **Built** — wrap the existing, measured screener and ingest |
+| S3 geometry | **Three providers**: `sense` (synthetic), `adopt` (a real run's artefacts), `request` (names the container command and steps the ladder down). The containers themselves are unchanged and still run on Cloud Run |
+| S5 georeference (5-DOF, ENU → UTM, EGM2008) | **Built** — refuses a 7-DOF fit outright |
+| S5b level (F4 → F5), S6 export, S7 score, S8 verdicts | **Built** |
+| QA report | **Built** — `report.py`, written on every run |
+| CLI: screen / run / calibrate / report / verify | **Built** — `cli.py`, `python tesseract.py` |
+| Executors: Slurm, Cloud Run | **Not built.** Stages call the existing containers by hand; the orchestrator runs in-process. This is the next structural piece |
+| Ladder levels L1/L2 | **Partly**: L2 halves the dense set and L5 is screen-only. L1's half-resolution densify is a flag on a stage that this host cannot run |
+| Texture | Not built — `TextureMesh` still fails (EXP-20) |
 
 ---
 

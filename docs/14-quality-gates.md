@@ -39,14 +39,18 @@ scale status (`docs/09` §2). "cm" on a model-unit measurement is a defect.
 |---|---|---|
 | Harness unit tests | `python src/eval3d/test_metrics.py` | **21 PASS / 0 FAIL** (2026-09-16) |
 | Window-fusion test | `python src/pipeline/test_window_fuse.py` | **T-SCALE-01 PASS** |
-| Syntax | `python -m compileall -q src tools mvs_job mapanything_job` | not wired |
+| Pipeline: contracts, scale, orchestration, end to end | `python src/tesseract/test_tesseract.py` | **44 PASS / 0 FAIL** (2026-09-18). Its T5 section (6 checks against the real Kolu run) is **local-only**: `out/` is gitignored, so on a clean checkout and in CI it reports SKIP with the command that would enable it |
+| A run satisfies its own contracts | `tesseract run synthetic … && tesseract verify …` | PASS |
+| Syntax | `python -m compileall -q src tools mvs_job mapanything_job` | wired in CI |
 | Demo build + audits + figure re-grep | `python tools/build_all.py` | passing at last deploy |
 | Manifest schemas | validate any changed `*_manifest.json` / `scale_calibration.json` against `docs/09` | **not built** |
 | Licence register | a new import or image package must appear in `docs/11` §5 | manual |
 | Telemetry fuzz | EXP-23 suite | **not built** |
 
-**Not in place: CI.** Nothing runs automatically on push. Proposed workflow (Ubuntu runner,
-Python 3.12), to be added as `.github/workflows/ci.yml`:
+**CI is in place** since 2026-09-18: `.github/workflows/ci.yml` runs the gate on every
+push and pull request, including a synthetic end-to-end run that must pass
+`tesseract verify`, and a licence check that fails if a pinned dependency is missing from
+the register in `docs/11` §5.1. The workflow, abbreviated:
 
 ```yaml
 name: ci

@@ -42,6 +42,7 @@ pip install opencv-python-headless av matplotlib open3d python-pptx
 
 ```
 src/
+  tesseract/     the pipeline: contracts, scale service, orchestrator, stages, CLI
   ingest/        screen.py (S0), video_ingest.py (S1), make_test_video.py (SRT fixtures)
   pipeline/      colmap_export.py, gravity.py, fuse_mesh.py, window_fuse.py,
                  render_views.py, export_formats.py (S6), run_demo.py (synthetic E2E)
@@ -65,6 +66,12 @@ out/             every run artefact — gitignored, regenerable
 
 | Task | Command | Where |
 |---|---|---|
+| Everything, one clip | `python tesseract.py run <video> [--adopt out/<run>] [--calibration-run <run>]` | local |
+| Everything, no data | `python tesseract.py run synthetic --gnss rtk` | local, seconds |
+| Screen only | `python tesseract.py screen data/cand/*.webm` | local |
+| Calibrate from a known length | `python tesseract.py calibrate <run> --points X1 Y1 Z1 X2 Y2 Z2 --length 21.0 --what "ecoduct waist"` | local |
+| Check a finished run | `python tesseract.py verify out/runs/<run>` | local |
+| Pipeline tests | `python src/tesseract/test_tesseract.py` | local, ~1 min |
 | Harness tests | `python src/eval3d/test_metrics.py` | local |
 | Synthetic end to end | `python src/pipeline/run_demo.py out/demo` | local, seconds |
 | Screen clips | `python src/ingest/screen.py data/cand/*.webm` | local, ~40 s/clip |
