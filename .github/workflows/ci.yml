@@ -1,0 +1,63 @@
+# The commit gate (docs/14 section 2.1), made automatic.
+#
+# Everything here runs on CPU in a couple of minutes and needs no data beyond the repo:
+# the harness has its own synthetic fixtures, and the pipeline test builds a scene whose
+# ground truth it knows. The parts that need run artefacts (the demo build, its design
+# and wiring audits) stay a local pre-deploy gate until a small fixture run is committed.
+name: ci
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    env:
+      PYTHONIOENCODING: utf-8
+      PROJ_NETWORK: "ON"        # the geoid grid is fetched; the container ships it instead
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"     # ADR-018: open3d has no 3.13 wheels
+          cache: pip
+
+      - name: install
+        run: |
+          python -m pip install -U pip
+          pip install -r requirements.txt
+          pip install opencv-python-headless av matplotlib
+
+      - name: syntax
+        run: python -m compileall -q src tools mvs_job mapanything_job tesseract.py
+
+      - name: evaluation harness
+        run: python src/eval3d/test_metrics.py
+
+      - name: window fusion
+        run: python src/pipeline/test_window_fuse.py
+
+      - name: pipeline - contracts, scale, orchestration, end to end
+        run: python src/tesseract/test_tesseract.py
+
+      - name: a run must satisfy its own contracts
+        run: |
+          python tesseract.py run synthetic --frames 60 --gnss rtk --name ci
+          python tesseract.py verify out/runs/ci
+
+      - name: licences of anything new must be registered
+        run: |
+          python - <<'PY'
+          import pathlib, re, sys
+          reg = pathlib.Path("docs/11-state-of-the-art.md").read_text(encoding="utf-8")
+          pins = [l.split("==")[0].strip().lower()
+                  for l in pathlib.Path("requirements.txt").read_text().splitlines()
+                  if l.strip() and not l.startswith("#")]
+          # every pinned dependency should be named somewhere in the licence register
+          missing = [p for p in pins if p not in reg.lower()]
+          print("registered:", [p for p in pins if p not in missing])
+          if missing:
+              print("NOT in the licence register (docs/11 section 5):", missing)
+              sys.exit(1)
+          PY

@@ -203,6 +203,11 @@ job logs.
 }
 ```
 
+**Built 2026-09-18.** `src/tesseract/contracts.py` writes this file on every run and
+`tesseract verify <rundir>` checks it: schema, ladder level, units against scale status,
+frame against the georeferencing claim, and every artefact's checksum against the file on
+disk. **GAP C-8 closed.**
+
 ---
 
 ## 5. Viewer data contract

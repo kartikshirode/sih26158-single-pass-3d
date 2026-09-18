@@ -160,6 +160,30 @@ cameras are not video cameras.
 | telemetry-parser | Apache-2.0 (API) — `research/02-ingestion-export-findings.md` reads MIT OR Apache | Use | GitHub API |
 | assimp | BSD-3 | Use | `research/02-ingestion-export-findings.md` |
 
+### 5.1 Pinned Python dependencies
+
+Read from the installed distributions' own metadata on 2026-09-18, not from memory. The
+CI gate refuses a new pin that is not listed here (`.github/workflows/ci.yml`).
+
+| Package | Version | Licence |
+|---|---|---|
+| numpy | 2.2.6 | BSD |
+| scipy | 1.15.2 | BSD |
+| trimesh | 4.7.4 | MIT |
+| pyproj | 3.7.2 | MIT |
+| laspy | 2.7.0 | BSD-2-Clause |
+| rasterio | 1.5.1 | BSD-3-Clause |
+| google-cloud-storage | 2.19.0 | Apache-2.0 |
+| av (PyAV) | 15.0.0 | BSD-3-Clause |
+| opencv-python(-headless) | 4.11.0 | Apache-2.0 |
+| matplotlib | 3.10.3 | PSF |
+| python-pptx | 1.0.2 | MIT |
+| pillow | 11.1.0 | MIT-CMU |
+| open3d | 0.19.0 (Python 3.11 only here) | MIT |
+
+All permissive. The only copyleft in the runtime is OpenMVS (AGPL-3.0), invoked as a
+separate unmodified process (ADR-005, `docs/16` L-1).
+
 ---
 
 ## 6. What "world class" means, in numbers

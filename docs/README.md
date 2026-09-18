@@ -47,6 +47,14 @@ with an external ruler or GNSS behind it (ADR-014).
 
 ---
 
+## The code the suite describes
+
+`src/tesseract/` is the pipeline these documents specify: `contracts.py` (docs/09),
+`scale.py` (docs/08), `pipeline.py` and `stages.py` (docs/13), `report.py` (docs/14 §3.3)
+and `cli.py`. Run `python tesseract.py run synthetic --gnss rtk` for a complete run in
+seconds, or `python src/tesseract/test_tesseract.py` for the 44 checks that hold it to
+this suite.
+
 ## Reading paths
 
 | You are | Read |
