@@ -303,6 +303,27 @@ def t_real_run():
           50 < g.get("camera_above_ground_m", 0) < 70,
           f"{g.get('camera_above_ground_m')} m")
 
+    # The horizon remedy: --horizon crop has to survive S0, or the flag the CLI
+    # offers is unreachable and the clip is refused before ingest can crop it.
+    v = os.path.join(K.ROOT, "out", "runs", "village", "run_manifest.json")
+    rj = os.path.join(K.ROOT, "out", "runs", "village-rejected", "run_manifest.json")
+    if not (os.path.exists(v) and os.path.exists(rj)):
+        skip("the horizon remedy (2 checks)",
+             "out/runs/village absent - LOCAL ONLY: python tesseract.py run "
+             "data/cand/yt_short.mp4 --horizon crop --adopt out/ytdmvs3d "
+             "--calibration-run ytdmvs3d --name village")
+        return
+    cropped = json.loads(io.open(v, encoding="utf-8").read())
+    refused = json.loads(io.open(rj, encoding="utf-8").read())
+    s0 = next(s for s in cropped["stages"] if s["id"] == "S0-screen")
+    check("a croppable horizon is remedied rather than refused",
+          cropped["level"] == "L0" and Code.ADM_HORIZON in cropped["codes"]
+          and s0["facts"].get("remedied_by_crop") is True,
+          f"{cropped['level']}, codes {cropped['codes']}")
+    check("the same clip under the default policy is still refused",
+          refused["level"] == "L5" and not refused.get("artefacts"),
+          refused["level"])
+
 
 if __name__ == "__main__":
     print("=" * 62)
