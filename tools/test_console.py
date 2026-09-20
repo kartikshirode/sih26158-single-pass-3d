@@ -10,6 +10,11 @@ metres while the same tool on an unvalidated one prints units, or whether a tab 
 once it has data in it. Those are exactly the claims the console exists to make, so
 they are checked here against a headless Chromium with a served copy of demo/.
 
+It drives the COMMITTED page, not a fresh build: build_console.py needs out/, which is
+not in the repo, so CI cannot rebuild the console. A fingerprint of the template and the
+stylesheet is stamped into the page, and this refuses to run when they have moved, so a
+stale committed page cannot sail through a green gate.
+
 Needs playwright (`pip install playwright && playwright install chromium`). Skips with
 a clear message rather than failing when it is not installed, because the rest of the
 build gate does not depend on it.
@@ -19,11 +24,15 @@ from __future__ import annotations
 import argparse
 import functools
 import http.server
+import io
 import os
+import re
 import socket
 import socketserver
 import sys
 import threading
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DEMO = os.path.join(ROOT, "demo")
@@ -54,9 +63,23 @@ def main() -> int:
     except ImportError:
         print("  SKIP - playwright is not installed; the console was not driven")
         return 0
-    if not os.path.exists(os.path.join(DEMO, "console", "index.html")):
+    page_path = os.path.join(DEMO, "console", "index.html")
+    if not os.path.exists(page_path):
         print("  no demo/console/index.html: run tools/build_console.py first")
         return 2
+    # The console build needs out/, which is not in the repo, so CI drives the
+    # committed page rather than rebuilding it. That is only safe if the committed
+    # page is current, which is what the stamp proves.
+    from build_console import sources_sha
+    with io.open(page_path, encoding="utf-8") as f:
+        head = f.read(4096)
+    m = re.search(r'name="tesseract-sources" content="([0-9a-f]+)"', head)
+    if not m or m.group(1) != sources_sha():
+        print(f"  FAIL the committed console is stale: built from "
+              f"{m.group(1) if m else 'an unstamped template'}, "
+              f"sources are now {sources_sha()}")
+        print("       run tools/build_console.py and commit demo/console/index.html")
+        return 1
 
     shots = a.shots and os.path.abspath(a.shots)
     if shots:
