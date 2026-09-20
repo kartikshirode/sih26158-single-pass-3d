@@ -46,6 +46,16 @@ jobs:
           python tesseract.py run synthetic --frames 60 --gnss rtk --name ci
           python tesseract.py verify out/runs/ci
 
+      # demo/ is committed, so the built console is in the repo and can be driven
+      # here. It is the only check that can see the WebGL workspace: whether a
+      # measurement on a calibrated clip prints metres and the same tool on an
+      # unvalidated one prints units.
+      - name: the console must say what the manifests say
+        run: |
+          pip install playwright
+          python -m playwright install --with-deps chromium
+          python tools/test_console.py
+
       - name: licences of anything new must be registered
         run: |
           python - <<'PY'
