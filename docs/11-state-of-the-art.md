@@ -184,6 +184,21 @@ CI gate refuses a new pin that is not listed here (`.github/workflows/ci.yml`).
 All permissive. The only copyleft in the runtime is OpenMVS (AGPL-3.0), invoked as a
 separate unmodified process (ADR-005, `docs/16` L-1).
 
+### 5.2 Fonts shipped with the console
+
+The console (`demo/console/`) self-hosts its webfonts rather than linking a font CDN,
+so the page has no third-party runtime dependency and works offline. Redistribution is
+what the licence is for, and the files are the latin subsets only.
+
+| Family | Weights | Licence | Where |
+|---|---|---|---|
+| IBM Plex Sans | 400, 500, 600 | SIL OFL 1.1 | `demo/console/fonts/` |
+| IBM Plex Mono | 400, 500 | SIL OFL 1.1 | `demo/console/fonts/` |
+
+OFL 1.1 permits redistribution with the software; it forbids selling the fonts on their
+own and requires that a modified version be renamed. Neither applies here: the files are
+shipped unmodified, under their own names, as part of a page.
+
 ---
 
 ## 6. What "world class" means, in numbers

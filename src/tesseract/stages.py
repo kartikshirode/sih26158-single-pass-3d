@@ -73,13 +73,26 @@ class Screen(BaseStage):
             json.dump(v, f, indent=2)
         art = Artefact(rel, "verdict").stamp(ctx.workdir)
 
-        if v["verdict"] == "REJECT" and not ctx.config.get("force"):
+        # A horizon and the sky above it are the one rejection with a remedy in the
+        # pipeline: ingest can crop them off. Refusing the clip before applying the
+        # remedy the caller asked for would make --horizon crop unreachable, so the
+        # policy is honoured here - the codes stay on the run either way, because the
+        # clip did need cropping and the manifest should say so.
+        # Of the screener's three rejection thresholds (src/ingest/screen.py), the
+        # horizon and the sky above it go away with the crop; a clip that is simply
+        # cut too short does not.
+        cropping = (ctx.config.get("ingest", {}).get("horizon_policy") == "crop"
+                    and v["verdict"] == "REJECT" and v["longest_shot_s"] >= 8)
+        if v["verdict"] == "REJECT" and not cropping and not ctx.config.get("force"):
             # Not a crash: a reasoned refusal is the answer (R-C9). The orchestrator
             # walks down to L5, where the verdict itself is the deliverable.
             raise StageError(codes[0] if codes else Code.ADM_SKY,
                              "; ".join(v["reasons"]))
         return StageResult(self.id, 0.0, outputs={"screen": art}, codes=codes,
-                           facts={"admissible": True, "screen": v})
+                           facts={"admissible": True, "screen": v,
+                                  "remedied_by_crop": bool(cropping)},
+                           note="horizon cropped off rather than refused" if cropping
+                                else "")
 
 
 # ------------------------------------------------------------------ S1 · ingest

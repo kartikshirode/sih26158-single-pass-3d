@@ -1,0 +1,1055 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tesseract - reconstruction console</title>
+<meta name="description" content="Every run the single-pass drone-video-to-3D pipeline has produced, read out of each run's own manifest: what it may claim, what it cannot, and why.">
+<meta name="robots" content="noindex, nofollow">
+<meta name="theme-color" content="#0a0a0b">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' fill='%230a0a0b'/><rect x='7' y='7' width='18' height='18' fill='none' stroke='%23ededef' stroke-width='2'/><rect x='12' y='12' width='8' height='8' fill='%23ededef'/></svg>">
+<style>@font-face{font-family:'IBM Plex Mono';font-style:normal;font-weight:400;font-display:swap;src:url(fonts/IBMPlexMono-400.woff2) format('woff2')}
+@font-face{font-family:'IBM Plex Mono';font-style:normal;font-weight:500;font-display:swap;src:url(fonts/IBMPlexMono-500.woff2) format('woff2')}
+@font-face{font-family:'IBM Plex Sans';font-style:normal;font-weight:400;font-display:swap;src:url(fonts/IBMPlexSans-400.woff2) format('woff2')}
+@font-face{font-family:'IBM Plex Sans';font-style:normal;font-weight:500;font-display:swap;src:url(fonts/IBMPlexSans-500.woff2) format('woff2')}
+@font-face{font-family:'IBM Plex Sans';font-style:normal;font-weight:600;font-display:swap;src:url(fonts/IBMPlexSans-600.woff2) format('woff2')}
+
+/* ============================================================================
+   Tesseract console - design system
+
+   Monotone by instruction: there is no accent hue anywhere in this file. Every
+   distinction is carried by value (how light), weight, rule thickness and the
+   word itself. That is a real constraint for a page whose job is to say whether
+   a number may be trusted, so status is ALWAYS spelled out in text and the marks
+   only reinforce it.
+
+   Density is high on purpose (cockpit, not landing page): 1px rules instead of
+   cards, tight padding, and every number set in mono so columns line up and a
+   mis-scaled figure is visible as a ragged column.
+
+   Type: IBM Plex Sans / IBM Plex Mono, self-hosted from demo/console/fonts
+   (SIL OFL 1.1, see docs/11 section 5.2). Not Carbon: this is a hand-built
+   system, because the only packaged option that runs without a bundler is
+   Primer CSS, whose value is GitHub's colour system and whose bundle is ~1 MB.
+   ============================================================================ */
+
+:root{
+  --bg:#0a0a0b; --panel:#0f0f10; --raised:#151516; --hover:#1b1b1d;
+  --line:#222225; --line-hi:#34343a; --rule:#ededef;
+  --fg:#ededef; --fg-2:#9c9ca4; --fg-3:#67676f;
+  --sans:'IBM Plex Sans',ui-sans-serif,system-ui,sans-serif;
+  --mono:'IBM Plex Mono',ui-monospace,'SF Mono',Menlo,monospace;
+  --t-xs:11px; --t-sm:12px; --t-md:13px; --t-lg:15px; --t-xl:20px;
+  --sp-1:4px; --sp-2:8px; --sp-3:12px; --sp-4:16px; --sp-5:24px; --sp-6:32px;
+  --rail:300px; --top:48px;
+  color-scheme:dark;
+}
+/* Light is the same greyscale read the other way up. It is declared twice on
+   purpose: once for a viewer whose system asks for light and has not chosen, and
+   once for the explicit choice, which has to win over the system either way. */
+@media (prefers-color-scheme:light){
+  :root:not([data-theme="dark"]){
+    --bg:#fbfbfc; --panel:#ffffff; --raised:#f4f4f5; --hover:#ececee;
+    --line:#e2e2e5; --line-hi:#c8c8cd; --rule:#17171a;
+    --fg:#17171a; --fg-2:#5a5a62; --fg-3:#8a8a93;
+    color-scheme:light;
+  }
+}
+:root[data-theme="light"]{
+  --bg:#fbfbfc; --panel:#ffffff; --raised:#f4f4f5; --hover:#ececee;
+  --line:#e2e2e5; --line-hi:#c8c8cd; --rule:#17171a;
+  --fg:#17171a; --fg-2:#5a5a62; --fg-3:#8a8a93;
+  color-scheme:light;
+}
+
+*{box-sizing:border-box}
+html,body{height:100%}
+body{
+  margin:0; background:var(--bg); color:var(--fg);
+  font:400 var(--t-md)/1.5 var(--sans);
+  -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility;
+  overflow:hidden;
+}
+a{color:inherit; text-decoration:none}
+a:hover{text-decoration:underline}
+button{font:inherit; color:inherit; background:none; border:0; cursor:pointer}
+:focus-visible{outline:2px solid var(--rule); outline-offset:1px}
+::selection{background:var(--fg); color:var(--bg)}
+
+/* nothing rounds. one shape system: square. */
+input,button,table,td,th,div{border-radius:0}
+
+.mono{font-family:var(--mono); font-variant-numeric:tabular-nums}
+.num{font-family:var(--mono); font-variant-numeric:tabular-nums; font-size:var(--t-sm)}
+.fg2{color:var(--fg-2)} .fg3{color:var(--fg-3)}
+.cap{font:500 var(--t-xs)/1.4 var(--mono); letter-spacing:.09em;
+     text-transform:uppercase; color:var(--fg-3)}
+
+/* ---------------------------------------------------------------- shell */
+#app{
+  display:grid; height:100vh; height:100dvh;
+  grid-template-columns:var(--rail) 1fr;
+  grid-template-rows:var(--top) 1fr;
+  grid-template-areas:"top top" "rail main";
+}
+
+/* ---------------------------------------------------------------- topbar */
+#top{
+  grid-area:top; display:flex; align-items:center; gap:var(--sp-4);
+  padding:0 var(--sp-4); border-bottom:1px solid var(--line); background:var(--panel);
+}
+#top .mark{font:600 var(--t-md)/1 var(--sans); letter-spacing:.13em;
+           text-transform:uppercase}
+#top .ps{font:400 var(--t-xs)/1 var(--mono); color:var(--fg-3); letter-spacing:.06em}
+#top .spacer{flex:1}
+#top .stat{display:flex; gap:var(--sp-4); align-items:baseline}
+#top .stat b{font:500 var(--t-sm)/1 var(--mono); font-variant-numeric:tabular-nums}
+#top .stat span{font:400 var(--t-xs)/1 var(--mono); color:var(--fg-3); margin-left:5px}
+#top .tbtn{padding:5px var(--sp-2); border:1px solid var(--line);
+           font:500 var(--t-xs)/1.3 var(--mono); letter-spacing:.06em;
+           text-transform:uppercase; color:var(--fg-2)}
+#top .tbtn:hover{border-color:var(--line-hi); color:var(--fg); text-decoration:none}
+
+/* ---------------------------------------------------------------- rail */
+#rail{
+  grid-area:rail; border-right:1px solid var(--line); background:var(--panel);
+  display:flex; flex-direction:column; min-height:0;
+}
+#rail .head{display:flex; align-items:center; justify-content:space-between;
+            padding:var(--sp-3) var(--sp-4) var(--sp-2)}
+#rail input{
+  margin:0 var(--sp-4) var(--sp-3); padding:6px var(--sp-2);
+  background:var(--bg); border:1px solid var(--line); color:var(--fg);
+  font:400 var(--t-sm)/1.4 var(--mono); width:calc(100% - 2*var(--sp-4));
+}
+#rail input::placeholder{color:var(--fg-3)}
+#rail input:focus{border-color:var(--line-hi); outline:none}
+#runs{overflow-y:auto; flex:1; min-height:0; border-top:1px solid var(--line)}
+.run{
+  display:block; width:100%; text-align:left; padding:var(--sp-3) var(--sp-4);
+  border-bottom:1px solid var(--line); border-left:2px solid transparent;
+}
+.run:hover{background:var(--hover); text-decoration:none}
+.run[aria-current="true"]{background:var(--raised); border-left-color:var(--rule)}
+.run .id{display:flex; justify-content:space-between; align-items:baseline; gap:var(--sp-2)}
+.run .id b{font:500 var(--t-md)/1.3 var(--mono)}
+.run .id i{font:400 var(--t-xs)/1.3 var(--mono); color:var(--fg-3); font-style:normal}
+.run .src{font:400 var(--t-xs)/1.5 var(--mono); color:var(--fg-3); margin-top:3px;
+          overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.run .tags{display:flex; gap:var(--sp-2); margin-top:6px; flex-wrap:wrap}
+.run .tags span{font:400 var(--t-xs)/1.4 var(--mono); color:var(--fg-2)}
+.run .tags span.off{color:var(--fg-3)}
+#rail .foot{padding:var(--sp-3) var(--sp-4); border-top:1px solid var(--line);
+            font:400 var(--t-xs)/1.6 var(--mono); color:var(--fg-3)}
+
+/* ---------------------------------------------------------------- main */
+#main{grid-area:main; overflow-y:auto; min-height:0; display:flex; flex-direction:column}
+#main.nogrow{overflow:hidden}
+.rhead{padding:var(--sp-5) var(--sp-6) 0; border-bottom:1px solid var(--line)}
+.rhead h1{margin:0; font:500 var(--t-xl)/1.2 var(--mono)}
+.rhead .sub{margin-top:var(--sp-2); display:flex; flex-wrap:wrap; gap:var(--sp-4);
+            font:400 var(--t-xs)/1.6 var(--mono); color:var(--fg-3)}
+.rhead .sub b{color:var(--fg-2); font-weight:400}
+.tabs{display:flex; gap:var(--sp-5); margin-top:var(--sp-5)}
+.tabs button{
+  padding:0 0 var(--sp-3); border-bottom:2px solid transparent; color:var(--fg-3);
+  font:500 var(--t-xs)/1.4 var(--mono); letter-spacing:.09em; text-transform:uppercase;
+}
+.tabs button:hover{color:var(--fg-2)}
+.tabs button[aria-current="true"]{color:var(--fg); border-bottom-color:var(--rule)}
+.tabs button[disabled]{color:var(--line-hi); cursor:default}
+.body{padding:var(--sp-5) var(--sp-6) var(--sp-6); max-width:1180px}
+.body.wide{max-width:none}
+
+/* ---------------------------------------------------------------- blocks */
+section{margin-bottom:var(--sp-6)}
+section > h2{margin:0 0 var(--sp-3); font:500 var(--t-xs)/1.4 var(--mono);
+             letter-spacing:.09em; text-transform:uppercase; color:var(--fg-3);
+             padding-bottom:var(--sp-2); border-bottom:1px solid var(--line)}
+section > p{margin:0 0 var(--sp-3); color:var(--fg-2); font-size:var(--t-sm);
+            max-width:70ch}
+
+/* key/value grid: the claim block */
+.kv{display:grid; grid-template-columns:repeat(auto-fit,minmax(210px,1fr)); gap:0
+    var(--sp-5)}
+.kv > div{padding:var(--sp-3) 0; border-bottom:1px solid var(--line)}
+.kv dt{font:400 var(--t-xs)/1.4 var(--mono); color:var(--fg-3); letter-spacing:.06em;
+       text-transform:uppercase; margin:0}
+.kv dd{margin:5px 0 0; font:400 var(--t-md)/1.4 var(--mono)}
+.kv dd small{display:block; font:400 var(--t-xs)/1.5 var(--mono); color:var(--fg-3);
+             margin-top:3px; text-transform:none; letter-spacing:0}
+
+/* ladder position: six cells, filled up to where the run landed */
+.ladder{display:inline-flex; gap:2px; vertical-align:middle; margin-left:var(--sp-3);
+         align-items:center}
+.ladder i{width:13px; height:8px; border:1px solid var(--line-hi)}
+.ladder i.here{background:var(--fg); border-color:var(--fg)}
+.ladder u{font:400 var(--t-xs)/1 var(--mono); color:var(--fg-3); text-decoration:none;
+          padding:0 6px}
+
+/* verdicts: the word carries it, the rule reinforces it */
+.verdict{border-top:1px solid var(--line)}
+.verdict > div{display:grid; grid-template-columns:1fr auto; gap:var(--sp-4);
+               align-items:baseline; padding:var(--sp-3) 0 var(--sp-3) var(--sp-3);
+               border-bottom:1px solid var(--line); border-left:3px solid var(--line)}
+.verdict > div.met{border-left-color:var(--rule)}
+.verdict > div.unmet{border-left-color:var(--fg-3)}
+.verdict > div.unknown{border-left-color:transparent;
+  background:repeating-linear-gradient(180deg,var(--fg-3) 0 2px,transparent 2px 6px)
+             left/3px 100% no-repeat}
+.verdict .t{font-size:var(--t-md)}
+.verdict .t small{display:block; color:var(--fg-3); font-size:var(--t-xs);
+                  font-family:var(--mono); margin-top:2px}
+.verdict .s{font:500 var(--t-xs)/1.4 var(--mono); letter-spacing:.09em;
+            text-transform:uppercase; text-align:right; white-space:nowrap}
+.verdict > div.unmet .s,.verdict > div.unknown .s{color:var(--fg-2)}
+
+/* tables */
+table{width:100%; border-collapse:collapse}
+th{text-align:left; font:500 var(--t-xs)/1.4 var(--mono); letter-spacing:.07em;
+   text-transform:uppercase; color:var(--fg-3); padding:0 var(--sp-4) var(--sp-2) 0;
+   border-bottom:1px solid var(--line-hi); white-space:nowrap}
+td{padding:var(--sp-2) var(--sp-4) var(--sp-2) 0; border-bottom:1px solid var(--line);
+   font-size:var(--t-sm); vertical-align:top}
+td.m,th.m{font-family:var(--mono); font-variant-numeric:tabular-nums}
+td.r,th.r{text-align:right}
+td:last-child,th:last-child{padding-right:0}
+/* the first column takes the slack so the numeric ones stay beside each other */
+td:first-child,th:first-child{width:100%}
+td:not(:first-child),th:not(:first-child){white-space:nowrap; width:1%}
+tr:hover td{background:var(--hover)}
+
+/* stage timeline */
+.tl{border-top:1px solid var(--line)}
+.tl .row{display:grid; grid-template-columns:150px 1fr 74px;
+         gap:var(--sp-4); align-items:center; padding:var(--sp-2) 0;
+         border-bottom:1px solid var(--line)}
+.tl .row:hover{background:var(--hover)}
+.tl .nm{font:400 var(--t-sm)/1.4 var(--mono)}
+.tl .track{position:relative; height:14px; background:var(--raised)}
+.tl .bar{position:absolute; top:0; bottom:0; background:var(--fg); min-width:2px}
+.tl .bar.skip{background:transparent; border:1px dashed var(--line-hi);
+               min-width:34px}
+.tl .bar.cache{background:repeating-linear-gradient(90deg,var(--fg-2) 0 2px,
+               transparent 2px 5px)}
+.tl .sec{font:400 var(--t-sm)/1.4 var(--mono); text-align:right;
+         font-variant-numeric:tabular-nums}
+.tl .facts{grid-column:1/-1; display:flex; flex-wrap:wrap; gap:var(--sp-2);
+           padding:0 0 var(--sp-2) 150px}
+.tl .facts span{font:400 var(--t-xs)/1.5 var(--mono); color:var(--fg-3);
+                border:1px solid var(--line); padding:1px 5px}
+.tl .facts span b{color:var(--fg-2); font-weight:400}
+
+/* budget bar */
+.budget{height:20px; background:var(--raised); position:relative;
+        border:1px solid var(--line)}
+.budget i{position:absolute; inset:0 auto 0 0; background:var(--fg)}
+.budget b{position:absolute; right:6px; top:1px; font:400 var(--t-xs)/18px var(--mono);
+          color:var(--fg-2); mix-blend-mode:difference}
+
+/* code chips */
+.codes{display:flex; gap:var(--sp-2); flex-wrap:wrap}
+.codes span{font:500 var(--t-xs)/1.5 var(--mono); letter-spacing:.06em;
+            border:1px solid var(--line-hi); padding:1px 6px; color:var(--fg-2)}
+
+/* notices */
+.note{border-left:3px solid var(--line-hi); padding:var(--sp-3) var(--sp-4);
+      background:var(--panel); font-size:var(--t-sm); color:var(--fg-2);
+      max-width:78ch}
+.note b{color:var(--fg); font-weight:500}
+.empty{border:1px dashed var(--line-hi); padding:var(--sp-6); text-align:center;
+       color:var(--fg-3); font-size:var(--t-sm)}
+.empty b{display:block; color:var(--fg-2); font-weight:500; margin-bottom:var(--sp-2);
+         font-family:var(--mono); font-size:var(--t-md)}
+
+/* ---------------------------------------------------------------- workspace */
+#ws{display:grid; grid-template-columns:1fr 300px; flex:1; min-height:0}
+#stage{position:relative; background:var(--bg); min-width:0}
+#gl{width:100%; height:100%; display:block; cursor:grab; touch-action:none}
+#gl.drag{cursor:grabbing}
+body.measuring #gl{cursor:crosshair}
+#ovl{position:absolute; inset:0; pointer-events:none; width:100%; height:100%}
+#ovl .m-line{stroke:var(--rule); stroke-width:1.25; stroke-dasharray:4 3}
+#ovl .m-ring{fill:none; stroke:var(--rule); stroke-width:1.25}
+#ovl .m-dot{fill:var(--rule)}
+#ovl .m-box{fill:var(--bg); stroke:var(--rule); stroke-width:1}
+#ovl .m-txt{fill:var(--fg); font:500 11px var(--mono); text-anchor:middle}
+#hud{position:absolute; top:var(--sp-3); right:var(--sp-3);
+     font:400 var(--t-xs)/1.4 var(--mono); color:var(--fg-3);
+     background:var(--panel); border:1px solid var(--line); padding:3px 7px}
+#load{position:absolute; inset:0; display:grid; place-items:center;
+      background:var(--bg); font:400 var(--t-sm)/1.6 var(--mono); color:var(--fg-3);
+      text-align:center; padding:var(--sp-5)}
+#load.hide{display:none}
+#load .err{color:var(--fg); font-weight:500}
+#tools{position:absolute; left:var(--sp-3); bottom:var(--sp-3); display:flex;
+       flex-wrap:wrap; gap:var(--sp-2)}
+#tools button{padding:4px var(--sp-2); border:1px solid var(--line);
+              background:var(--panel); font:400 var(--t-xs)/1.4 var(--mono);
+              color:var(--fg-2)}
+#tools button:hover{border-color:var(--line-hi); color:var(--fg)}
+#tools button[aria-pressed="true"]{background:var(--fg); color:var(--bg);
+                                   border-color:var(--fg)}
+#insp{border-left:1px solid var(--line); background:var(--panel); overflow-y:auto;
+      padding:var(--sp-4)}
+#insp h3{margin:var(--sp-4) 0 var(--sp-2); font:500 var(--t-xs)/1.4 var(--mono);
+         letter-spacing:.09em; text-transform:uppercase; color:var(--fg-3);
+         border-bottom:1px solid var(--line); padding-bottom:5px}
+#insp h3:first-child{margin-top:0}
+#insp .r{display:flex; justify-content:space-between; gap:var(--sp-3);
+         padding:5px 0; font-size:var(--t-sm); border-bottom:1px solid var(--line)}
+#insp .r span{color:var(--fg-3)}
+#insp .r b{font:400 var(--t-sm)/1.5 var(--mono); font-variant-numeric:tabular-nums;
+           text-align:right}
+#insp .seg{display:flex; border:1px solid var(--line); margin-bottom:var(--sp-3)}
+#insp .seg button{flex:1; padding:6px 4px; font:400 var(--t-xs)/1.4 var(--mono);
+                  color:var(--fg-2); border-right:1px solid var(--line)}
+#insp .seg button:last-child{border-right:0}
+#insp .seg button[aria-pressed="true"]{background:var(--fg); color:var(--bg)}
+#mtip{font-size:var(--t-sm); color:var(--fg-2); line-height:1.55}
+#mtip b{color:var(--fg); font-weight:500}
+
+/* ---------------------------------------------------------------- responsive */
+@media (max-width:1100px){
+  #ws{grid-template-columns:1fr}
+  #insp{border-left:0; border-top:1px solid var(--line); max-height:42vh}
+}
+@media (max-width:820px){
+  body{overflow:auto}
+  #app{grid-template-columns:1fr; grid-template-rows:var(--top) auto 1fr;
+       grid-template-areas:"top" "rail" "main"; height:auto; min-height:100dvh}
+  #rail{border-right:0; border-bottom:1px solid var(--line)}
+  #runs{max-height:33vh}
+  .rhead{padding:var(--sp-4) var(--sp-4) 0}
+  .body{padding:var(--sp-4)}
+  .tabs{gap:var(--sp-4); overflow-x:auto; padding-bottom:2px}
+  .tl .row{grid-template-columns:110px 1fr 60px}
+  .tl .facts{padding-left:0}
+  #ws{min-height:76vh}
+  #top .stat{display:none}
+}
+@media (max-width:560px){
+  #top .ps{display:none}
+}
+
+@media (prefers-reduced-motion:reduce){
+  *{transition:none !important; animation:none !important}
+}
+</style>
+
+<div id="app">
+  <header id="top">
+    <span class="mark">Tesseract</span>
+    <span class="ps">SIH26158 / NTRO</span>
+    <span class="spacer"></span>
+    <span class="stat">
+      <b id="sRuns">0<span>runs</span></b>
+      <b id="sVerify">0/0<span>contracts pass</span></b>
+      <b id="sGit">-<span>build</span></b>
+    </span>
+    <button class="tbtn" id="bTheme" title="Switch between the dark and light console">Light</button>
+    <a class="tbtn" href="../qa/">Evidence</a>
+  </header>
+
+  <nav id="rail">
+    <div class="head"><span class="cap">Runs</span><span class="cap" id="nRuns"></span></div>
+    <input id="q" type="search" placeholder="filter by id or source" aria-label="Filter runs">
+    <div id="runs" role="list"></div>
+    <div class="foot" id="railFoot"></div>
+  </nav>
+
+  <main id="main"></main>
+</div>
+
+<script>
+"use strict";
+var DATA = {"build":{"git":"cc5618b","at":"2026-09-18","verified":7},"ladder":[["L0","measured","dense set at full resolution, mesh, texture"],["L1","measured, reduced resolution","densify at resolution level 1 (~4x faster)"],["L2","measured, sparse coverage","dense set halved"],["L3","coarse - patch-limited","no MVS: fused feed-forward point maps (docs/05: ~14 px information floor)"],["L4","sparse","sparse points and a DSM only"],["L5","not reconstructable","the admissibility report and its codes"]],"meshDir":"../gallery/mesh/","runs":[{"id":"kolu","source":"video:kolu.webm","started":"2026-09-18 09:15:28","host":"Windows python 3.13.2 18 cpu","region":"asia-south1","git":"4259664","cfg":"98034f16d709","schema":"sih26158/run-manifest/1","seconds":58.88,"budget":900.0,"within":true,"level":"L0","quality":"measured","ladderDesc":"dense set at full resolution, mesh, texture","frame":"F5","frameNote":"local level frame: gravity is up, north is not known","units":"metres","geo":false,"crs":null,"codes":["ADM-SHOTS","ING-NOGNSS"],"codeNote":"Two shots and no GNSS sidecar. The shot boundary bounds the pass that was used; the missing telemetry is why this run is levelled rather than georeferenced.","timeNote":"The dense stage was adopted from an earlier run rather than recomputed, so this figure is the orchestration, not the reconstruction. The recorded reconstruction took 34m 39s.","scale":{"status":"calibrated","factor":5.54,"label":"calibrated x5.54 (5.32-5.77)","basis":"lane width and the ecoduct's published 21-22 m waist","bracket":null},"verdicts":{"R-O1 reconstruction type":"met","R-O2 processing time":"not measurable (stage adopted, not timed here)","R-O3 spatial accuracy":"not measurable (no ground truth)","R-O4 coverage":"not measurable","R-O5 formats":"met","R-O6 viewer":"met (tools/build_viewer.py, demo/)","scale":"calibrated x5.54 (5.32-5.77)"},"stages":[{"id":"S0-screen","sec":9.521,"skipped":false,"cached":false,"note":"","codes":["ADM-SHOTS"],"facts":{"admissible":"yes"}},{"id":"S1-ingest","sec":43.914,"skipped":false,"cached":false,"note":"","codes":["ING-NOGNSS"],"facts":{"frames_in":1518,"keyframes":43,"has_telemetry":"no"}},{"id":"S2-plan","sec":0.008,"skipped":false,"cached":false,"note":"","codes":[],"facts":{"pose_views":43,"dense_views":43}},{"id":"S3-geometry","sec":0.226,"skipped":false,"cached":false,"note":"adopted out/kolumvs3d","codes":[],"facts":{"points":3445735,"geometry_provider":"adopt","adopted_from":"out/kolumvs3d"}},{"id":"S4-scale","sec":0.006,"skipped":false,"cached":false,"note":"scale calibrated x5.540 (bracket 5.32-5.77) from lane width and the ecoduct's published 21-22 m waist","codes":[],"facts":{"units":"metres"}},{"id":"S5-georef","sec":0.0,"skipped":true,"cached":false,"note":"no telemetry: the result stays in a local frame","codes":["ING-NOGNSS"],"facts":{"georeferenced":"no","frame":"F5"}},{"id":"S5b-level","sec":0.978,"skipped":false,"cached":false,"note":"levelled and scaled x5.54","codes":[],"facts":{"frame":"F5"}},{"id":"S6-export","sec":4.224,"skipped":false,"cached":false,"note":"","codes":[],"facts":{"frame":"F5","units":"metres"}},{"id":"S7-score","sec":0.0,"skipped":true,"cached":false,"note":"no ground truth for this source","codes":[],"facts":{}},{"id":"S8-verdict","sec":0.0,"skipped":false,"cached":false,"note":"","codes":[],"facts":{}}],"arts":[{"name":"cameras","path":"cameras.npy","frame":"F4","units":"model units","bytes":3008,"sha":"9ce42f3b80e88b504c2b434dab7ce962d6f581055ece45cca16d3505f29461b7"},{"name":"colors","path":"colors.npy","frame":"F4","units":"rgb","bytes":10337333,"sha":"f8f5f5c231e757001e7cd4f84200580b761cef11a2b3ce6b29afba6eaf421a3b"},{"name":"export_geotiff","path":"export/dsm.tif","frame":"F5","units":"metres","bytes":2970433,"sha":"69003947d3672c76d323d46dc18114143b184ed29fb245c4153f01d2a472e708"},{"name":"export_las","path":"export/cloud.las","frame":"F5","units":"metres","bytes":117155365,"sha":"73026a9975fde9a6f37185d4cc57e3bce1ed209054d146c5ad773471033dc895"},{"name":"export_ply","path":"export/cloud.ply","frame":"F5","units":"metres","bytes":41348983,"sha":"d570c484a6cf224138a489ce5a6550f518a2518a1e0468762c63b4ef214eab18"},{"name":"exports","path":"export","frame":"F5","units":"metres","bytes":null,"sha":null},{"name":"keyframes","path":"ingest.json","frame":"F0","units":null,"bytes":1223,"sha":"790990657bf35ef20211a5d04dbeef0e6859c500aa2aa3b6ff054f0aa4851bcd"},{"name":"plan","path":"dense_index.npy","frame":"F0","units":"index","bytes":472,"sha":"7eecb5e69367d2c03da3f289fe7f9dca8178649be2f7d37e0a8c291314e1ea42"},{"name":"points","path":"points.npy","frame":"F4","units":"model units","bytes":41348948,"sha":"e5f3b31fa1be67f724e5a7ead88bfac7b3b26e602153d85a61b9a71022aa8808"},{"name":"points_llf","path":"points_llf.npy","frame":"F5","units":"metres","bytes":41348948,"sha":"c4df074de291b1553ee4c34956d94b898e5a4489908f17d6752164a07ab48c53"},{"name":"screen","path":"screen.json","frame":null,"units":null,"bytes":401,"sha":"9f450b0f40144a21b27589c0af5cb36e494d77ccf582f86f08bca9484dcb9333"}],"inputs":[{"path":"data/cand/kolu.webm","bytes":125246500,"sha":"871f3de3f842e8947db3b20604ca6403d1b06e638864b6bc1e92038d780fe441"}],"dense":3445735,"verify":{"ok":true,"problems":[]},"models":[{"key":"kolu_mvs","file":"kolu_mvs.js","label":"MVS rebuild","note":"Per-pixel photometric MVS at full keyframe resolution. The feed-forward model supplied the camera poses and the metric scale, nothing else.","tri":159999,"pts":220000},{"key":"kolu_base","file":"kolu_base.js","label":"Feed-forward","note":"The feed-forward baseline: one point map per view, fused. Faster, and it paints buildings onto a sheet where the rebuild resolves them.","tri":160000,"pts":220000}],"viewScale":12.9643},{"id":"village","source":"video:yt_short.mp4","started":"2026-09-20 13:12:18","host":"Windows python 3.13.2 18 cpu","region":null,"git":"cc5618b","cfg":"5be2d314d3f2","schema":"sih26158/run-manifest/1","seconds":84.86,"budget":900.0,"within":true,"level":"L0","quality":"measured","ladderDesc":"dense set at full resolution, mesh, texture","frame":"F5","frameNote":"local level frame: gravity is up, north is not known","units":"model units","geo":false,"crs":null,"codes":["ADM-HORIZON","ADM-SKY","ADM-SHOTS","ADM-OVERLAY","ING-NOGNSS"],"codeNote":"The horizon fills every frame and the sky is 18 percent of it. Ingest cropped both away rather than refusing the clip, which is what --horizon crop asks for; the codes stay on the run.","timeNote":"Geometry was adopted from an earlier run. Ingest is the real cost here.","scale":{"status":"unvalidated","factor":1.0,"label":"unvalidated (model units)","basis":"no external ruler or GNSS for this clip","bracket":null},"verdicts":{"R-O1 reconstruction type":"met","R-O2 processing time":"not measurable (stage adopted, not timed here)","R-O3 spatial accuracy":"not measurable (no ground truth)","R-O4 coverage":"not measurable","R-O5 formats":"met","R-O6 viewer":"met (tools/build_viewer.py, demo/)","scale":"unvalidated (model units)"},"stages":[{"id":"S0-screen","sec":5.683,"skipped":false,"cached":false,"note":"horizon cropped off rather than refused","codes":["ADM-HORIZON","ADM-SKY","ADM-SHOTS","ADM-OVERLAY"],"facts":{"admissible":"yes","remedied_by_crop":"yes"}},{"id":"S1-ingest","sec":74.742,"skipped":false,"cached":false,"note":"","codes":["ING-NOGNSS"],"facts":{"frames_in":1429,"keyframes":386,"has_telemetry":"no"}},{"id":"S2-plan","sec":0.007,"skipped":false,"cached":false,"note":"","codes":[],"facts":{"pose_views":386,"dense_views":300}},{"id":"S3-geometry","sec":0.074,"skipped":false,"cached":false,"note":"adopted out/ytdmvs3d","codes":[],"facts":{"points":1343713,"geometry_provider":"adopt","adopted_from":"out/ytdmvs3d"}},{"id":"S4-scale","sec":0.006,"skipped":false,"cached":false,"note":"scale unvalidated - lengths are model units, not metres","codes":[],"facts":{"units":"model units"}},{"id":"S5-georef","sec":0.0,"skipped":true,"cached":false,"note":"no telemetry: the result stays in a local frame","codes":["ING-NOGNSS"],"facts":{"georeferenced":"no","frame":"F5"}},{"id":"S5b-level","sec":0.925,"skipped":false,"cached":false,"note":"levelled and scaled x1.00","codes":[],"facts":{"frame":"F5"}},{"id":"S6-export","sec":3.423,"skipped":false,"cached":false,"note":"","codes":[],"facts":{"frame":"F5","units":"model units"}},{"id":"S7-score","sec":0.0,"skipped":true,"cached":false,"note":"no ground truth for this source","codes":[],"facts":{}},{"id":"S8-verdict","sec":0.0,"skipped":false,"cached":false,"note":"","codes":[],"facts":{}}],"arts":[{"name":"cameras","path":"cameras.npy","frame":"F4","units":"model units","bytes":2816,"sha":"21260dc2344791d53171e18a848b327205491a1676fbe744696233465d543740"},{"name":"colors","path":"colors.npy","frame":"F4","units":"rgb","bytes":4031267,"sha":"d46c923fb0226d64787156e2e1d39066a7cf5ee8be78a8e36cf36bc2a524ef32"},{"name":"export_geotiff","path":"export/dsm.tif","frame":"F5","units":"model units","bytes":292179,"sha":"53a34547fcff030364af4a94ddae7c9d3b9431eacef2ff714b6c74420f04752d"},{"name":"export_las","path":"export/cloud.las","frame":"F5","units":"model units","bytes":45686617,"sha":"6263e161696806631e130c27023a483f39d8a12ec85dbea2d3aea83ee56a6df5"},{"name":"export_ply","path":"export/cloud.ply","frame":"F5","units":"model units","bytes":16124719,"sha":"11e14884564e1e10586e01fd8c445ee1a310e7f93da0b572271343ed621ddd96"},{"name":"exports","path":"export","frame":"F5","units":"model units","bytes":null,"sha":null},{"name":"keyframes","path":"ingest.json","frame":"F0","units":null,"bytes":4748,"sha":"d50165278e3c94657f9059c4532104730a0c28da273eebe4b011e380d93dc889"},{"name":"plan","path":"dense_index.npy","frame":"F0","units":"index","bytes":2528,"sha":"4073cb61ea37d5e4cbb1aae6ead86380064982bc10627e2b51c3ef37c5422414"},{"name":"points","path":"points.npy","frame":"F4","units":"model units","bytes":16124684,"sha":"8ed415cc81882e43f91a3410ecdd9e0cba3d9f360d952ebed04b8cfdb40c3d17"},{"name":"points_llf","path":"points_llf.npy","frame":"F5","units":"model units","bytes":16124684,"sha":"9bf93919d032dce6494702d068f1dd92078e0a263dfbe11b79669b37958e8cc3"},{"name":"screen","path":"screen.json","frame":null,"units":null,"bytes":523,"sha":"1b455c6249f65f79439298b4f7421d1b78094cc24ecaa30e1f49bef3774965ae"}],"inputs":[{"path":"data/cand/yt_short.mp4","bytes":16522376,"sha":"be75d9351ebcacca1eb68010ac3db3aef1f3d5fd38980e7763d41ff16f71d05c"}],"dense":1343713,"verify":{"ok":true,"problems":[]},"models":[{"key":"vill_mvs","file":"vill_mvs.js","label":"MVS rebuild","note":null,"tri":160000,"pts":220000},{"key":"vill_base","file":"vill_base.js","label":"Feed-forward","note":null,"tri":159999,"pts":220000}],"viewScale":21.6936},{"id":"village-wide","source":"video:yt_short.mp4","started":"2026-09-20 13:13:50","host":"Windows python 3.13.2 18 cpu","region":null,"git":"cc5618b","cfg":"03be797ef8a2","schema":"sih26158/run-manifest/1","seconds":87.27,"budget":900.0,"within":true,"level":"L0","quality":"measured","ladderDesc":"dense set at full resolution, mesh, texture","frame":"F5","frameNote":"local level frame: gravity is up, north is not known","units":"model units","geo":false,"crs":null,"codes":["ADM-HORIZON","ADM-SKY","ADM-SHOTS","ADM-OVERLAY","ING-NOGNSS"],"codeNote":"Same clip, same crop, but the whole pass rather than the dense window.","timeNote":"Geometry was adopted from an earlier run.","scale":{"status":"unvalidated","factor":1.0,"label":"unvalidated (model units)","basis":"no external ruler or GNSS for this clip","bracket":null},"verdicts":{"R-O1 reconstruction type":"met","R-O2 processing time":"not measurable (stage adopted, not timed here)","R-O3 spatial accuracy":"not measurable (no ground truth)","R-O4 coverage":"not measurable","R-O5 formats":"met","R-O6 viewer":"met (tools/build_viewer.py, demo/)","scale":"unvalidated (model units)"},"stages":[{"id":"S0-screen","sec":6.4,"skipped":false,"cached":false,"note":"horizon cropped off rather than refused","codes":["ADM-HORIZON","ADM-SKY","ADM-SHOTS","ADM-OVERLAY"],"facts":{"admissible":"yes","remedied_by_crop":"yes"}},{"id":"S1-ingest","sec":76.589,"skipped":false,"cached":false,"note":"","codes":["ING-NOGNSS"],"facts":{"frames_in":1429,"keyframes":386,"has_telemetry":"no"}},{"id":"S2-plan","sec":0.008,"skipped":false,"cached":false,"note":"","codes":[],"facts":{"pose_views":386,"dense_views":300}},{"id":"S3-geometry","sec":0.164,"skipped":false,"cached":false,"note":"adopted out/yt3d","codes":[],"facts":{"points":1887505,"geometry_provider":"adopt","adopted_from":"out/yt3d"}},{"id":"S4-scale","sec":0.006,"skipped":false,"cached":false,"note":"scale unvalidated - lengths are model units, not metres","codes":[],"facts":{"units":"model units"}},{"id":"S5-georef","sec":0.0,"skipped":true,"cached":false,"note":"no telemetry: the result stays in a local frame","codes":["ING-NOGNSS"],"facts":{"georeferenced":"no","frame":"F5"}},{"id":"S5b-level","sec":0.882,"skipped":false,"cached":false,"note":"levelled and scaled x1.00","codes":[],"facts":{"frame":"F5"}},{"id":"S6-export","sec":3.217,"skipped":false,"cached":false,"note":"","codes":[],"facts":{"frame":"F5","units":"model units"}},{"id":"S7-score","sec":0.0,"skipped":true,"cached":false,"note":"no ground truth for this source","codes":[],"facts":{}},{"id":"S8-verdict","sec":0.0,"skipped":false,"cached":false,"note":"","codes":[],"facts":{}}],"arts":[{"name":"cameras","path":"cameras.npy","frame":"F4","units":"model units","bytes":1208,"sha":"87ad8fdf2ee1073579b52ef1d42c300ab96fbb52494d59586cc41478fc8d9731"},{"name":"colors","path":"colors.npy","frame":"F4","units":"rgb","bytes":5662643,"sha":"e89561d31b1378a7ccb0f3c08662f2293c3d1aa122e7c2dac63b1fc2bb6b32ad"},{"name":"export_geotiff","path":"export/dsm.tif","frame":"F5","units":"model units","bytes":966092,"sha":"1f997f6b8b6ae0ee7856ef2f1e8bf764fd9b52a40f5dc166f306f2b6ca9e6df8"},{"name":"export_las","path":"export/cloud.las","frame":"F5","units":"model units","bytes":64175545,"sha":"15a66969eae32e1a9095e18968642d6c8aca3be87d0af264cfd16274e5a2b9ac"},{"name":"export_ply","path":"export/cloud.ply","frame":"F5","units":"model units","bytes":22650223,"sha":"4521a291daf6d4920e9dcb759e9ea8c42f0bee755ba35471f8231b3b2f505ecb"},{"name":"exports","path":"export","frame":"F5","units":"model units","bytes":null,"sha":null},{"name":"keyframes","path":"ingest.json","frame":"F0","units":null,"bytes":4748,"sha":"d50165278e3c94657f9059c4532104730a0c28da273eebe4b011e380d93dc889"},{"name":"plan","path":"dense_index.npy","frame":"F0","units":"index","bytes":2528,"sha":"4073cb61ea37d5e4cbb1aae6ead86380064982bc10627e2b51c3ef37c5422414"},{"name":"points","path":"points.npy","frame":"F4","units":"model units","bytes":22650188,"sha":"2187e5e3e2157fc61453353415485873bef01bf6ffbf62abb25de2edc18de08c"},{"name":"points_llf","path":"points_llf.npy","frame":"F5","units":"model units","bytes":22650188,"sha":"9e3cdddcc8615685a73478d1d1d8e3198efa432ba46f5d9acd705cdc457a88fc"},{"name":"screen","path":"screen.json","frame":null,"units":null,"bytes":523,"sha":"1b455c6249f65f79439298b4f7421d1b78094cc24ecaa30e1f49bef3774965ae"}],"inputs":[{"path":"data/cand/yt_short.mp4","bytes":16522376,"sha":"be75d9351ebcacca1eb68010ac3db3aef1f3d5fd38980e7763d41ff16f71d05c"}],"dense":1887505,"verify":{"ok":true,"problems":[]},"models":[{"key":"wide_base","file":"wide_base.js","label":"Feed-forward","note":"The whole clip rather than the dense pass, so coverage is wider and the surface is looser.","tri":159999,"pts":220000}],"viewScale":57.8643},{"id":"demo","source":"synthetic:seed=7,frames=240,gnss=rtk","started":"2026-09-20 12:51:40","host":"Windows python 3.13.2 18 cpu","region":null,"git":"cc5618b","cfg":"9bf3d31ee799","schema":"sih26158/run-manifest/1","seconds":3.84,"budget":900.0,"within":true,"level":"L0","quality":"measured","ladderDesc":"dense set at full resolution, mesh, texture","frame":"F7","frameNote":"projected: the fit put it in a real CRS","units":"metres","geo":true,"crs":"EPSG:32643","codes":[],"codeNote":"","timeNote":"A generated scene whose ground truth is known, which is how the accuracy figure above can exist at all.","scale":{"status":"gnss+rtk","factor":0.9999723270615707,"label":"gnss+rtk x1.000","basis":"RTK/PPK track","bracket":null},"verdicts":{"R-O1 reconstruction type":"met","R-O2 processing time":"met","R-O3 spatial accuracy":"met","R-O4 coverage":"met","R-O5 formats":"met","R-O6 viewer":"met (tools/build_viewer.py, demo/)","scale":"gnss+rtk x1.000"},"stages":[{"id":"S0-screen","sec":0.0,"skipped":false,"cached":false,"note":"synthetic source: nothing to screen","codes":[],"facts":{"admissible":"yes"}},{"id":"S1-ingest","sec":0.769,"skipped":false,"cached":false,"note":"synthetic flight; blur gate on a modelled score","codes":[],"facts":{"frames_in":240,"keyframes":216,"has_telemetry":"yes"}},{"id":"S2-plan","sec":0.002,"skipped":false,"cached":false,"note":"","codes":[],"facts":{"pose_views":216,"dense_views":216}},{"id":"S3-geometry","sec":1.483,"skipped":false,"cached":false,"note":"","codes":[],"facts":{"points":20283,"sensing_views":72,"geometry_provider":"sense","observable_fraction":0.3381}},{"id":"S4-scale","sec":0.0,"skipped":false,"cached":false,"note":"scale unvalidated - lengths are model units, not metres","codes":[],"facts":{"units":"model units"}},{"id":"S5-georef","sec":1.009,"skipped":false,"cached":false,"note":"","codes":[],"facts":{"georeferenced":"yes","frame":"F7","units":"metres","crs":"EPSG:32643","geoid_model":"EGM2008 (EPSG:9518)","geoid_separation_m":-52.542,"gnss_inlier_fraction":0.9833,"sim3_scale":0.999972,"dof":5}},{"id":"S5b-level","sec":0.0,"skipped":true,"cached":false,"note":"already georeferenced (F7); nothing to level","codes":[],"facts":{}},{"id":"S6-export","sec":0.382,"skipped":false,"cached":false,"note":"","codes":[],"facts":{"frame":"F7","units":"metres"}},{"id":"S7-score","sec":0.191,"skipped":false,"cached":false,"note":"","codes":[],"facts":{"accuracy_absolute_rmse_m":0.0701,"accuracy_aligned_rmse_m":0.053,"scale_diagnostic":1.000027,"recall_at_1m_observable":1.0,"recall_at_1m_whole_scene":0.3429,"fscore_at_1m":1.0}},{"id":"S8-verdict","sec":0.0,"skipped":false,"cached":false,"note":"","codes":[],"facts":{}}],"arts":[{"name":"cameras","path":"cameras.npy","frame":"F3","units":"model units","bytes":5888,"sha":"9e952a92a79624e5ed50e38d738a10cf0fdc3de78019feb743f5ba38b12010eb"},{"name":"export_geotiff","path":"export/dsm.tif","frame":"F7","units":"metres","bytes":22589,"sha":"d6cd2679c3c5bd9d12e62c1cd2da99e6632582267f1a852ecb98521815c72b15"},{"name":"export_las","path":"export/cloud.las","frame":"F7","units":"metres","bytes":610449,"sha":"56fa9dc05cd15ab11056017819e98320c329f8f3a45457c9c4229740ebbdded1"},{"name":"export_ply","path":"export/cloud.ply","frame":"F7","units":"metres","bytes":243557,"sha":"26fc49b20aad2493fb59b5d11d3585c82630df380a13d924c22b1dccf76e1694"},{"name":"exports","path":"export","frame":"F7","units":"metres","bytes":null,"sha":null},{"name":"keyframes","path":"keyframe_index.npy","frame":"F0","units":"index","bytes":1856,"sha":"00b43a42d0c7da946a26d56635e0f01f3728b4ec34a34c55f4ee1b519a9bef76"},{"name":"plan","path":"dense_index.npy","frame":"F0","units":"index","bytes":1856,"sha":"b9dc4cdea621d1298bd08025705f2a44246f197a2c26d73e74ead37cb2fb1c44"},{"name":"points","path":"points.npy","frame":"F3","units":"model units","bytes":243524,"sha":"082542d04b2e47370587ba1cc42a17f237425c0aedf78abdf8ccea54fa19fa53"},{"name":"points_geo","path":"points_geo.npy","frame":"F7","units":"metres","bytes":486920,"sha":"2844d20e247557d6931f93795288d8e2b569bf3d220f034127dcfedb7c93bb03"}],"inputs":[{"path":"(synthetic)","bytes":null,"sha":null}],"dense":20283,"verify":{"ok":true,"problems":[]},"models":[],"viewScale":1.0},{"id":"synthetic-rtk","source":"synthetic:seed=7,frames=120,gnss=rtk","started":"2026-09-18 09:12:26","host":"Windows python 3.13.2 18 cpu","region":null,"git":"4259664","cfg":"9bf3d31ee799","schema":"sih26158/run-manifest/1","seconds":4.63,"budget":900.0,"within":true,"level":"L0","quality":"measured","ladderDesc":"dense set at full resolution, mesh, texture","frame":"F7","frameNote":"projected: the fit put it in a real CRS","units":"metres","geo":true,"crs":"EPSG:32643","codes":[],"codeNote":"","timeNote":"A generated scene whose ground truth is known, which is how the accuracy figure above can exist at all.","scale":{"status":"gnss+rtk","factor":0.9999795565560112,"label":"gnss+rtk x1.000","basis":"RTK/PPK track","bracket":null},"verdicts":{"R-O1 reconstruction type":"met","R-O2 processing time":"met","R-O3 spatial accuracy":"met","R-O4 coverage":"met","R-O5 formats":"met","R-O6 viewer":"met (tools/build_viewer.py, demo/)","scale":"gnss+rtk x1.000"},"stages":[{"id":"S0-screen","sec":0.0,"skipped":false,"cached":false,"note":"synthetic source: nothing to screen","codes":[],"facts":{"admissible":"yes"}},{"id":"S1-ingest","sec":0.728,"skipped":false,"cached":false,"note":"synthetic flight; blur gate on a modelled score","codes":[],"facts":{"frames_in":120,"keyframes":108,"has_telemetry":"yes"}},{"id":"S2-plan","sec":0.002,"skipped":false,"cached":false,"note":"","codes":[],"facts":{"pose_views":108,"dense_views":108}},{"id":"S3-geometry","sec":2.167,"skipped":false,"cached":false,"note":"","codes":[],"facts":{"points":20608,"sensing_views":108,"geometry_provider":"sense","observable_fraction":0.3435}},{"id":"S4-scale","sec":0.0,"skipped":false,"cached":false,"note":"scale unvalidated - lengths are model units, not metres","codes":[],"facts":{"units":"model units"}},{"id":"S5-georef","sec":1.166,"skipped":false,"cached":false,"note":"","codes":[],"facts":{"georeferenced":"yes","frame":"F7","units":"metres","crs":"EPSG:32643","geoid_model":"EGM2008 (EPSG:9518)","geoid_separation_m":-52.542,"gnss_inlier_fraction":0.9833,"sim3_scale":0.99998,"dof":5}},{"id":"S6-export","sec":0.372,"skipped":false,"cached":false,"note":"","codes":[],"facts":{"frame":"F7","units":"metres"}},{"id":"S7-score","sec":0.195,"skipped":false,"cached":false,"note":"","codes":[],"facts":{"accuracy_absolute_rmse_m":0.0894,"accuracy_aligned_rmse_m":0.0529,"scale_diagnostic":1.000019,"recall_at_1m_observable":1.0,"recall_at_1m_whole_scene":0.3486,"fscore_at_1m":1.0}},{"id":"S8-verdict","sec":0.0,"skipped":false,"cached":false,"note":"","codes":[],"facts":{}}],"arts":[{"name":"cameras","path":"cameras.npy","frame":"F3","units":"model units","bytes":3008,"sha":"851d0cc8cb5d84396b962bb6d1e4f0eaf1ce74adc78e5faf406b8443fcda9d48"},{"name":"export_geotiff","path":"export/dsm.tif","frame":"F7","units":"metres","bytes":22995,"sha":"9120c200c371293604ee498d6895f7f6be4242ac30c1d337fe17e5f54e5a5c41"},{"name":"export_las","path":"export/cloud.las","frame":"F7","units":"metres","bytes":620199,"sha":"ce4461ae61c25e2ea2ec34ed935b89bd97053b811c071d9448640a371f97d4d6"},{"name":"export_ply","path":"export/cloud.ply","frame":"F7","units":"metres","bytes":247457,"sha":"18088e3df6c76a2c07764aaeef30fcbcd0ecd49c5f814c6e5e7b51ed38ca5263"},{"name":"exports","path":"export","frame":"F7","units":"metres","bytes":null,"sha":null},{"name":"keyframes","path":"keyframe_index.npy","frame":"F0","units":"index","bytes":992,"sha":"d2d0bdb92ab43ee2875030627be4d645eadabe11cb118dac90f92632d563608a"},{"name":"plan","path":"dense_index.npy","frame":"F0","units":"index","bytes":992,"sha":"77129f97e42a94f77acc8ea06a73dc2814f73d555962037a12f17df1def02665"},{"name":"points","path":"points.npy","frame":"F3","units":"model units","bytes":247424,"sha":"e89854661b24ea791989a1822551990b95e2689e107c8e20eec63f018b411a65"},{"name":"points_geo","path":"points_geo.npy","frame":"F7","units":"metres","bytes":494720,"sha":"881ca85c0057e0abe3f8cf00ca608dc60d4099d18ca439a92fd6ecaee2fb0920"}],"inputs":[{"path":"(synthetic)","bytes":null,"sha":null}],"dense":20608,"verify":{"ok":true,"problems":[]},"models":[],"viewScale":1.0},{"id":"synthetic-consumer-120","source":"synthetic:seed=7,frames=120,gnss=consumer","started":"2026-09-18 09:12:09","host":"Windows python 3.13.2 18 cpu","region":null,"git":"4259664","cfg":"9bf3d31ee799","schema":"sih26158/run-manifest/1","seconds":2.79,"budget":900.0,"within":true,"level":"L0","quality":"measured","ladderDesc":"dense set at full resolution, mesh, texture","frame":"F7","frameNote":"projected: the fit put it in a real CRS","units":"metres","geo":true,"crs":"EPSG:32643","codes":[],"codeNote":"","timeNote":"A generated scene whose ground truth is known, which is how the accuracy figure above can exist at all.","scale":{"status":"gnss","factor":1.000775417125913,"label":"gnss x1.001","basis":"consumer GNSS track","bracket":null},"verdicts":{"R-O1 reconstruction type":"met","R-O2 processing time":"met","R-O3 spatial accuracy":"not met","R-O4 coverage":"not met","R-O5 formats":"met","R-O6 viewer":"met (tools/build_viewer.py, demo/)","scale":"gnss x1.001"},"stages":[{"id":"S0-screen","sec":0.0,"skipped":true,"cached":true,"note":"","codes":[],"facts":{"admissible":"yes"}},{"id":"S1-ingest","sec":0.0,"skipped":true,"cached":true,"note":"","codes":[],"facts":{"frames_in":120,"keyframes":108,"has_telemetry":"yes"}},{"id":"S2-plan","sec":0.0,"skipped":true,"cached":true,"note":"","codes":[],"facts":{"pose_views":108,"dense_views":108}},{"id":"S3-geometry","sec":0.0,"skipped":true,"cached":true,"note":"","codes":[],"facts":{"points":20608,"sensing_views":108,"geometry_provider":"sense","observable_fraction":0.3435}},{"id":"S4-scale","sec":0.0,"skipped":true,"cached":true,"note":"","codes":[],"facts":{"units":"model units"}},{"id":"S5-georef","sec":0.0,"skipped":true,"cached":true,"note":"","codes":[],"facts":{"georeferenced":"yes","frame":"F7","units":"metres","crs":"EPSG:32643","geoid_model":"EGM2008 (EPSG:9518)","geoid_separation_m":-52.542,"gnss_inlier_fraction":0.8,"sim3_scale":1.000775,"dof":5}},{"id":"S6-export","sec":1.016,"skipped":false,"cached":false,"note":"","codes":[],"facts":{"frame":"F7","units":"metres"}},{"id":"S7-score","sec":1.775,"skipped":false,"cached":false,"note":"","codes":[],"facts":{"accuracy_absolute_rmse_m":3.5373,"accuracy_aligned_rmse_m":0.1958,"scale_diagnostic":0.999224,"recall_at_1m_observable":0.0035,"recall_at_1m_whole_scene":0.0021,"fscore_at_1m":0.0035}},{"id":"S8-verdict","sec":0.0,"skipped":false,"cached":false,"note":"","codes":[],"facts":{}}],"arts":[{"name":"cameras","path":"cameras.npy","frame":"F3","units":"model units","bytes":3008,"sha":"851d0cc8cb5d84396b962bb6d1e4f0eaf1ce74adc78e5faf406b8443fcda9d48"},{"name":"export_geotiff","path":"export/dsm.tif","frame":"F7","units":"metres","bytes":23165,"sha":"b603f1adc7c83d456448f2a25775b9b9ca4a46c1e7bdf837df7536cc87fac58e"},{"name":"export_las","path":"export/cloud.las","frame":"F7","units":"metres","bytes":620199,"sha":"2a63d58fda13c9f94065276624ef4995fc784a9f89ea4ef4434ab3e0162ed6b1"},{"name":"export_ply","path":"export/cloud.ply","frame":"F7","units":"metres","bytes":247457,"sha":"4229d51e278adba7f42bd070d1429709e3cdfc42e70082aca8647a0b32ac413f"},{"name":"exports","path":"export","frame":"F7","units":"metres","bytes":null,"sha":null},{"name":"keyframes","path":"keyframe_index.npy","frame":"F0","units":"index","bytes":992,"sha":"d2d0bdb92ab43ee2875030627be4d645eadabe11cb118dac90f92632d563608a"},{"name":"plan","path":"dense_index.npy","frame":"F0","units":"index","bytes":992,"sha":"77129f97e42a94f77acc8ea06a73dc2814f73d555962037a12f17df1def02665"},{"name":"points","path":"points.npy","frame":"F3","units":"model units","bytes":247424,"sha":"e89854661b24ea791989a1822551990b95e2689e107c8e20eec63f018b411a65"},{"name":"points_geo","path":"points_geo.npy","frame":"F7","units":"metres","bytes":494720,"sha":"387a3764adca952a661a95f8b7480f7e36b078d5952aab38f46ed569172e2cd2"}],"inputs":[{"path":"(synthetic)","bytes":null,"sha":null}],"dense":20608,"verify":{"ok":true,"problems":[]},"models":[],"viewScale":1.0},{"id":"village-rejected","source":"video:yt_short.mp4","started":"2026-09-20 13:08:48","host":"Windows python 3.13.2 18 cpu","region":null,"git":"cc5618b","cfg":"9bf3d31ee799","schema":"sih26158/run-manifest/1","seconds":0.0,"budget":900.0,"within":true,"level":"L5","quality":"not reconstructable","ladderDesc":"the admissibility report and its codes","frame":null,"frameNote":"no frame: the run never reached geometry","units":"model units","geo":false,"crs":null,"codes":["ADM-HORIZON"],"codeNote":"The same clip with the default policy. The screener refused it and the ladder walked down to L5, where the refusal itself is the deliverable. This is the intended behaviour, not a crash.","timeNote":"Nothing ran past the screener.","scale":{"status":"unvalidated","factor":1.0,"label":"unvalidated (model units)","basis":"no scale stage resolved this run","bracket":null},"verdicts":{},"stages":[{"id":"S0-screen","sec":0.0,"skipped":true,"cached":false,"note":"[ADM-HORIZON] horizon in 100% of frames -> unbounded depth; median sky 18% -> too much frame carries no geometry","codes":["ADM-HORIZON"],"facts":{}},{"id":"S0-screen","sec":0.0,"skipped":true,"cached":false,"note":"[ADM-HORIZON] horizon in 100% of frames -> unbounded depth; median sky 18% -> too much frame carries no geometry","codes":["ADM-HORIZON"],"facts":{}},{"id":"S0-screen","sec":0.0,"skipped":true,"cached":false,"note":"[ADM-HORIZON] horizon in 100% of frames -> unbounded depth; median sky 18% -> too much frame carries no geometry","codes":["ADM-HORIZON"],"facts":{}},{"id":"S0-screen","sec":0.0,"skipped":true,"cached":false,"note":"[ADM-HORIZON] horizon in 100% of frames -> unbounded depth; median sky 18% -> too much frame carries no geometry","codes":["ADM-HORIZON"],"facts":{}},{"id":"S0-screen","sec":0.0,"skipped":true,"cached":false,"note":"[ADM-HORIZON] horizon in 100% of frames -> unbounded depth; median sky 18% -> too much frame carries no geometry","codes":["ADM-HORIZON"],"facts":{}},{"id":"S0-screen","sec":0.0,"skipped":true,"cached":false,"note":"[ADM-HORIZON] horizon in 100% of frames -> unbounded depth; median sky 18% -> too much frame carries no geometry","codes":["ADM-HORIZON"],"facts":{}}],"arts":[],"inputs":[{"path":"data/cand/yt_short.mp4","bytes":16522376,"sha":"be75d9351ebcacca1eb68010ac3db3aef1f3d5fd38980e7763d41ff16f71d05c"}],"dense":null,"verify":{"ok":true,"problems":[]},"models":[],"viewScale":1.0}]};
+var RUNS = DATA.runs, BY = {};
+RUNS.forEach(function(r){ BY[r.id] = r; });
+
+/* ============================ theme ============================ */
+var root = document.documentElement;
+/* The stylesheet's default is dark; a system that asks for light gets light, but
+   only while the viewer has not chosen. Read it back the same way, so the button
+   always offers the other one. */
+function isDark(){
+  var t = root.getAttribute("data-theme");
+  if(t) return t === "dark";
+  return !window.matchMedia("(prefers-color-scheme: light)").matches;
+}
+function applyTheme(t){
+  if(t === "auto") root.removeAttribute("data-theme");
+  else root.setAttribute("data-theme", t);
+  var dark = isDark();
+  document.getElementById("bTheme").textContent = dark ? "Light" : "Dark";
+  glClear = dark ? [0.039,0.039,0.043,1] : [0.984,0.984,0.988,1];
+}
+var theme = "auto", glClear = [0.039,0.039,0.043,1];
+try{ theme = localStorage.getItem("tess.theme") || "auto"; }catch(e){}
+applyTheme(theme);
+document.getElementById("bTheme").onclick = function(){
+  theme = isDark() ? "light" : "dark";
+  try{ localStorage.setItem("tess.theme", theme); }catch(e){}
+  applyTheme(theme);
+};
+
+/* ============================ helpers ============================ */
+function h(s){ return String(s == null ? "" : s)
+  .replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;"); }
+function el(tag, cls, html){
+  var e = document.createElement(tag);
+  if(cls) e.className = cls;
+  if(html != null) e.innerHTML = html;
+  return e;
+}
+function bytes(b){
+  if(b == null) return "";
+  if(b >= 1e9) return (b/1073741824).toFixed(1) + " GB";
+  if(b >= 1e6) return (b/1048576).toFixed(1) + " MB";
+  if(b >= 1e3) return (b/1024).toFixed(1) + " KB";
+  return b + " B";
+}
+function secs(s){ return s >= 60 ? Math.floor(s/60) + "m " + (s%60).toFixed(0) + "s"
+                                 : s.toFixed(2) + "s"; }
+function num(v){
+  if(typeof v !== "number") return h(v);
+  if(Number.isInteger(v)) return v.toLocaleString("en-US");
+  return Math.abs(v) < 0.01 ? v.toExponential(2) : v.toFixed(4).replace(/0+$/,"").replace(/\.$/,"");
+}
+var LADDER = DATA.ladder.map(function(x){ return x[0]; });
+
+/* ============================ rail ============================ */
+var railBox = document.getElementById("runs"), qbox = document.getElementById("q");
+function renderRail(){
+  var f = qbox.value.trim().toLowerCase();
+  var list = RUNS.filter(function(r){
+    return !f || (r.id + " " + r.source + " " + r.level).toLowerCase().indexOf(f) >= 0;
+  });
+  railBox.innerHTML = "";
+  if(!list.length){
+    railBox.appendChild(el("div", "empty", "<b>No match</b>Nothing here answers to that."));
+  }
+  list.forEach(function(r){
+    var a = el("a", "run");
+    a.href = "#/" + r.id;
+    a.setAttribute("role", "listitem");
+    a.setAttribute("aria-current", String(r.id === cur));
+    var unit = r.level === "L5" ? "refused"
+      : (r.scale.status === "unvalidated" ? "model units" : "metres");
+    a.innerHTML =
+      '<span class="id"><b>' + h(r.id) + '</b><i>' + secs(r.seconds) + '</i></span>' +
+      '<span class="src">' + h(r.source) + '</span>' +
+      '<span class="tags"><span>' + h(r.level) + '</span>' +
+      '<span class="' + (r.frame ? "" : "off") + '">' + h(r.frame || "no frame") + '</span>' +
+      '<span class="' + (unit === "metres" ? "" : "off") + '">' + unit + '</span></span>';
+    railBox.appendChild(a);
+  });
+  document.getElementById("nRuns").textContent = list.length + " / " + RUNS.length;
+}
+qbox.addEventListener("input", renderRail);
+
+document.getElementById("sRuns").innerHTML = RUNS.length + "<span>runs</span>";
+document.getElementById("sVerify").innerHTML =
+  DATA.build.verified + "/" + RUNS.length + "<span>contracts pass</span>";
+document.getElementById("sGit").innerHTML = h(DATA.build.git) + "<span>build</span>";
+document.getElementById("railFoot").innerHTML =
+  "built " + h(DATA.build.at) + "<br>every figure is read from that run&rsquo;s own " +
+  "run_manifest.json";
+
+/* ============================ routing ============================ */
+var TABS = [["overview","Overview"],["stages","Stages"],["model","Model"],
+            ["artefacts","Artefacts"],["contracts","Contracts"]];
+var cur = null, curTab = "overview";
+var main = document.getElementById("main");
+
+function route(){
+  var p = (location.hash || "").replace(/^#\/?/, "").split("/");
+  var id = p[0] && BY[p[0]] ? p[0] : RUNS[0].id;
+  var tab = p[1] && TABS.some(function(t){ return t[0] === p[1]; }) ? p[1] : "overview";
+  var r = BY[id];
+  if(tab === "model" && !r.models.length) tab = "overview";
+  cur = id; curTab = tab;
+  renderRail();
+  render(r, tab);
+}
+window.addEventListener("hashchange", route);
+
+/* ============================ render ============================ */
+function render(r, tab){
+  detachWorkspace();
+  main.className = tab === "model" ? "nogrow" : "";
+  main.scrollTop = 0;
+  main.innerHTML = "";
+
+  var head = el("div", "rhead");
+  head.innerHTML =
+    "<h1>" + h(r.id) + "</h1>" +
+    '<div class="sub">' +
+      "<span>source <b>" + h(r.source) + "</b></span>" +
+      "<span>started <b>" + h(r.started) + "</b></span>" +
+      "<span>git <b>" + h(r.git) + "</b></span>" +
+      "<span>config <b>" + h(r.cfg) + "</b></span>" +
+      "<span>host <b>" + h(r.host || "not recorded") + "</b></span>" +
+    "</div>";
+  var tabs = el("div", "tabs");
+  TABS.forEach(function(t){
+    var b = el("button", null, t[1]);
+    b.setAttribute("aria-current", String(t[0] === tab));
+    if(t[0] === "model" && !r.models.length){ b.disabled = true;
+      b.title = "This run has no packed mesh"; }
+    else b.onclick = function(){ location.hash = "#/" + r.id + "/" + t[0]; };
+    tabs.appendChild(b);
+  });
+  head.appendChild(tabs);
+  main.appendChild(head);
+
+  if(tab === "model") return mountWorkspace(r);
+  var body = el("div", "body");
+  ({overview:tabOverview, stages:tabStages, artefacts:tabArtefacts,
+    contracts:tabContracts})[tab](r, body);
+  main.appendChild(body);
+}
+
+/* ---------------------------------------------------- overview */
+function tabOverview(r, b){
+  var li = LADDER.indexOf(r.level);
+  var ladder = '<span class="ladder"><u>full</u>' + LADDER.map(function(k, i){
+    return '<i class="' + (i === li ? "here" : "") + '" title="' + h(k) +
+           '"></i>'; }).join("") + "<u>refused</u></span>";
+
+  var claim = el("section");
+  claim.innerHTML = "<h2>What this run may claim</h2>" +
+    '<div class="kv">' +
+      kv("Ladder level", h(r.level) + ladder, r.quality + ", " + r.ladderDesc) +
+      kv("Frame", h(r.frame || "none"), r.frameNote) +
+      kv("Units", h(r.units), r.units === "metres"
+          ? "lengths in the files are metres" : "lengths are not comparable between runs") +
+      kv("Metric scale", h(r.scale.label), r.scale.basis) +
+      kv("Georeferenced", r.geo ? "yes" : "no",
+         r.geo ? "projected to " + h(r.crs || "a CRS") : "no CRS attached") +
+      kv("Region", h(r.region || "not recorded"), "") +
+      kv("Wall clock", secs(r.seconds),
+         r.within ? "inside the " + secs(r.budget) + " budget"
+                  : "over the " + secs(r.budget) + " budget") +
+      kv("Contract check", r.verify.ok ? "pass" : r.verify.problems.length + " problems",
+         r.arts.length + " artefacts re-hashed") +
+    "</div>";
+  b.appendChild(claim);
+
+  if(r.codes.length){
+    var c = el("section");
+    c.innerHTML = "<h2>Codes raised</h2><div class=\"codes\">" +
+      r.codes.map(function(x){ return "<span>" + h(x) + "</span>"; }).join("") + "</div>" +
+      '<p style="margin-top:12px">' + h(r.codeNote) + "</p>";
+    b.appendChild(c);
+  }
+
+  var targets = Object.keys(r.verdicts).filter(function(k){ return k !== "scale"; });
+  var v = el("section");
+  v.innerHTML = "<h2>The problem statement&rsquo;s six targets</h2>" +
+    "<p>Read off this run alone. A target that cannot be measured on this clip says so " +
+    "rather than defaulting to a pass or a fail.</p>" +
+    (!targets.length
+     ? '<div class="empty"><b>Nothing to read</b>No target can be read off a run that ' +
+       'produced no geometry. The refusal on the left is the whole result.</div>'
+     : '<div class="verdict">' + Object.keys(r.verdicts).map(function(k){
+      if(k === "scale") return "";
+      var s = r.verdicts[k];
+      var cls = s.indexOf("not measurable") === 0 ? "unknown"
+              : s.indexOf("not met") === 0 ? "unmet" : "met";
+      var word = cls === "unknown" ? "not measurable"
+               : cls === "unmet" ? "not met" : "met";
+      var why = s.replace(/^(not measurable|not met|met)\s*/, "").replace(/^[(]|[)]$/g,"");
+      return '<div class="' + cls + '"><div class="t">' + h(k.replace(/^R-O\d\s*/,"")) +
+        '<small>' + h(k.split(" ")[0]) + (why ? " / " + h(why) : "") + "</small></div>" +
+        '<div class="s">' + word + "</div></div>";
+    }).join("") + "</div>");
+  b.appendChild(v);
+
+  var t = el("section");
+  var pc = Math.min(100, 100 * r.seconds / r.budget);
+  t.innerHTML = "<h2>Time</h2>" +
+    '<div class="budget"><i style="width:' + pc.toFixed(1) + '%"></i><b>' +
+      secs(r.seconds) + " of " + secs(r.budget) + "</b></div>" +
+    '<p style="margin-top:12px">' + h(r.timeNote) + "</p>";
+  b.appendChild(t);
+}
+function kv(k, v, small){
+  return "<div><dt>" + k + "</dt><dd>" + v +
+    (small ? "<small>" + h(small) + "</small>" : "") + "</dd></div>";
+}
+
+/* ---------------------------------------------------- stages */
+function tabStages(r, b){
+  var total = r.stages.reduce(function(a, s){ return a + s.sec; }, 0) || 1;
+  var s = el("section");
+  var acc = 0;
+  s.innerHTML = "<h2>Stages</h2><p>Bar length is the stage&rsquo;s share of this " +
+    "run&rsquo;s wall clock. A stage that was skipped says why; a stage restored from " +
+    "the cache is hatched, because it cost nothing this time.</p>" +
+    '<div class="tl">' + r.stages.map(function(st){
+      var left = 100 * acc / total, w = Math.max(0.4, 100 * st.sec / total);
+      acc += st.sec;
+      var cls = st.skipped ? "skip" : st.cached ? "cache" : "";
+      var facts = Object.keys(st.facts || {}).map(function(k){
+        return "<span><b>" + h(k) + "</b> " + num(st.facts[k]) + "</span>"; }).join("");
+      return '<div class="row"><span class="nm">' + h(st.id) + "</span>" +
+        '<span class="track"><i class="bar ' + cls + '" style="left:' +
+          left.toFixed(2) + "%;width:" + w.toFixed(2) + '%"></i></span>' +
+        '<span class="sec">' + st.sec.toFixed(2) + "s</span>" +
+        (facts || st.note ? '<span class="facts">' +
+          (st.note ? "<span>" + h(st.note) + "</span>" : "") + facts + "</span>" : "") +
+        "</div>";
+    }).join("") + "</div>";
+  b.appendChild(s);
+}
+
+/* ---------------------------------------------------- artefacts */
+function tabArtefacts(r, b){
+  var s = el("section");
+  s.innerHTML = "<h2>Artefacts</h2>" +
+    "<p>Written by this run and checksummed on write. Each one carries the frame and " +
+    "the units it is in, so a file cannot be read back in the wrong one by accident.</p>" +
+    (r.arts.length ? "<table><thead><tr><th>Name</th><th>Path</th><th>Frame</th>" +
+      "<th>Units</th><th class='r'>Bytes</th><th>SHA-256</th></tr></thead><tbody>" +
+      r.arts.map(function(a){
+        return "<tr><td class='m'>" + h(a.name) + "</td><td class='m fg2'>" + h(a.path) +
+          "</td><td class='m'>" + h(a.frame || "") + "</td><td class='m'>" +
+          h(a.units || "") + "</td><td class='m r'>" + (a.bytes ? bytes(a.bytes) : "") +
+          "</td><td class='m fg3'>" + h((a.sha || "").slice(0, 16)) + "</td></tr>";
+      }).join("") + "</tbody></table>"
+     : '<div class="empty"><b>Nothing written</b>This run stopped before any stage ' +
+       'produced a file.</div>');
+  b.appendChild(s);
+}
+
+/* ---------------------------------------------------- contracts */
+function tabContracts(r, b){
+  var s = el("section");
+  s.innerHTML = "<h2>Contract check</h2>" +
+    "<p>What <span class='mono'>tesseract verify</span> asks of a finished run: that the " +
+    "manifest matches its schema, that the units do not contradict the scale status, that " +
+    "the frame matches the georeferencing claim, and that every artefact still hashes to " +
+    "what the run recorded.</p>" +
+    (r.verify.ok
+      ? '<div class="note"><b>PASS.</b> ' + r.arts.length + " artefacts re-hashed, " +
+        "manifest consistent, no problems.</div>"
+      : '<div class="note"><b>' + r.verify.problems.length + " problem(s).</b><br>" +
+        r.verify.problems.map(h).join("<br>") + "</div>");
+  b.appendChild(s);
+
+  var i = el("section");
+  i.innerHTML = "<h2>Inputs</h2>" +
+    (r.inputs.length
+      ? "<table><thead><tr><th>Path</th><th class='r'>Bytes</th><th>SHA-256</th></tr>" +
+        "</thead><tbody>" + r.inputs.map(function(x){
+          return "<tr><td class='m'>" + h(x.path) + "</td><td class='m r'>" +
+            bytes(x.bytes) + "</td><td class='m fg3'>" + h((x.sha || "").slice(0,16)) +
+            "</td></tr>"; }).join("") + "</tbody></table>"
+      : '<div class="empty"><b>Generated input</b>This run built its own scene, so there ' +
+        'is no file to check in.</div>');
+  b.appendChild(i);
+
+  var d = el("section");
+  d.innerHTML = "<h2>Identity</h2><div class=\"kv\">" +
+    kv("Schema", h(r.schema), "") +
+    kv("Config hash", h(r.cfg), "the inputs that would change the result") +
+    kv("Git", h(r.git), "the code that produced it") +
+    kv("Ladder", h(r.level), r.quality) +
+    "</div>";
+  b.appendChild(d);
+}
+
+/* ============================ workspace ============================ */
+var WS = null, cv, gl, pM, pP, uM, uP, curMVP = null, curW = 1, curH = 1;
+var az = .55, el3 = .80, dist = 2.6, panx = 0, pany = 0, target = null, raf = 0;
+var PRESETS = {plan:[0,1.5605,2.30], oblique:[.55,.80,2.60], low:[1.25,.26,2.50]};
+var showMesh = true, showPts = false, cache = {}, active = null, wsRun = null;
+var measuring = false, marks = [], tipTimer = null, curModel = 0;
+
+function detachWorkspace(){
+  if(raf){ cancelAnimationFrame(raf); raf = 0; }
+  if(WS && WS.parentNode) WS.parentNode.removeChild(WS);
+  document.body.classList.remove("measuring");
+}
+
+function buildWorkspace(){
+  WS = el("div"); WS.id = "ws";
+  WS.innerHTML =
+    '<div id="stage">' +
+      '<canvas id="gl"></canvas><svg id="ovl"></svg>' +
+      '<div id="hud"></div><div id="load" class="hide"></div>' +
+      '<div id="tools">' +
+        '<button id="bMesh" aria-pressed="true">mesh</button>' +
+        '<button id="bPts" aria-pressed="false">points</button>' +
+        '<button data-view="plan">plan</button>' +
+        '<button data-view="oblique">oblique</button>' +
+        '<button data-view="low">low angle</button>' +
+        '<button id="bMeasure" aria-pressed="false">measure</button>' +
+        '<button id="bClear">clear</button>' +
+      "</div>" +
+    "</div><aside id=\"insp\"></aside>";
+  cv = WS.querySelector("#gl");
+  gl = cv.getContext("webgl2", {antialias:true, alpha:false});
+  initGL();
+  wireWorkspace();
+}
+
+function mountWorkspace(r){
+  if(!WS) buildWorkspace();
+  if(!gl){
+    var e = el("div", "body");
+    e.innerHTML = '<div class="empty"><b>No WebGL2</b>This browser cannot open the ' +
+      'workspace. The exported OBJ, PLY, LAS, GeoTIFF, glTF and FBX carry the same ' +
+      'geometry.</div>';
+    return main.appendChild(e);
+  }
+  main.appendChild(WS);
+  if(wsRun !== r.id){ marks = []; curModel = 0; wsRun = r.id;
+    target = PRESETS.oblique.slice(); }
+  renderInspector(r);
+  loadModel(r, curModel);
+  if(!raf) raf = requestAnimationFrame(draw);
+}
+
+function renderInspector(r){
+  var m = r.models[curModel];
+  var sc = r.scale;
+  var insp = WS.querySelector("#insp");
+  insp.innerHTML =
+    (r.models.length > 1
+      ? '<div class="seg">' + r.models.map(function(x, i){
+          return '<button data-m="' + i + '" aria-pressed="' + (i === curModel) + '">' +
+            h(x.label) + "</button>"; }).join("") + "</div>"
+      : "") +
+    "<h3>Geometry</h3>" +
+    row("dense points", r.dense ? r.dense.toLocaleString("en-US") : "not recorded") +
+    row("in the browser", m.pts.toLocaleString("en-US") + " pts, " +
+                          m.tri.toLocaleString("en-US") + " tri") +
+    "<h3>Frame and scale</h3>" +
+    row("frame", r.frame || "none") +
+    row("units", r.units) +
+    row("scale", sc.status === "unvalidated" ? "unvalidated" : "x" + sc.factor.toFixed(2)) +
+    (sc.bracket ? row("bracket", "x" + sc.bracket[0].toFixed(2) + " to x" +
+                                 sc.bracket[1].toFixed(2)) : "") +
+    "<h3>Measure</h3><div id=\"mtip\"></div>" +
+    (m.note ? "<h3>About this model</h3><p class='fg2' style='font-size:12px;" +
+              "margin:0;line-height:1.6'>" + h(m.note) + "</p>" : "");
+  insp.querySelectorAll("[data-m]").forEach(function(btn){
+    btn.onclick = function(){
+      curModel = +btn.dataset.m; marks = [];
+      renderInspector(r); loadModel(r, curModel);
+    };
+  });
+  setTip();
+}
+function row(k, v){
+  return '<div class="r"><span>' + h(k) + "</span><b>" + h(v) + "</b></div>";
+}
+
+/* ---- GL ---- */
+function initGL(){
+  if(!gl) return;
+  var HEAD = ["#version 300 es","uniform float uScale; uniform vec3 uOffset;"].join("\n");
+  var VS_M = [HEAD,
+    "in vec3 aPos; in vec3 aCol; in vec3 aNrm; uniform mat4 uMVP;",
+    "out vec3 vCol; out vec3 vN;",
+    "void main(){ vCol=aCol; vN=aNrm;",
+    "  gl_Position=uMVP*vec4(aPos*uScale-uOffset,1.0); }"].join("\n");
+  var FS_M = ["#version 300 es","precision highp float;",
+    "in vec3 vCol; in vec3 vN; out vec4 o; uniform vec3 uLight;",
+    "void main(){ float d=0.40+0.60*abs(dot(normalize(vN),normalize(uLight)));",
+    "  o=vec4(vCol*d,1.0); }"].join("\n");
+  var VS_P = [HEAD,
+    "in vec3 aPos; in vec3 aCol; uniform mat4 uMVP; uniform float uSize;",
+    "out vec3 vCol;",
+    "void main(){ vCol=aCol; gl_Position=uMVP*vec4(aPos*uScale-uOffset,1.0);",
+    "  gl_PointSize=uSize; }"].join("\n");
+  var FS_P = ["#version 300 es","precision highp float; in vec3 vCol; out vec4 o;",
+    "void main(){ o=vec4(vCol,1.0); }"].join("\n");
+  function prog(vs, fs){
+    var c = function(t, s){ var o = gl.createShader(t); gl.shaderSource(o, s);
+      gl.compileShader(o);
+      if(!gl.getShaderParameter(o, gl.COMPILE_STATUS)) console.error(gl.getShaderInfoLog(o));
+      return o; };
+    var p = gl.createProgram();
+    gl.attachShader(p, c(gl.VERTEX_SHADER, vs));
+    gl.attachShader(p, c(gl.FRAGMENT_SHADER, fs));
+    gl.linkProgram(p); return p;
+  }
+  pM = prog(VS_M, FS_M); pP = prog(VS_P, FS_P);
+  uM = {mvp:gl.getUniformLocation(pM,"uMVP"), light:gl.getUniformLocation(pM,"uLight"),
+        scale:gl.getUniformLocation(pM,"uScale"), off:gl.getUniformLocation(pM,"uOffset")};
+  uP = {mvp:gl.getUniformLocation(pP,"uMVP"), size:gl.getUniformLocation(pP,"uSize"),
+        scale:gl.getUniformLocation(pP,"uScale"), off:gl.getUniformLocation(pP,"uOffset")};
+}
+
+var un = function(s){ var b = atob(s), u = new Uint8Array(b.length);
+  for(var i=0;i<b.length;i++) u[i] = b.charCodeAt(i); return u; };
+
+function buildMesh(key, D, viewScale){
+  var VP = new Int16Array(un(D.vpos).buffer), VC = un(D.vcol);
+  var IX = new Uint32Array(un(D.idx).buffer);
+  var PP = new Int16Array(un(D.ppos).buffer), PC = un(D.pcol);
+  var NR = new Float32Array(VP.length);
+  for(var t=0;t<IX.length;t+=3){
+    var i0=IX[t]*3, i1=IX[t+1]*3, i2=IX[t+2]*3;
+    var ux=VP[i1]-VP[i0], uy=VP[i1+1]-VP[i0+1], uz=VP[i1+2]-VP[i0+2];
+    var vx=VP[i2]-VP[i0], vy=VP[i2+1]-VP[i0+1], vz=VP[i2+2]-VP[i0+2];
+    var nx=uy*vz-uz*vy, ny=uz*vx-ux*vz, nz=ux*vy-uy*vx;
+    NR[i0]+=nx; NR[i0+1]+=ny; NR[i0+2]+=nz;
+    NR[i1]+=nx; NR[i1+1]+=ny; NR[i1+2]+=nz;
+    NR[i2]+=nx; NR[i2+1]+=ny; NR[i2+2]+=nz;
+  }
+  for(var i=0;i<NR.length;i+=3){
+    var L=Math.hypot(NR[i],NR[i+1],NR[i+2])||1;
+    NR[i]/=L; NR[i+1]/=L; NR[i+2]/=L;
+  }
+  var buf = function(d, tg){ var t = tg || gl.ARRAY_BUFFER, b = gl.createBuffer();
+    gl.bindBuffer(t,b); gl.bufferData(t,d,gl.STATIC_DRAW); return b; };
+  var bVP=buf(VP), bVC=buf(VC), bNR=buf(NR), bPP=buf(PP), bPC=buf(PC);
+  var bIX=buf(IX, gl.ELEMENT_ARRAY_BUFFER);
+  var vaoM=gl.createVertexArray(), vaoP=gl.createVertexArray();
+  var bind = function(vao,p,pos,col,nrm){
+    gl.bindVertexArray(vao);
+    var at=function(n,b,sz,ty,nm){ var l=gl.getAttribLocation(p,n); if(l<0)return;
+      gl.bindBuffer(gl.ARRAY_BUFFER,b); gl.enableVertexAttribArray(l);
+      gl.vertexAttribPointer(l,sz,ty,nm,0,0); };
+    at("aPos",pos,3,gl.SHORT,true); at("aCol",col,3,gl.UNSIGNED_BYTE,true);
+    if(nrm) at("aNrm",nrm,3,gl.FLOAT,false);
+    gl.bindVertexArray(null);
+  };
+  bind(vaoM,pM,bVP,bVC,bNR); bind(vaoP,pP,bPP,bPC,null);
+  /* model units per raw shader unit, divided by the run's shared view scale so the
+     A/B toggle compares geometry and not normalisation. The calibration factor is
+     deliberately absent here: it belongs to measurement, never to rendering. */
+  var mpu = D.scale * 32767 / 32000;
+  cache[key] = {vaoM:vaoM, vaoP:vaoP, bIX:bIX, nIdx:IX.length, PP:PP,
+                nt:D.nt, np:D.np, uScale: mpu / viewScale,
+                uOff: D.centroid.map(function(c){ return c / viewScale; }),
+                viewScale: viewScale};
+  return cache[key];
+}
+
+function loadModel(r, i){
+  var m = r.models[i], L = WS.querySelector("#load");
+  if(cache[m.key]){ active = cache[m.key]; L.classList.add("hide"); return; }
+  active = null;
+  L.classList.remove("hide");
+  L.textContent = "loading geometry";
+  var go = function(){
+    if(window.__MESH && window.__MESH[m.key]){
+      active = buildMesh(m.key, window.__MESH[m.key], r.viewScale);
+      L.classList.add("hide");
+    } else {
+      L.innerHTML = '<span class="err">Could not load ' + h(m.file) + "</span><br>" +
+        "Keep the mesh folder beside this page. If the browser is blocking local " +
+        "scripts, serve the folder instead: <span class='mono'>python -m http.server</span>";
+    }
+  };
+  if(window.__MESH && window.__MESH[m.key]) return go();
+  var s = document.createElement("script");
+  s.src = DATA.meshDir + m.file;
+  s.onload = go;
+  s.onerror = go;
+  document.head.appendChild(s);
+}
+
+var mul = function(a,b){ var o=new Float32Array(16);
+  for(var i=0;i<4;i++)for(var j=0;j<4;j++){var s=0;
+    for(var k=0;k<4;k++)s+=a[k*4+j]*b[i*4+k]; o[i*4+j]=s;} return o; };
+var persp = function(f,ar,n,fa){ var t=1/Math.tan(f/2); return new Float32Array(
+  [t/ar,0,0,0, 0,t,0,0, 0,0,(fa+n)/(n-fa),-1, 0,0,2*fa*n/(n-fa),0]); };
+var look = function(e,c,u){
+  var nz=function(v){var L=Math.hypot(v[0],v[1],v[2])||1;return[v[0]/L,v[1]/L,v[2]/L];};
+  var cr=function(a,b){return[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]];};
+  var dt=function(a,b){return a[0]*b[0]+a[1]*b[1]+a[2]*b[2];};
+  var f=nz([c[0]-e[0],c[1]-e[1],c[2]-e[2]]), r=nz(cr(f,u)), v=cr(r,f);
+  return new Float32Array([r[0],v[0],-f[0],0, r[1],v[1],-f[1],0, r[2],v[2],-f[2],0,
+    -dt(r,e),-dt(v,e),dt(f,e),1]); };
+function xform(m,x,y,z){
+  return [m[0]*x+m[4]*y+m[8]*z+m[12], m[1]*x+m[5]*y+m[9]*z+m[13],
+          m[2]*x+m[6]*y+m[10]*z+m[14], m[3]*x+m[7]*y+m[11]*z+m[15]];
+}
+function toScreen(m,x,y,z,w,ht){
+  var c = xform(m,x,y,z);
+  if(c[3] <= 1e-6) return null;
+  return [(c[0]/c[3]*0.5+0.5)*w, (1-(c[1]/c[3]*0.5+0.5))*ht, c[2]/c[3]];
+}
+
+function draw(){
+  if(!WS || !WS.parentNode){ raf = 0; return; }
+  if(target){
+    az += (target[0]-az)*0.16; el3 += (target[1]-el3)*0.16;
+    dist += (target[2]-dist)*0.16;
+    if(Math.abs(target[0]-az)+Math.abs(target[1]-el3)+Math.abs(target[2]-dist) < 2e-3)
+      target = null;
+  }
+  var dpr = Math.min(window.devicePixelRatio||1, 2);
+  var w = Math.max(1, cv.clientWidth*dpr|0), ht = Math.max(1, cv.clientHeight*dpr|0);
+  if(cv.width!==w || cv.height!==ht){ cv.width=w; cv.height=ht; }
+  gl.viewport(0,0,w,ht);
+  gl.clearColor(glClear[0], glClear[1], glClear[2], 1);
+  gl.enable(gl.DEPTH_TEST);
+  gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
+
+  var eye=[Math.cos(el3)*Math.sin(az)*dist+panx, Math.sin(el3)*dist+pany,
+           Math.cos(el3)*Math.cos(az)*dist];
+  var mvp = mul(persp(0.85, w/ht, 0.02, 60), look(eye,[panx,pany,0],[0,1,0]));
+  curMVP = mvp; curW = w; curH = ht;
+
+  var A = active;
+  if(A){
+    if(showMesh){
+      gl.useProgram(pM); gl.bindVertexArray(A.vaoM);
+      gl.uniformMatrix4fv(uM.mvp,false,mvp);
+      gl.uniform3f(uM.light,0.36,0.78,0.51);
+      gl.uniform1f(uM.scale, A.uScale);
+      gl.uniform3f(uM.off, A.uOff[0], A.uOff[1], A.uOff[2]);
+      gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, A.bIX);
+      gl.drawElements(gl.TRIANGLES, A.nIdx, gl.UNSIGNED_INT, 0);
+    }
+    if(showPts){
+      gl.useProgram(pP); gl.bindVertexArray(A.vaoP);
+      gl.uniformMatrix4fv(uP.mvp,false,mvp);
+      gl.uniform1f(uP.size, Math.max(1.0,1.7*dpr));
+      gl.uniform1f(uP.scale, A.uScale);
+      gl.uniform3f(uP.off, A.uOff[0], A.uOff[1], A.uOff[2]);
+      gl.drawArrays(gl.POINTS, 0, A.PP.length/3);
+    }
+    gl.bindVertexArray(null);
+    WS.querySelector("#hud").textContent =
+      "az " + (az*57.2958).toFixed(0) + "  el " + (el3*57.2958).toFixed(0) + "   " +
+      (showMesh ? A.nt.toLocaleString("en-US") + " tri" : "") +
+      (showMesh && showPts ? "  +  " : "") +
+      (showPts ? A.np.toLocaleString("en-US") + " pts" : "");
+  }
+  drawOverlay(dpr);
+  raf = requestAnimationFrame(draw);
+}
+
+function wireWorkspace(){
+  var down=false, lx=0, ly=0, panning=false, moved=0;
+  cv.addEventListener("pointerdown", function(e){
+    down=true; panning=e.shiftKey||e.button===2; lx=e.clientX; ly=e.clientY; moved=0;
+    cv.classList.add("drag"); cv.setPointerCapture(e.pointerId); target=null; });
+  cv.addEventListener("pointerup", function(e){
+    down=false; cv.classList.remove("drag");
+    if(measuring && moved < 5) pick(e); });
+  cv.addEventListener("pointermove", function(e){
+    if(!down) return;
+    var dx=e.clientX-lx, dy=e.clientY-ly; lx=e.clientX; ly=e.clientY;
+    moved += Math.abs(dx)+Math.abs(dy);
+    if(panning){ panx-=dx*0.0022*dist; pany+=dy*0.0022*dist; }
+    else { az-=dx*0.0062; el3=Math.max(-1.52,Math.min(1.52, el3+dy*0.0062)); } });
+  cv.addEventListener("contextmenu", function(e){ e.preventDefault(); });
+  cv.addEventListener("wheel", function(e){ e.preventDefault();
+    dist=Math.max(0.35,Math.min(9, dist*(1+Math.sign(e.deltaY)*0.09))); target=null;
+  }, {passive:false});
+
+  function toggle(id, fn){
+    var b = WS.querySelector("#" + id);
+    b.onclick = function(){ var v = b.getAttribute("aria-pressed")!=="true";
+      b.setAttribute("aria-pressed", String(v)); fn(v); };
+  }
+  toggle("bMesh", function(v){ showMesh=v; });
+  toggle("bPts", function(v){ showPts=v; });
+  toggle("bMeasure", function(v){ measuring=v;
+    document.body.classList.toggle("measuring", v); if(!v) marks=[]; setTip(); });
+  WS.querySelector("#bClear").onclick = function(){ marks=[]; setTip(); };
+  WS.querySelectorAll("[data-view]").forEach(function(b){
+    b.onclick = function(){ target = PRESETS[b.dataset.view].slice(); }; });
+}
+
+function flash(msg){
+  var t = WS.querySelector("#mtip"); if(!t) return;
+  t.innerHTML = msg; clearTimeout(tipTimer); tipTimer = setTimeout(setTip, 1800);
+}
+function setTip(){
+  var t = WS && WS.querySelector("#mtip"); if(!t) return;
+  clearTimeout(tipTimer);
+  var sc = BY[wsRun].scale;
+  t.innerHTML = !measuring ? "Turn on <b>measure</b>, then click two surface points."
+    : marks.length === 0 ? "Click a surface point to start."
+    : marks.length === 1 ? "Click a second point."
+    : "<b>Distance shown.</b> Click again to start over.<br><span class='fg3'>" +
+      (sc.status === "unvalidated"
+        ? "Model units. This clip has no external ruler, so the number is not metres "
+          + "and is not comparable with another run."
+        : "Scale " + h(sc.label) + " from " + h(sc.basis) + ". About 5 percent on "
+          + "horizontal lengths; vertical ones are less certain. Picks land only on "
+          + "surfaces the drone saw.") + "</span>";
+}
+
+function pick(e){
+  if(!active || !curMVP) return;
+  var r = cv.getBoundingClientRect();
+  var dpr = Math.min(window.devicePixelRatio||1, 2);
+  var mx=(e.clientX-r.left)*dpr, my=(e.clientY-r.top)*dpr;
+  var A = active, PP = A.PP, n = PP.length/3;
+  var best=-1, bestD=1e9, bestZ=2, rad=14*dpr, rad2=rad*rad;
+  for(var i=0;i<n;i++){
+    var x = PP[i*3]/32767*A.uScale - A.uOff[0];
+    var y = PP[i*3+1]/32767*A.uScale - A.uOff[1];
+    var z = PP[i*3+2]/32767*A.uScale - A.uOff[2];
+    var s = toScreen(curMVP, x, y, z, curW, curH);
+    if(!s) continue;
+    var dx=s[0]-mx, dy=s[1]-my, d2=dx*dx+dy*dy;
+    if(d2 > rad2) continue;
+    if(s[2] < bestZ-1e-6 || (Math.abs(s[2]-bestZ)<1e-6 && d2<bestD)){
+      bestZ=s[2]; bestD=d2; best=i;
+    }
+  }
+  if(best < 0){ flash("No surface point there. Aim at the model."); return; }
+  if(marks.length >= 2) marks = [];
+  marks.push([PP[best*3]/32767*A.uScale - A.uOff[0],
+              PP[best*3+1]/32767*A.uScale - A.uOff[1],
+              PP[best*3+2]/32767*A.uScale - A.uOff[2]]);
+  setTip();
+}
+
+function drawOverlay(dpr){
+  var ovl = WS.querySelector("#ovl");
+  if(!marks.length || !curMVP){ if(ovl.innerHTML) ovl.innerHTML=""; return; }
+  var pts = marks.map(function(p){ return toScreen(curMVP,p[0],p[1],p[2],curW,curH); });
+  if(pts.some(function(p){ return !p; })){ ovl.innerHTML=""; return; }
+  var s = pts.map(function(p){ return [p[0]/dpr, p[1]/dpr]; });
+  var out = "";
+  if(s.length === 2)
+    out += '<line class="m-line" x1="'+s[0][0]+'" y1="'+s[0][1]+
+           '" x2="'+s[1][0]+'" y2="'+s[1][1]+'"/>';
+  s.forEach(function(p){
+    out += '<circle class="m-ring" cx="'+p[0]+'" cy="'+p[1]+'" r="5"/>'+
+           '<circle class="m-dot" cx="'+p[0]+'" cy="'+p[1]+'" r="1.5"/>';
+  });
+  if(marks.length === 2){
+    var a=marks[0], b=marks[1], sc = BY[wsRun].scale;
+    var d = Math.hypot(a[0]-b[0],a[1]-b[1],a[2]-b[2]) * active.viewScale * sc.factor;
+    var mx=(s[0][0]+s[1][0])/2, my=(s[0][1]+s[1][1])/2;
+    var lab = sc.status === "unvalidated" ? d.toFixed(2)+" units" : d.toFixed(1)+" m";
+    var wpx = lab.length*7.6+14;
+    out += '<rect class="m-box" x="'+(mx-wpx/2)+'" y="'+(my-24)+'" width="'+wpx+
+           '" height="19"/>'+
+           '<text class="m-txt" x="'+mx+'" y="'+(my-10.5)+'">'+lab+"</text>";
+  }
+  ovl.innerHTML = out;
+}
+
+/* ============================ keys ============================ */
+document.addEventListener("keydown", function(e){
+  if(e.target.tagName === "INPUT" || e.metaKey || e.ctrlKey || e.altKey) return;
+  if(e.key === "/"){ qbox.focus(); e.preventDefault(); return; }
+  var i = RUNS.findIndex(function(r){ return r.id === cur; });
+  if(e.key === "j" || e.key === "ArrowDown"){
+    location.hash = "#/" + RUNS[Math.min(RUNS.length-1, i+1)].id + "/" + curTab;
+    e.preventDefault();
+  } else if(e.key === "k" || e.key === "ArrowUp"){
+    location.hash = "#/" + RUNS[Math.max(0, i-1)].id + "/" + curTab;
+    e.preventDefault();
+  } else if(e.key >= "1" && e.key <= "5"){
+    var t = TABS[+e.key - 1];
+    if(t && !(t[0] === "model" && !BY[cur].models.length))
+      location.hash = "#/" + cur + "/" + t[0];
+  }
+});
+
+route();
+</script>

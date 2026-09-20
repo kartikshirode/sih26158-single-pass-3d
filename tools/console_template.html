@@ -1,0 +1,729 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>__TITLE__</title>
+<meta name="description" content="__DESC__">
+<meta name="robots" content="noindex, nofollow">
+<meta name="theme-color" content="#0a0a0b">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' fill='%230a0a0b'/><rect x='7' y='7' width='18' height='18' fill='none' stroke='%23ededef' stroke-width='2'/><rect x='12' y='12' width='8' height='8' fill='%23ededef'/></svg>">
+<style>__FACES__
+__DS__</style>
+
+<div id="app">
+  <header id="top">
+    <span class="mark">Tesseract</span>
+    <span class="ps">SIH26158 / NTRO</span>
+    <span class="spacer"></span>
+    <span class="stat">
+      <b id="sRuns">0<span>runs</span></b>
+      <b id="sVerify">0/0<span>contracts pass</span></b>
+      <b id="sGit">-<span>build</span></b>
+    </span>
+    <button class="tbtn" id="bTheme" title="Switch between the dark and light console">Light</button>
+    <a class="tbtn" href="__QA__">Evidence</a>
+  </header>
+
+  <nav id="rail">
+    <div class="head"><span class="cap">Runs</span><span class="cap" id="nRuns"></span></div>
+    <input id="q" type="search" placeholder="filter by id or source" aria-label="Filter runs">
+    <div id="runs" role="list"></div>
+    <div class="foot" id="railFoot"></div>
+  </nav>
+
+  <main id="main"></main>
+</div>
+
+<script>
+"use strict";
+var DATA = __DATA__;
+var RUNS = DATA.runs, BY = {};
+RUNS.forEach(function(r){ BY[r.id] = r; });
+
+/* ============================ theme ============================ */
+var root = document.documentElement;
+/* The stylesheet's default is dark; a system that asks for light gets light, but
+   only while the viewer has not chosen. Read it back the same way, so the button
+   always offers the other one. */
+function isDark(){
+  var t = root.getAttribute("data-theme");
+  if(t) return t === "dark";
+  return !window.matchMedia("(prefers-color-scheme: light)").matches;
+}
+function applyTheme(t){
+  if(t === "auto") root.removeAttribute("data-theme");
+  else root.setAttribute("data-theme", t);
+  var dark = isDark();
+  document.getElementById("bTheme").textContent = dark ? "Light" : "Dark";
+  glClear = dark ? [0.039,0.039,0.043,1] : [0.984,0.984,0.988,1];
+}
+var theme = "auto", glClear = [0.039,0.039,0.043,1];
+try{ theme = localStorage.getItem("tess.theme") || "auto"; }catch(e){}
+applyTheme(theme);
+document.getElementById("bTheme").onclick = function(){
+  theme = isDark() ? "light" : "dark";
+  try{ localStorage.setItem("tess.theme", theme); }catch(e){}
+  applyTheme(theme);
+};
+
+/* ============================ helpers ============================ */
+function h(s){ return String(s == null ? "" : s)
+  .replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;"); }
+function el(tag, cls, html){
+  var e = document.createElement(tag);
+  if(cls) e.className = cls;
+  if(html != null) e.innerHTML = html;
+  return e;
+}
+function bytes(b){
+  if(b == null) return "";
+  if(b >= 1e9) return (b/1073741824).toFixed(1) + " GB";
+  if(b >= 1e6) return (b/1048576).toFixed(1) + " MB";
+  if(b >= 1e3) return (b/1024).toFixed(1) + " KB";
+  return b + " B";
+}
+function secs(s){ return s >= 60 ? Math.floor(s/60) + "m " + (s%60).toFixed(0) + "s"
+                                 : s.toFixed(2) + "s"; }
+function num(v){
+  if(typeof v !== "number") return h(v);
+  if(Number.isInteger(v)) return v.toLocaleString("en-US");
+  return Math.abs(v) < 0.01 ? v.toExponential(2) : v.toFixed(4).replace(/0+$/,"").replace(/\.$/,"");
+}
+var LADDER = DATA.ladder.map(function(x){ return x[0]; });
+
+/* ============================ rail ============================ */
+var railBox = document.getElementById("runs"), qbox = document.getElementById("q");
+function renderRail(){
+  var f = qbox.value.trim().toLowerCase();
+  var list = RUNS.filter(function(r){
+    return !f || (r.id + " " + r.source + " " + r.level).toLowerCase().indexOf(f) >= 0;
+  });
+  railBox.innerHTML = "";
+  if(!list.length){
+    railBox.appendChild(el("div", "empty", "<b>No match</b>Nothing here answers to that."));
+  }
+  list.forEach(function(r){
+    var a = el("a", "run");
+    a.href = "#/" + r.id;
+    a.setAttribute("role", "listitem");
+    a.setAttribute("aria-current", String(r.id === cur));
+    var unit = r.level === "L5" ? "refused"
+      : (r.scale.status === "unvalidated" ? "model units" : "metres");
+    a.innerHTML =
+      '<span class="id"><b>' + h(r.id) + '</b><i>' + secs(r.seconds) + '</i></span>' +
+      '<span class="src">' + h(r.source) + '</span>' +
+      '<span class="tags"><span>' + h(r.level) + '</span>' +
+      '<span class="' + (r.frame ? "" : "off") + '">' + h(r.frame || "no frame") + '</span>' +
+      '<span class="' + (unit === "metres" ? "" : "off") + '">' + unit + '</span></span>';
+    railBox.appendChild(a);
+  });
+  document.getElementById("nRuns").textContent = list.length + " / " + RUNS.length;
+}
+qbox.addEventListener("input", renderRail);
+
+document.getElementById("sRuns").innerHTML = RUNS.length + "<span>runs</span>";
+document.getElementById("sVerify").innerHTML =
+  DATA.build.verified + "/" + RUNS.length + "<span>contracts pass</span>";
+document.getElementById("sGit").innerHTML = h(DATA.build.git) + "<span>build</span>";
+document.getElementById("railFoot").innerHTML =
+  "built " + h(DATA.build.at) + "<br>every figure is read from that run&rsquo;s own " +
+  "run_manifest.json";
+
+/* ============================ routing ============================ */
+var TABS = [["overview","Overview"],["stages","Stages"],["model","Model"],
+            ["artefacts","Artefacts"],["contracts","Contracts"]];
+var cur = null, curTab = "overview";
+var main = document.getElementById("main");
+
+function route(){
+  var p = (location.hash || "").replace(/^#\/?/, "").split("/");
+  var id = p[0] && BY[p[0]] ? p[0] : RUNS[0].id;
+  var tab = p[1] && TABS.some(function(t){ return t[0] === p[1]; }) ? p[1] : "overview";
+  var r = BY[id];
+  if(tab === "model" && !r.models.length) tab = "overview";
+  cur = id; curTab = tab;
+  renderRail();
+  render(r, tab);
+}
+window.addEventListener("hashchange", route);
+
+/* ============================ render ============================ */
+function render(r, tab){
+  detachWorkspace();
+  main.className = tab === "model" ? "nogrow" : "";
+  main.scrollTop = 0;
+  main.innerHTML = "";
+
+  var head = el("div", "rhead");
+  head.innerHTML =
+    "<h1>" + h(r.id) + "</h1>" +
+    '<div class="sub">' +
+      "<span>source <b>" + h(r.source) + "</b></span>" +
+      "<span>started <b>" + h(r.started) + "</b></span>" +
+      "<span>git <b>" + h(r.git) + "</b></span>" +
+      "<span>config <b>" + h(r.cfg) + "</b></span>" +
+      "<span>host <b>" + h(r.host || "not recorded") + "</b></span>" +
+    "</div>";
+  var tabs = el("div", "tabs");
+  TABS.forEach(function(t){
+    var b = el("button", null, t[1]);
+    b.setAttribute("aria-current", String(t[0] === tab));
+    if(t[0] === "model" && !r.models.length){ b.disabled = true;
+      b.title = "This run has no packed mesh"; }
+    else b.onclick = function(){ location.hash = "#/" + r.id + "/" + t[0]; };
+    tabs.appendChild(b);
+  });
+  head.appendChild(tabs);
+  main.appendChild(head);
+
+  if(tab === "model") return mountWorkspace(r);
+  var body = el("div", "body");
+  ({overview:tabOverview, stages:tabStages, artefacts:tabArtefacts,
+    contracts:tabContracts})[tab](r, body);
+  main.appendChild(body);
+}
+
+/* ---------------------------------------------------- overview */
+function tabOverview(r, b){
+  var li = LADDER.indexOf(r.level);
+  var ladder = '<span class="ladder"><u>full</u>' + LADDER.map(function(k, i){
+    return '<i class="' + (i === li ? "here" : "") + '" title="' + h(k) +
+           '"></i>'; }).join("") + "<u>refused</u></span>";
+
+  var claim = el("section");
+  claim.innerHTML = "<h2>What this run may claim</h2>" +
+    '<div class="kv">' +
+      kv("Ladder level", h(r.level) + ladder, r.quality + ", " + r.ladderDesc) +
+      kv("Frame", h(r.frame || "none"), r.frameNote) +
+      kv("Units", h(r.units), r.units === "metres"
+          ? "lengths in the files are metres" : "lengths are not comparable between runs") +
+      kv("Metric scale", h(r.scale.label), r.scale.basis) +
+      kv("Georeferenced", r.geo ? "yes" : "no",
+         r.geo ? "projected to " + h(r.crs || "a CRS") : "no CRS attached") +
+      kv("Region", h(r.region || "not recorded"), "") +
+      kv("Wall clock", secs(r.seconds),
+         r.within ? "inside the " + secs(r.budget) + " budget"
+                  : "over the " + secs(r.budget) + " budget") +
+      kv("Contract check", r.verify.ok ? "pass" : r.verify.problems.length + " problems",
+         r.arts.length + " artefacts re-hashed") +
+    "</div>";
+  b.appendChild(claim);
+
+  if(r.codes.length){
+    var c = el("section");
+    c.innerHTML = "<h2>Codes raised</h2><div class=\"codes\">" +
+      r.codes.map(function(x){ return "<span>" + h(x) + "</span>"; }).join("") + "</div>" +
+      '<p style="margin-top:12px">' + h(r.codeNote) + "</p>";
+    b.appendChild(c);
+  }
+
+  var targets = Object.keys(r.verdicts).filter(function(k){ return k !== "scale"; });
+  var v = el("section");
+  v.innerHTML = "<h2>The problem statement&rsquo;s six targets</h2>" +
+    "<p>Read off this run alone. A target that cannot be measured on this clip says so " +
+    "rather than defaulting to a pass or a fail.</p>" +
+    (!targets.length
+     ? '<div class="empty"><b>Nothing to read</b>No target can be read off a run that ' +
+       'produced no geometry. The refusal on the left is the whole result.</div>'
+     : '<div class="verdict">' + Object.keys(r.verdicts).map(function(k){
+      if(k === "scale") return "";
+      var s = r.verdicts[k];
+      var cls = s.indexOf("not measurable") === 0 ? "unknown"
+              : s.indexOf("not met") === 0 ? "unmet" : "met";
+      var word = cls === "unknown" ? "not measurable"
+               : cls === "unmet" ? "not met" : "met";
+      var why = s.replace(/^(not measurable|not met|met)\s*/, "").replace(/^[(]|[)]$/g,"");
+      return '<div class="' + cls + '"><div class="t">' + h(k.replace(/^R-O\d\s*/,"")) +
+        '<small>' + h(k.split(" ")[0]) + (why ? " / " + h(why) : "") + "</small></div>" +
+        '<div class="s">' + word + "</div></div>";
+    }).join("") + "</div>");
+  b.appendChild(v);
+
+  var t = el("section");
+  var pc = Math.min(100, 100 * r.seconds / r.budget);
+  t.innerHTML = "<h2>Time</h2>" +
+    '<div class="budget"><i style="width:' + pc.toFixed(1) + '%"></i><b>' +
+      secs(r.seconds) + " of " + secs(r.budget) + "</b></div>" +
+    '<p style="margin-top:12px">' + h(r.timeNote) + "</p>";
+  b.appendChild(t);
+}
+function kv(k, v, small){
+  return "<div><dt>" + k + "</dt><dd>" + v +
+    (small ? "<small>" + h(small) + "</small>" : "") + "</dd></div>";
+}
+
+/* ---------------------------------------------------- stages */
+function tabStages(r, b){
+  var total = r.stages.reduce(function(a, s){ return a + s.sec; }, 0) || 1;
+  var s = el("section");
+  var acc = 0;
+  s.innerHTML = "<h2>Stages</h2><p>Bar length is the stage&rsquo;s share of this " +
+    "run&rsquo;s wall clock. A stage that was skipped says why; a stage restored from " +
+    "the cache is hatched, because it cost nothing this time.</p>" +
+    '<div class="tl">' + r.stages.map(function(st){
+      var left = 100 * acc / total, w = Math.max(0.4, 100 * st.sec / total);
+      acc += st.sec;
+      var cls = st.skipped ? "skip" : st.cached ? "cache" : "";
+      var facts = Object.keys(st.facts || {}).map(function(k){
+        return "<span><b>" + h(k) + "</b> " + num(st.facts[k]) + "</span>"; }).join("");
+      return '<div class="row"><span class="nm">' + h(st.id) + "</span>" +
+        '<span class="track"><i class="bar ' + cls + '" style="left:' +
+          left.toFixed(2) + "%;width:" + w.toFixed(2) + '%"></i></span>' +
+        '<span class="sec">' + st.sec.toFixed(2) + "s</span>" +
+        (facts || st.note ? '<span class="facts">' +
+          (st.note ? "<span>" + h(st.note) + "</span>" : "") + facts + "</span>" : "") +
+        "</div>";
+    }).join("") + "</div>";
+  b.appendChild(s);
+}
+
+/* ---------------------------------------------------- artefacts */
+function tabArtefacts(r, b){
+  var s = el("section");
+  s.innerHTML = "<h2>Artefacts</h2>" +
+    "<p>Written by this run and checksummed on write. Each one carries the frame and " +
+    "the units it is in, so a file cannot be read back in the wrong one by accident.</p>" +
+    (r.arts.length ? "<table><thead><tr><th>Name</th><th>Path</th><th>Frame</th>" +
+      "<th>Units</th><th class='r'>Bytes</th><th>SHA-256</th></tr></thead><tbody>" +
+      r.arts.map(function(a){
+        return "<tr><td class='m'>" + h(a.name) + "</td><td class='m fg2'>" + h(a.path) +
+          "</td><td class='m'>" + h(a.frame || "") + "</td><td class='m'>" +
+          h(a.units || "") + "</td><td class='m r'>" + (a.bytes ? bytes(a.bytes) : "") +
+          "</td><td class='m fg3'>" + h((a.sha || "").slice(0, 16)) + "</td></tr>";
+      }).join("") + "</tbody></table>"
+     : '<div class="empty"><b>Nothing written</b>This run stopped before any stage ' +
+       'produced a file.</div>');
+  b.appendChild(s);
+}
+
+/* ---------------------------------------------------- contracts */
+function tabContracts(r, b){
+  var s = el("section");
+  s.innerHTML = "<h2>Contract check</h2>" +
+    "<p>What <span class='mono'>tesseract verify</span> asks of a finished run: that the " +
+    "manifest matches its schema, that the units do not contradict the scale status, that " +
+    "the frame matches the georeferencing claim, and that every artefact still hashes to " +
+    "what the run recorded.</p>" +
+    (r.verify.ok
+      ? '<div class="note"><b>PASS.</b> ' + r.arts.length + " artefacts re-hashed, " +
+        "manifest consistent, no problems.</div>"
+      : '<div class="note"><b>' + r.verify.problems.length + " problem(s).</b><br>" +
+        r.verify.problems.map(h).join("<br>") + "</div>");
+  b.appendChild(s);
+
+  var i = el("section");
+  i.innerHTML = "<h2>Inputs</h2>" +
+    (r.inputs.length
+      ? "<table><thead><tr><th>Path</th><th class='r'>Bytes</th><th>SHA-256</th></tr>" +
+        "</thead><tbody>" + r.inputs.map(function(x){
+          return "<tr><td class='m'>" + h(x.path) + "</td><td class='m r'>" +
+            bytes(x.bytes) + "</td><td class='m fg3'>" + h((x.sha || "").slice(0,16)) +
+            "</td></tr>"; }).join("") + "</tbody></table>"
+      : '<div class="empty"><b>Generated input</b>This run built its own scene, so there ' +
+        'is no file to check in.</div>');
+  b.appendChild(i);
+
+  var d = el("section");
+  d.innerHTML = "<h2>Identity</h2><div class=\"kv\">" +
+    kv("Schema", h(r.schema), "") +
+    kv("Config hash", h(r.cfg), "the inputs that would change the result") +
+    kv("Git", h(r.git), "the code that produced it") +
+    kv("Ladder", h(r.level), r.quality) +
+    "</div>";
+  b.appendChild(d);
+}
+
+/* ============================ workspace ============================ */
+var WS = null, cv, gl, pM, pP, uM, uP, curMVP = null, curW = 1, curH = 1;
+var az = .55, el3 = .80, dist = 2.6, panx = 0, pany = 0, target = null, raf = 0;
+var PRESETS = {plan:[0,1.5605,2.30], oblique:[.55,.80,2.60], low:[1.25,.26,2.50]};
+var showMesh = true, showPts = false, cache = {}, active = null, wsRun = null;
+var measuring = false, marks = [], tipTimer = null, curModel = 0;
+
+function detachWorkspace(){
+  if(raf){ cancelAnimationFrame(raf); raf = 0; }
+  if(WS && WS.parentNode) WS.parentNode.removeChild(WS);
+  document.body.classList.remove("measuring");
+}
+
+function buildWorkspace(){
+  WS = el("div"); WS.id = "ws";
+  WS.innerHTML =
+    '<div id="stage">' +
+      '<canvas id="gl"></canvas><svg id="ovl"></svg>' +
+      '<div id="hud"></div><div id="load" class="hide"></div>' +
+      '<div id="tools">' +
+        '<button id="bMesh" aria-pressed="true">mesh</button>' +
+        '<button id="bPts" aria-pressed="false">points</button>' +
+        '<button data-view="plan">plan</button>' +
+        '<button data-view="oblique">oblique</button>' +
+        '<button data-view="low">low angle</button>' +
+        '<button id="bMeasure" aria-pressed="false">measure</button>' +
+        '<button id="bClear">clear</button>' +
+      "</div>" +
+    "</div><aside id=\"insp\"></aside>";
+  cv = WS.querySelector("#gl");
+  gl = cv.getContext("webgl2", {antialias:true, alpha:false});
+  initGL();
+  wireWorkspace();
+}
+
+function mountWorkspace(r){
+  if(!WS) buildWorkspace();
+  if(!gl){
+    var e = el("div", "body");
+    e.innerHTML = '<div class="empty"><b>No WebGL2</b>This browser cannot open the ' +
+      'workspace. The exported OBJ, PLY, LAS, GeoTIFF, glTF and FBX carry the same ' +
+      'geometry.</div>';
+    return main.appendChild(e);
+  }
+  main.appendChild(WS);
+  if(wsRun !== r.id){ marks = []; curModel = 0; wsRun = r.id;
+    target = PRESETS.oblique.slice(); }
+  renderInspector(r);
+  loadModel(r, curModel);
+  if(!raf) raf = requestAnimationFrame(draw);
+}
+
+function renderInspector(r){
+  var m = r.models[curModel];
+  var sc = r.scale;
+  var insp = WS.querySelector("#insp");
+  insp.innerHTML =
+    (r.models.length > 1
+      ? '<div class="seg">' + r.models.map(function(x, i){
+          return '<button data-m="' + i + '" aria-pressed="' + (i === curModel) + '">' +
+            h(x.label) + "</button>"; }).join("") + "</div>"
+      : "") +
+    "<h3>Geometry</h3>" +
+    row("dense points", r.dense ? r.dense.toLocaleString("en-US") : "not recorded") +
+    row("in the browser", m.pts.toLocaleString("en-US") + " pts, " +
+                          m.tri.toLocaleString("en-US") + " tri") +
+    "<h3>Frame and scale</h3>" +
+    row("frame", r.frame || "none") +
+    row("units", r.units) +
+    row("scale", sc.status === "unvalidated" ? "unvalidated" : "x" + sc.factor.toFixed(2)) +
+    (sc.bracket ? row("bracket", "x" + sc.bracket[0].toFixed(2) + " to x" +
+                                 sc.bracket[1].toFixed(2)) : "") +
+    "<h3>Measure</h3><div id=\"mtip\"></div>" +
+    (m.note ? "<h3>About this model</h3><p class='fg2' style='font-size:12px;" +
+              "margin:0;line-height:1.6'>" + h(m.note) + "</p>" : "");
+  insp.querySelectorAll("[data-m]").forEach(function(btn){
+    btn.onclick = function(){
+      curModel = +btn.dataset.m; marks = [];
+      renderInspector(r); loadModel(r, curModel);
+    };
+  });
+  setTip();
+}
+function row(k, v){
+  return '<div class="r"><span>' + h(k) + "</span><b>" + h(v) + "</b></div>";
+}
+
+/* ---- GL ---- */
+function initGL(){
+  if(!gl) return;
+  var HEAD = ["#version 300 es","uniform float uScale; uniform vec3 uOffset;"].join("\n");
+  var VS_M = [HEAD,
+    "in vec3 aPos; in vec3 aCol; in vec3 aNrm; uniform mat4 uMVP;",
+    "out vec3 vCol; out vec3 vN;",
+    "void main(){ vCol=aCol; vN=aNrm;",
+    "  gl_Position=uMVP*vec4(aPos*uScale-uOffset,1.0); }"].join("\n");
+  var FS_M = ["#version 300 es","precision highp float;",
+    "in vec3 vCol; in vec3 vN; out vec4 o; uniform vec3 uLight;",
+    "void main(){ float d=0.40+0.60*abs(dot(normalize(vN),normalize(uLight)));",
+    "  o=vec4(vCol*d,1.0); }"].join("\n");
+  var VS_P = [HEAD,
+    "in vec3 aPos; in vec3 aCol; uniform mat4 uMVP; uniform float uSize;",
+    "out vec3 vCol;",
+    "void main(){ vCol=aCol; gl_Position=uMVP*vec4(aPos*uScale-uOffset,1.0);",
+    "  gl_PointSize=uSize; }"].join("\n");
+  var FS_P = ["#version 300 es","precision highp float; in vec3 vCol; out vec4 o;",
+    "void main(){ o=vec4(vCol,1.0); }"].join("\n");
+  function prog(vs, fs){
+    var c = function(t, s){ var o = gl.createShader(t); gl.shaderSource(o, s);
+      gl.compileShader(o);
+      if(!gl.getShaderParameter(o, gl.COMPILE_STATUS)) console.error(gl.getShaderInfoLog(o));
+      return o; };
+    var p = gl.createProgram();
+    gl.attachShader(p, c(gl.VERTEX_SHADER, vs));
+    gl.attachShader(p, c(gl.FRAGMENT_SHADER, fs));
+    gl.linkProgram(p); return p;
+  }
+  pM = prog(VS_M, FS_M); pP = prog(VS_P, FS_P);
+  uM = {mvp:gl.getUniformLocation(pM,"uMVP"), light:gl.getUniformLocation(pM,"uLight"),
+        scale:gl.getUniformLocation(pM,"uScale"), off:gl.getUniformLocation(pM,"uOffset")};
+  uP = {mvp:gl.getUniformLocation(pP,"uMVP"), size:gl.getUniformLocation(pP,"uSize"),
+        scale:gl.getUniformLocation(pP,"uScale"), off:gl.getUniformLocation(pP,"uOffset")};
+}
+
+var un = function(s){ var b = atob(s), u = new Uint8Array(b.length);
+  for(var i=0;i<b.length;i++) u[i] = b.charCodeAt(i); return u; };
+
+function buildMesh(key, D, viewScale){
+  var VP = new Int16Array(un(D.vpos).buffer), VC = un(D.vcol);
+  var IX = new Uint32Array(un(D.idx).buffer);
+  var PP = new Int16Array(un(D.ppos).buffer), PC = un(D.pcol);
+  var NR = new Float32Array(VP.length);
+  for(var t=0;t<IX.length;t+=3){
+    var i0=IX[t]*3, i1=IX[t+1]*3, i2=IX[t+2]*3;
+    var ux=VP[i1]-VP[i0], uy=VP[i1+1]-VP[i0+1], uz=VP[i1+2]-VP[i0+2];
+    var vx=VP[i2]-VP[i0], vy=VP[i2+1]-VP[i0+1], vz=VP[i2+2]-VP[i0+2];
+    var nx=uy*vz-uz*vy, ny=uz*vx-ux*vz, nz=ux*vy-uy*vx;
+    NR[i0]+=nx; NR[i0+1]+=ny; NR[i0+2]+=nz;
+    NR[i1]+=nx; NR[i1+1]+=ny; NR[i1+2]+=nz;
+    NR[i2]+=nx; NR[i2+1]+=ny; NR[i2+2]+=nz;
+  }
+  for(var i=0;i<NR.length;i+=3){
+    var L=Math.hypot(NR[i],NR[i+1],NR[i+2])||1;
+    NR[i]/=L; NR[i+1]/=L; NR[i+2]/=L;
+  }
+  var buf = function(d, tg){ var t = tg || gl.ARRAY_BUFFER, b = gl.createBuffer();
+    gl.bindBuffer(t,b); gl.bufferData(t,d,gl.STATIC_DRAW); return b; };
+  var bVP=buf(VP), bVC=buf(VC), bNR=buf(NR), bPP=buf(PP), bPC=buf(PC);
+  var bIX=buf(IX, gl.ELEMENT_ARRAY_BUFFER);
+  var vaoM=gl.createVertexArray(), vaoP=gl.createVertexArray();
+  var bind = function(vao,p,pos,col,nrm){
+    gl.bindVertexArray(vao);
+    var at=function(n,b,sz,ty,nm){ var l=gl.getAttribLocation(p,n); if(l<0)return;
+      gl.bindBuffer(gl.ARRAY_BUFFER,b); gl.enableVertexAttribArray(l);
+      gl.vertexAttribPointer(l,sz,ty,nm,0,0); };
+    at("aPos",pos,3,gl.SHORT,true); at("aCol",col,3,gl.UNSIGNED_BYTE,true);
+    if(nrm) at("aNrm",nrm,3,gl.FLOAT,false);
+    gl.bindVertexArray(null);
+  };
+  bind(vaoM,pM,bVP,bVC,bNR); bind(vaoP,pP,bPP,bPC,null);
+  /* model units per raw shader unit, divided by the run's shared view scale so the
+     A/B toggle compares geometry and not normalisation. The calibration factor is
+     deliberately absent here: it belongs to measurement, never to rendering. */
+  var mpu = D.scale * 32767 / 32000;
+  cache[key] = {vaoM:vaoM, vaoP:vaoP, bIX:bIX, nIdx:IX.length, PP:PP,
+                nt:D.nt, np:D.np, uScale: mpu / viewScale,
+                uOff: D.centroid.map(function(c){ return c / viewScale; }),
+                viewScale: viewScale};
+  return cache[key];
+}
+
+function loadModel(r, i){
+  var m = r.models[i], L = WS.querySelector("#load");
+  if(cache[m.key]){ active = cache[m.key]; L.classList.add("hide"); return; }
+  active = null;
+  L.classList.remove("hide");
+  L.textContent = "loading geometry";
+  var go = function(){
+    if(window.__MESH && window.__MESH[m.key]){
+      active = buildMesh(m.key, window.__MESH[m.key], r.viewScale);
+      L.classList.add("hide");
+    } else {
+      L.innerHTML = '<span class="err">Could not load ' + h(m.file) + "</span><br>" +
+        "Keep the mesh folder beside this page. If the browser is blocking local " +
+        "scripts, serve the folder instead: <span class='mono'>python -m http.server</span>";
+    }
+  };
+  if(window.__MESH && window.__MESH[m.key]) return go();
+  var s = document.createElement("script");
+  s.src = DATA.meshDir + m.file;
+  s.onload = go;
+  s.onerror = go;
+  document.head.appendChild(s);
+}
+
+var mul = function(a,b){ var o=new Float32Array(16);
+  for(var i=0;i<4;i++)for(var j=0;j<4;j++){var s=0;
+    for(var k=0;k<4;k++)s+=a[k*4+j]*b[i*4+k]; o[i*4+j]=s;} return o; };
+var persp = function(f,ar,n,fa){ var t=1/Math.tan(f/2); return new Float32Array(
+  [t/ar,0,0,0, 0,t,0,0, 0,0,(fa+n)/(n-fa),-1, 0,0,2*fa*n/(n-fa),0]); };
+var look = function(e,c,u){
+  var nz=function(v){var L=Math.hypot(v[0],v[1],v[2])||1;return[v[0]/L,v[1]/L,v[2]/L];};
+  var cr=function(a,b){return[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]];};
+  var dt=function(a,b){return a[0]*b[0]+a[1]*b[1]+a[2]*b[2];};
+  var f=nz([c[0]-e[0],c[1]-e[1],c[2]-e[2]]), r=nz(cr(f,u)), v=cr(r,f);
+  return new Float32Array([r[0],v[0],-f[0],0, r[1],v[1],-f[1],0, r[2],v[2],-f[2],0,
+    -dt(r,e),-dt(v,e),dt(f,e),1]); };
+function xform(m,x,y,z){
+  return [m[0]*x+m[4]*y+m[8]*z+m[12], m[1]*x+m[5]*y+m[9]*z+m[13],
+          m[2]*x+m[6]*y+m[10]*z+m[14], m[3]*x+m[7]*y+m[11]*z+m[15]];
+}
+function toScreen(m,x,y,z,w,ht){
+  var c = xform(m,x,y,z);
+  if(c[3] <= 1e-6) return null;
+  return [(c[0]/c[3]*0.5+0.5)*w, (1-(c[1]/c[3]*0.5+0.5))*ht, c[2]/c[3]];
+}
+
+function draw(){
+  if(!WS || !WS.parentNode){ raf = 0; return; }
+  if(target){
+    az += (target[0]-az)*0.16; el3 += (target[1]-el3)*0.16;
+    dist += (target[2]-dist)*0.16;
+    if(Math.abs(target[0]-az)+Math.abs(target[1]-el3)+Math.abs(target[2]-dist) < 2e-3)
+      target = null;
+  }
+  var dpr = Math.min(window.devicePixelRatio||1, 2);
+  var w = Math.max(1, cv.clientWidth*dpr|0), ht = Math.max(1, cv.clientHeight*dpr|0);
+  if(cv.width!==w || cv.height!==ht){ cv.width=w; cv.height=ht; }
+  gl.viewport(0,0,w,ht);
+  gl.clearColor(glClear[0], glClear[1], glClear[2], 1);
+  gl.enable(gl.DEPTH_TEST);
+  gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
+
+  var eye=[Math.cos(el3)*Math.sin(az)*dist+panx, Math.sin(el3)*dist+pany,
+           Math.cos(el3)*Math.cos(az)*dist];
+  var mvp = mul(persp(0.85, w/ht, 0.02, 60), look(eye,[panx,pany,0],[0,1,0]));
+  curMVP = mvp; curW = w; curH = ht;
+
+  var A = active;
+  if(A){
+    if(showMesh){
+      gl.useProgram(pM); gl.bindVertexArray(A.vaoM);
+      gl.uniformMatrix4fv(uM.mvp,false,mvp);
+      gl.uniform3f(uM.light,0.36,0.78,0.51);
+      gl.uniform1f(uM.scale, A.uScale);
+      gl.uniform3f(uM.off, A.uOff[0], A.uOff[1], A.uOff[2]);
+      gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, A.bIX);
+      gl.drawElements(gl.TRIANGLES, A.nIdx, gl.UNSIGNED_INT, 0);
+    }
+    if(showPts){
+      gl.useProgram(pP); gl.bindVertexArray(A.vaoP);
+      gl.uniformMatrix4fv(uP.mvp,false,mvp);
+      gl.uniform1f(uP.size, Math.max(1.0,1.7*dpr));
+      gl.uniform1f(uP.scale, A.uScale);
+      gl.uniform3f(uP.off, A.uOff[0], A.uOff[1], A.uOff[2]);
+      gl.drawArrays(gl.POINTS, 0, A.PP.length/3);
+    }
+    gl.bindVertexArray(null);
+    WS.querySelector("#hud").textContent =
+      "az " + (az*57.2958).toFixed(0) + "  el " + (el3*57.2958).toFixed(0) + "   " +
+      (showMesh ? A.nt.toLocaleString("en-US") + " tri" : "") +
+      (showMesh && showPts ? "  +  " : "") +
+      (showPts ? A.np.toLocaleString("en-US") + " pts" : "");
+  }
+  drawOverlay(dpr);
+  raf = requestAnimationFrame(draw);
+}
+
+function wireWorkspace(){
+  var down=false, lx=0, ly=0, panning=false, moved=0;
+  cv.addEventListener("pointerdown", function(e){
+    down=true; panning=e.shiftKey||e.button===2; lx=e.clientX; ly=e.clientY; moved=0;
+    cv.classList.add("drag"); cv.setPointerCapture(e.pointerId); target=null; });
+  cv.addEventListener("pointerup", function(e){
+    down=false; cv.classList.remove("drag");
+    if(measuring && moved < 5) pick(e); });
+  cv.addEventListener("pointermove", function(e){
+    if(!down) return;
+    var dx=e.clientX-lx, dy=e.clientY-ly; lx=e.clientX; ly=e.clientY;
+    moved += Math.abs(dx)+Math.abs(dy);
+    if(panning){ panx-=dx*0.0022*dist; pany+=dy*0.0022*dist; }
+    else { az-=dx*0.0062; el3=Math.max(-1.52,Math.min(1.52, el3+dy*0.0062)); } });
+  cv.addEventListener("contextmenu", function(e){ e.preventDefault(); });
+  cv.addEventListener("wheel", function(e){ e.preventDefault();
+    dist=Math.max(0.35,Math.min(9, dist*(1+Math.sign(e.deltaY)*0.09))); target=null;
+  }, {passive:false});
+
+  function toggle(id, fn){
+    var b = WS.querySelector("#" + id);
+    b.onclick = function(){ var v = b.getAttribute("aria-pressed")!=="true";
+      b.setAttribute("aria-pressed", String(v)); fn(v); };
+  }
+  toggle("bMesh", function(v){ showMesh=v; });
+  toggle("bPts", function(v){ showPts=v; });
+  toggle("bMeasure", function(v){ measuring=v;
+    document.body.classList.toggle("measuring", v); if(!v) marks=[]; setTip(); });
+  WS.querySelector("#bClear").onclick = function(){ marks=[]; setTip(); };
+  WS.querySelectorAll("[data-view]").forEach(function(b){
+    b.onclick = function(){ target = PRESETS[b.dataset.view].slice(); }; });
+}
+
+function flash(msg){
+  var t = WS.querySelector("#mtip"); if(!t) return;
+  t.innerHTML = msg; clearTimeout(tipTimer); tipTimer = setTimeout(setTip, 1800);
+}
+function setTip(){
+  var t = WS && WS.querySelector("#mtip"); if(!t) return;
+  clearTimeout(tipTimer);
+  var sc = BY[wsRun].scale;
+  t.innerHTML = !measuring ? "Turn on <b>measure</b>, then click two surface points."
+    : marks.length === 0 ? "Click a surface point to start."
+    : marks.length === 1 ? "Click a second point."
+    : "<b>Distance shown.</b> Click again to start over.<br><span class='fg3'>" +
+      (sc.status === "unvalidated"
+        ? "Model units. This clip has no external ruler, so the number is not metres "
+          + "and is not comparable with another run."
+        : "Scale " + h(sc.label) + " from " + h(sc.basis) + ". About 5 percent on "
+          + "horizontal lengths; vertical ones are less certain. Picks land only on "
+          + "surfaces the drone saw.") + "</span>";
+}
+
+function pick(e){
+  if(!active || !curMVP) return;
+  var r = cv.getBoundingClientRect();
+  var dpr = Math.min(window.devicePixelRatio||1, 2);
+  var mx=(e.clientX-r.left)*dpr, my=(e.clientY-r.top)*dpr;
+  var A = active, PP = A.PP, n = PP.length/3;
+  var best=-1, bestD=1e9, bestZ=2, rad=14*dpr, rad2=rad*rad;
+  for(var i=0;i<n;i++){
+    var x = PP[i*3]/32767*A.uScale - A.uOff[0];
+    var y = PP[i*3+1]/32767*A.uScale - A.uOff[1];
+    var z = PP[i*3+2]/32767*A.uScale - A.uOff[2];
+    var s = toScreen(curMVP, x, y, z, curW, curH);
+    if(!s) continue;
+    var dx=s[0]-mx, dy=s[1]-my, d2=dx*dx+dy*dy;
+    if(d2 > rad2) continue;
+    if(s[2] < bestZ-1e-6 || (Math.abs(s[2]-bestZ)<1e-6 && d2<bestD)){
+      bestZ=s[2]; bestD=d2; best=i;
+    }
+  }
+  if(best < 0){ flash("No surface point there. Aim at the model."); return; }
+  if(marks.length >= 2) marks = [];
+  marks.push([PP[best*3]/32767*A.uScale - A.uOff[0],
+              PP[best*3+1]/32767*A.uScale - A.uOff[1],
+              PP[best*3+2]/32767*A.uScale - A.uOff[2]]);
+  setTip();
+}
+
+function drawOverlay(dpr){
+  var ovl = WS.querySelector("#ovl");
+  if(!marks.length || !curMVP){ if(ovl.innerHTML) ovl.innerHTML=""; return; }
+  var pts = marks.map(function(p){ return toScreen(curMVP,p[0],p[1],p[2],curW,curH); });
+  if(pts.some(function(p){ return !p; })){ ovl.innerHTML=""; return; }
+  var s = pts.map(function(p){ return [p[0]/dpr, p[1]/dpr]; });
+  var out = "";
+  if(s.length === 2)
+    out += '<line class="m-line" x1="'+s[0][0]+'" y1="'+s[0][1]+
+           '" x2="'+s[1][0]+'" y2="'+s[1][1]+'"/>';
+  s.forEach(function(p){
+    out += '<circle class="m-ring" cx="'+p[0]+'" cy="'+p[1]+'" r="5"/>'+
+           '<circle class="m-dot" cx="'+p[0]+'" cy="'+p[1]+'" r="1.5"/>';
+  });
+  if(marks.length === 2){
+    var a=marks[0], b=marks[1], sc = BY[wsRun].scale;
+    var d = Math.hypot(a[0]-b[0],a[1]-b[1],a[2]-b[2]) * active.viewScale * sc.factor;
+    var mx=(s[0][0]+s[1][0])/2, my=(s[0][1]+s[1][1])/2;
+    var lab = sc.status === "unvalidated" ? d.toFixed(2)+" units" : d.toFixed(1)+" m";
+    var wpx = lab.length*7.6+14;
+    out += '<rect class="m-box" x="'+(mx-wpx/2)+'" y="'+(my-24)+'" width="'+wpx+
+           '" height="19"/>'+
+           '<text class="m-txt" x="'+mx+'" y="'+(my-10.5)+'">'+lab+"</text>";
+  }
+  ovl.innerHTML = out;
+}
+
+/* ============================ keys ============================ */
+document.addEventListener("keydown", function(e){
+  if(e.target.tagName === "INPUT" || e.metaKey || e.ctrlKey || e.altKey) return;
+  if(e.key === "/"){ qbox.focus(); e.preventDefault(); return; }
+  var i = RUNS.findIndex(function(r){ return r.id === cur; });
+  if(e.key === "j" || e.key === "ArrowDown"){
+    location.hash = "#/" + RUNS[Math.min(RUNS.length-1, i+1)].id + "/" + curTab;
+    e.preventDefault();
+  } else if(e.key === "k" || e.key === "ArrowUp"){
+    location.hash = "#/" + RUNS[Math.max(0, i-1)].id + "/" + curTab;
+    e.preventDefault();
+  } else if(e.key >= "1" && e.key <= "5"){
+    var t = TABS[+e.key - 1];
+    if(t && !(t[0] === "model" && !BY[cur].models.length))
+      location.hash = "#/" + cur + "/" + t[0];
+  }
+});
+
+route();
+</script>
