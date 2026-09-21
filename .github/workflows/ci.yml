@@ -56,6 +56,11 @@ jobs:
           python -m playwright install --with-deps chromium
           python tools/test_console.py
 
+      # docs/00 restates ~50 figures that live in eighteen other documents. Nothing
+      # breaks when one of them moves, which is exactly why it is checked here.
+      - name: the onboarding document must still match its sources
+        run: python tools/check_onboarding.py
+
       - name: licences of anything new must be registered
         run: |
           python - <<'PY'

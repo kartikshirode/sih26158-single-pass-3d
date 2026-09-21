@@ -10,10 +10,14 @@ for a 10-minute video.
 
 ## Start here
 
-**The full engineering suite (18 documents) is indexed in [`docs/README.md`](docs/README.md).**
+**New here? Read [`docs/00-start-here.md`](docs/00-start-here.md).** It is the whole project
+in one document: the problem, why the obvious approaches fail, what has been measured, what is
+still open, and where every figure comes from. The full suite (19 documents) is indexed in
+[`docs/README.md`](docs/README.md).
 
 | Document | What it is |
 |---|---|
+| [`docs/00-start-here.md`](docs/00-start-here.md) | **Start here:** the narrative introduction |
 | [`docs/README.md`](docs/README.md) | Suite index and reading paths |
 | [`docs/08-measurement-validation.md`](docs/08-measurement-validation.md) | **Read first:** the metric scale audit — Kolu is 5.3–5.8× too small |
 | [`docs/01-SRS-requirements.md`](docs/01-SRS-requirements.md) | Requirements, fully traced to the official PDF |
@@ -99,8 +103,9 @@ python tesseract.py screen data/cand/*.webm       # admissibility, before any co
 python tesseract.py run data/cand/kolu.webm     --adopt out/kolumvs3d --calibration-run kolumvs3d   # a real clip, geometry adopted
 python tesseract.py verify out/runs/kolu          # the run against its own contracts
 
-python src/tesseract/test_tesseract.py            # 44 checks
+python src/tesseract/test_tesseract.py            # 46 checks
 python src/eval3d/test_metrics.py                 # 21 checks
+python tools/test_console.py                      # the console, in a real browser
 python src/pipeline/run_demo.py out/demo          # the older single-file demo run
 ```
 
@@ -223,7 +228,7 @@ src/analysis/    MVS-vs-baseline measurements and the patch-floor analysis
 src/experiments/ EXP-01, 05, 08, 09, 13, 14
 mapanything_job/ S3 container;  mvs_job/  BA + MVS + export container
 tools/           run finishing, demo/gallery/Q&A/deck builders, design and wiring audits
-demo/            the deployed replay (tesseract-demo.vercel.app)
+demo/            the deployed site: /console/ the run console, plus the three replay pages
 research/        verified findings + recorded experiment output
 ```
 
