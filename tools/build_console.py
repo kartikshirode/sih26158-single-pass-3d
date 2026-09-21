@@ -112,11 +112,17 @@ def sources_sha() -> str:
     The console build needs out/, which is not in the repo, so CI cannot rebuild it -
     it drives the committed page instead. Without this, editing the template and
     forgetting to rebuild would sail through a green CI and ship the stale page.
-    tools/test_console.py recomputes this and refuses to run if it has moved."""
+    tools/test_console.py recomputes this and refuses to run if it has moved.
+
+    Line endings are normalised first. These files are committed with LF and checked
+    out with CRLF on Windows, so hashing the raw bytes makes the stamp disagree with
+    itself between the machine that built the page and the runner that checks it -
+    which is exactly what happened on the first CI run after this guard landed.
+    """
     h = hashlib.sha256()
     for name in ("console_template.html", "console_ds.css"):
-        with io.open(os.path.join(TOOLS, name), "rb") as f:
-            h.update(f.read())
+        with io.open(os.path.join(TOOLS, name), encoding="utf-8", newline="") as f:
+            h.update(f.read().replace("\r\n", "\n").encode("utf-8"))
     return h.hexdigest()[:12]
 
 
