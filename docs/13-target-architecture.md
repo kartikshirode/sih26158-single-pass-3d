@@ -7,7 +7,7 @@ and dense keyframe sets**, and a **GPU dense path** that is not a hard dependenc
 
 > **Built 2026-09-18 as `src/tesseract/`.** The orchestrator, the contracts, the scale
 > service, the levelling stage, the ladder, the QA report and the CLI are implemented and
-> tested (44 checks, `python src/tesseract/test_tesseract.py`). §10 records exactly what
+> tested (46 checks, `python src/tesseract/test_tesseract.py`). §10 records exactly what
 > is real, what is adopted from earlier runs, and what is still a design.
 
 ---

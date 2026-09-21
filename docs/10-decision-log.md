@@ -39,6 +39,7 @@ never by editing the old one's text.
 | 022 | Report completeness against two denominators | Accepted |
 | 023 | GPU dense path is COLMAP PatchMatch (BSD), not OpenMVS CUDA | Proposed |
 | 024 | Adapt a permissive metric-depth prior for aerial altitude | Proposed |
+| 025 | The product surface is a run console, built from run manifests | Accepted |
 
 ---
 
@@ -273,6 +274,33 @@ OpenMVS as the CPU path.
 **Evidence needed.** EXP-16 (`docs/12` R2): wall clock and the `compare_mvs.py` metrics for
 both densifiers on Kolu, same poses.
 **Decide by.** The first Baramati GPU run.
+
+## ADR-025 · The product surface is a run console, built from run manifests
+
+**Context.** ADR-017 shipped three pages that walk a visitor through one prepared
+reconstruction. That is a presentation. Meanwhile the rebuilt pipeline writes a
+`run_manifest.json` and a QA report for every run, and `tesseract verify` checks a finished
+run against the contracts, and none of it had a surface.
+**Decision.** `demo/console/` is the product: a rail of every run in `out/runs/`, and per run
+its claim block, stage timeline, geometry, artefacts and contract check. Every figure is read
+from that run's own manifest, and **the verdict strings are the manifest's**, so a target that
+reads `not measurable` reads that way on the page. Monotone greyscale with no accent hue, so
+status is carried by the word and the mark only reinforces it. Built by
+`tools/build_console.py` from `console_template.html` and `console_ds.css`.
+**Evidence.** Seven runs render, including one refused at L5 that produced nothing and says
+so. `tools/test_console.py` drives it in a real browser (21 checks) and asserts the two claims
+no static audit can see: a measurement on the calibrated clip prints metres, and the same tool
+on the unvalidated clip prints units.
+**Consequences.** The console build needs `out/`, which is gitignored, so CI drives the
+committed page instead. A fingerprint of the template and the stylesheet is stamped into the
+page and the test refuses to run when they drift. Hand-built rather than Carbon or Primer: the
+only packaged system that runs without a bundler is Primer CSS, whose value is GitHub's colour
+system and whose bundle is about 1 MB, and a monotone brief discards colour. Fonts are IBM Plex
+Sans and Mono, self-hosted, OFL-1.1 (`docs/11` §5.2).
+**Status.** Accepted. ADR-017's three pages stay live and unchanged at `/`, `/gallery/` and
+`/qa/`; the console is at `/console/`.
+**Revisit when.** The console is worth making the root, or the executors land and a run can be
+started from the page rather than the CLI.
 
 ## ADR-024 · Adapt a permissive metric-depth prior for aerial altitude (Proposed)
 

@@ -8,7 +8,11 @@ runbook. Every figure in these documents traces to a file, a run or a cited sour
 
 ## Read this first
 
-**`08-measurement-validation.md`.** On 2026-09-16 the metric scale was audited against
+**[`00-start-here.md`](00-start-here.md)** if you are new. It is the narrative version of
+this suite: the problem, why the obvious approaches fail, what has been measured, and what is
+still open, with every figure pointing back here. The table below is the reference.
+
+**`08-measurement-validation.md`** if you are about to trust a length. On 2026-09-16 the metric scale was audited against
 objects of published size, and the Kolu reconstruction came out **5.3–5.8× too small**. That
 finding changes a set of public figures (`14` §4) and one design rule: a metre is valid only
 with an external ruler or GNSS behind it (ADR-014).
@@ -19,6 +23,7 @@ with an external ruler or GNSS behind it (ADR-014).
 
 | # | Document | Answers | Status |
 |---|---|---|---|
+| 00 | [Start here](00-start-here.md) | The whole project in one read, for someone new | **New** |
 | **Requirements and design** ||||
 | 01 | [SRS](01-SRS-requirements.md) | What the PS actually requires, traced to its PDF | Baselined 2026-09-04 |
 | 02 | [Architecture v1](02-architecture.md) | The 900 s budget, model choice, stages | v1; extended by 13 |
@@ -52,14 +57,18 @@ with an external ruler or GNSS behind it (ADR-014).
 `src/tesseract/` is the pipeline these documents specify: `contracts.py` (docs/09),
 `scale.py` (docs/08), `pipeline.py` and `stages.py` (docs/13), `report.py` (docs/14 §3.3)
 and `cli.py`. Run `python tesseract.py run synthetic --gnss rtk` for a complete run in
-seconds, or `python src/tesseract/test_tesseract.py` for the 44 checks that hold it to
+seconds, or `python src/tesseract/test_tesseract.py` for the 46 checks that hold it to
 this suite.
+
+`demo/console/` is the product surface built on those manifests: every run, and per run what
+it may claim, its stage timeline, its geometry, its artefacts and its contract check
+(ADR-025). `tools/test_console.py` drives it in a real browser.
 
 ## Reading paths
 
 | You are | Read |
 |---|---|
-| **New to the project** | 01 → 08 → 13 → 15 |
+| **New to the project** | **00**, then 01 → 08 → 13 → 15 |
 | **Reviewing a claim** | 14 §4 → the cited source → 08 |
 | **Running an experiment** | 12 → 14 §1 → 09 |
 | **Changing a stage** | 09 → 10 → 15 §4–5 → 14 §2 |
@@ -75,5 +84,7 @@ this suite.
 - A decision changes by a new ADR, never by editing an old one.
 - A contract changes in the same commit as the code that implements it.
 - The claims ledger (`14` §4) is updated before any external artefact ships.
+- `00` restates figures from the other documents; `tools/check_onboarding.py` re-greps all
+  49 of them against their sources and fails if one has moved.
 - Owners: 01, 02, 09, 10, 13, 14 — tech lead; 05, 08, 12 — geometry/ML; 11 — tech lead;
   15, 16 — platform; 17, 18 — tech lead with all roles (`18` §3).

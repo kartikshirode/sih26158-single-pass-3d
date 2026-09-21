@@ -39,7 +39,9 @@ scale status (`docs/09` §2). "cm" on a model-unit measurement is a defect.
 |---|---|---|
 | Harness unit tests | `python src/eval3d/test_metrics.py` | **21 PASS / 0 FAIL** (2026-09-16) |
 | Window-fusion test | `python src/pipeline/test_window_fuse.py` | **T-SCALE-01 PASS** |
-| Pipeline: contracts, scale, orchestration, end to end | `python src/tesseract/test_tesseract.py` | **44 PASS / 0 FAIL** (2026-09-18). Its T5 section (6 checks against the real Kolu run) is **local-only**: `out/` is gitignored, so on a clean checkout and in CI it reports SKIP with the command that would enable it |
+| Pipeline: contracts, scale, orchestration, end to end | `python src/tesseract/test_tesseract.py` | **46 PASS / 0 FAIL** (2026-09-21). Its T5 section (8 checks against the real Kolu and village runs) is **local-only**: `out/` is gitignored, so on a clean checkout and in CI it reports SKIP with the command that would enable it |
+| Console behaviour in a real browser | `python tools/test_console.py` | **21 PASS** (2026-09-20). Drives the committed `demo/console/`; refuses to run if the template or stylesheet moved without a rebuild |
+| Onboarding figures still match their sources | `python tools/check_onboarding.py` | **49 figures across 8 sources** |
 | A run satisfies its own contracts | `tesseract run synthetic … && tesseract verify …` | PASS |
 | Syntax | `python -m compileall -q src tools mvs_job mapanything_job` | wired in CI |
 | Demo build + audits + figure re-grep | `python tools/build_all.py` | passing at last deploy |

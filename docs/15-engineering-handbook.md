@@ -73,6 +73,8 @@ out/             every run artefact — gitignored, regenerable
 | Check a finished run | `python tesseract.py verify out/runs/<run>` | local |
 | Pipeline tests | `python src/tesseract/test_tesseract.py` | local, ~1 min |
 | Harness tests | `python src/eval3d/test_metrics.py` | local |
+| The console, in a real browser | `python tools/test_console.py [--shots DIR]` | local, CI |
+| docs/00 figures vs their sources | `python tools/check_onboarding.py` | local, CI |
 | Synthetic end to end | `python src/pipeline/run_demo.py out/demo` | local, seconds |
 | Screen clips | `python src/ingest/screen.py data/cand/*.webm` | local, ~40 s/clip |
 | Ingest a clip | `python src/ingest/video_ingest.py <video> --out out/kf_<run> --n 45 [--skip s --end s] [--horizon crop]` | local |
