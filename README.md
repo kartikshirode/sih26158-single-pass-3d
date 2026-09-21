@@ -126,6 +126,11 @@ python src/experiments/exp09_straight_line_degeneracy.py # the degeneracy and it
 
 Viewer: copy `model.glb` + `run_manifest.json` beside `viewer/index.html`, serve over HTTP.
 
+The deployed site is https://tesseract-demo.vercel.app/console/ (the run console, ADR-025),
+with the three replay pages at `/`, `/gallery/` and `/qa/`. Rebuild everything and re-run both
+audits with `python tools/build_all.py`; redeploy with `vercel deploy --prod --yes` from
+`demo/`, because git integration is deliberately disconnected.
+
 ### On GCP (Mumbai — required, not preferred; see finding 5)
 
 ```bash
