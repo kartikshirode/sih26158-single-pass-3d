@@ -65,6 +65,14 @@ CLAIMS = [
         "0.42-0.55",           # MapAnything, seconds per view on a T4
         "6.4-11.4",            # the same on 8 vCPU
     ]),
+    ("research/02-ingestion-export-findings.md", [
+        "80.6 MB",             # the EGM2008 grid baked into the image
+        "-24.32 m", "-98.24 m",  # geoid separation, Leh and Kanyakumari
+        "221 open issues",     # why decord was rejected
+        "1415-1432",           # the blur-metric survey
+        "10.1002/esp.3609",    # focal and k1 dependence on a near-planar pass
+        "7755-7787",           # the per-state ISRO set that is not a UTM block
+    ]),
     ("README.md", [
         "311 m", "267 m",      # 7-DOF scene error, straight pass and RTK
         "0.097", "4.1 m",      # RTK and consumer GNSS absolute error
@@ -114,15 +122,34 @@ def main() -> int:
     raw = io.open(DOC, encoding="utf-8").read()
     dashes = [c for c in ("—", "–") if c in raw]
 
+    # A reference section's failure mode is an invented link. Every URL here has to
+    # appear somewhere else in the repository, which is where it was read from.
+    elsewhere = ""
+    for folder in ("docs", "research"):
+        for root, _, files in os.walk(os.path.join(ROOT, folder)):
+            for name in files:
+                if name.endswith((".md", ".txt", ".json")) and name != "00-start-here.md":
+                    with io.open(os.path.join(root, name), encoding="utf-8",
+                                 errors="ignore") as f:
+                        elsewhere += f.read()
+    with io.open(os.path.join(ROOT, "README.md"), encoding="utf-8") as f:
+        elsewhere += f.read()
+    invented = [u for u in sorted(set(re.findall(r"https?://[^\s)\]]+", raw)))
+                if u not in elsewhere]
+
     for m in missing:
         print("  ! " + m)
     for o in orphaned:
         print("  ~ " + o)
     for d in dashes:
         print(f"  ! docs/00-start-here.md contains {d!r}")
+    for u in invented:
+        print(f"  ! {u} appears nowhere else in the repository")
 
-    bad = len(missing) + len(orphaned) + len(dashes)
+    bad = len(missing) + len(orphaned) + len(dashes) + len(invented)
+    links = len(set(re.findall(r"https?://[^\s)\]]+", raw)))
     print(f"\n  {n} figures re-grepped across {len(CLAIMS)} sources"
+          f"\n  {links} links checked against the rest of the repository"
           + (f"\n  FAIL - {bad} problem(s)" if bad else "\n  PASS"))
     return 1 if bad else 0
 

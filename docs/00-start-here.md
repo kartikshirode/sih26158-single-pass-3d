@@ -670,45 +670,181 @@ softer version of the second.
 
 ## 13. References
 
-### The problem statement
+Everything the project cites, grouped. A source with a link is one the suite already records
+that way; a source without one is named exactly as the suite names it, because an invented URL
+is worse than none. `tools/check_onboarding.py` refuses any link in this file that appears
+nowhere else in the repository.
 
-`docs/SIH26158.pdf`, three pages, PS #17, pp. 37-39 of the NTRO problem-statement document. The
-sih.gov.in listing is incomplete (§2.1).
+### 13.1 The problem statement
 
-### Papers
+`docs/SIH26158.pdf`. Three pages, PS #17, pp. 37-39 of the NTRO problem-statement document, a
+print-to-PDF of a Google Doc with no text layer. The sih.gov.in listing for the same problem
+statement carries the editorial placeholder *"Add 'Desired Output' and 'Evaluation Criteria'
+table here"* and is not a usable source (§2.1, `01` §1.1).
 
-- MapAnything, [arXiv 2509.13414](https://arxiv.org/abs/2509.13414). The geometry spine.
-- An Evaluation of DUSt3R, MASt3R and VGGT on Photogrammetric Aerial Blocks,
-  [arXiv 2507.14798](https://arxiv.org/abs/2507.14798). Independent confirmation of ADR-004:
-  these models "cannot fully replace traditional SfM and MVS, but offer promise as complementary
-  approaches".
-- AerialMetric, [arXiv 2606.29716](https://arxiv.org/abs/2606.29716). The closest external
-  evidence for the scale finding: zero-shot metric depth collapses at UAV altitude, MoGe-2 at
-  5.1% delta-1 on its oblique-city split without true intrinsics, 89.3% after LoRA adaptation.
-- GLOMAP, [arXiv 2407.20219](https://arxiv.org/abs/2407.20219). Global SfM, 1 to 2 orders of
-  magnitude faster than COLMAP per its authors. The revisit condition on ADR-001.
-- H3D Hessigheim benchmark, [arXiv 2102.05346](https://arxiv.org/abs/2102.05346).
+Four questions for the organisers that change what may legitimately be claimed, from the root
+`README.md`: does the dataset include RTK or PPK corrections; is the 1 m target absolute or
+relative; is evaluation against a LiDAR or multi-pass reference; is the single pass nadir or
+oblique.
 
-### Standards and law
+### 13.2 Papers and preprints
 
-- DST Guidelines for acquiring and producing Geospatial Data and Geospatial Data Services,
-  15 February 2021. The 1 m / 3 m residency threshold.
-- Drone Rules 2021 and the Digital Sky airspace map, for any flight the team makes.
-- EPSG:9518 (EGM2008), EPSG:32642 to 32647 (UTM zones over India).
-- Estonian road design norms, MKM regulation 106 §9 and the 1999 norms §8: 5.0 m clearance under
-  an overpass. Used as the clearance floor in `08` §3.6.
+| Work | Where | Why it is cited |
+|---|---|---|
+| MapAnything | [arXiv 2509.13414](https://arxiv.org/abs/2509.13414) | The geometry spine. Metric by design, accepts intrinsics, poses, depth and metric flags as priors. Apache-2.0 code and an Apache-2.0 checkpoint. 1 B parameters, latest release 2026-01-20 |
+| Wu, Landgraf, Ulrich and Qin, *An Evaluation of DUSt3R, MASt3R and VGGT on Photogrammetric Aerial Blocks* | [arXiv 2507.14798](https://arxiv.org/abs/2507.14798) | Independent arrival at ADR-004. Completeness gains up to 50% over COLMAP from very sparse low-resolution sets, but pose reliability falls with more images; these models *"cannot fully replace traditional SfM and MVS, but offer promise as complementary approaches"* |
+| Song, Chen, Zhang et al., *AerialMetric* | [arXiv 2606.29716](https://arxiv.org/abs/2606.29716), [project page](https://kuieless.github.io/AerialMetric-ECCV2026-page/) | The closest external evidence for `08`. Zero-shot metric depth collapses at UAV altitude: MoGe-2 at 5.1% delta-1 on its oblique-city split without true intrinsics, 89.3% after rank-96 LoRA adaptation. Accuracy drops precipitously from 80 m to 120 m. Data, code and weights CC BY 4.0 per the paper |
+| GLOMAP, *Global Structure-from-Motion Revisited* | [arXiv 2407.20219](https://arxiv.org/abs/2407.20219) | Global SfM, accuracy on par with or better than COLMAP at 1 to 2 orders of magnitude less time per its authors (ECCV 2024). The revisit condition on ADR-001 |
+| H3D, the Hessigheim benchmark | [arXiv 2102.05346](https://arxiv.org/abs/2102.05346) | UAV LiDAR at about 800 pts/m2 with oblique imagery at 2 to 3 cm GSD, multiple epochs. Candidate held-out set B |
+| UseGeo | [ResearchGate 381534229](https://www.researchgate.net/publication/381534229_UseGeo_-_A_UAV-based_multi-sensor_dataset_for_geospatial_research) | UAV multi-sensor dataset with LiDAR. The other candidate held-out set |
+| VGG-T3 | [arXiv 2602.23361](https://arxiv.org/pdf/2602.23361) | Surveyed in `11`; not usable here for the same licence reason as VGGT |
+| LONG3R | [arXiv 2507.18255](https://arxiv.org/pdf/2507.18255) | Long-sequence feed-forward reconstruction, surveyed in `11` |
+| Pertuz, Puig and Garcia, *Analysis of focus measure operators for shape-from-focus*, Pattern Recognition 46(5):1415-1432, 2013 | named in `research/02` §6 | The blur-metric survey behind keyframe sharpness scoring. Also the correction: Tenengrad is attributed to Krotkov 1986, not Tenenbaum 1970 |
+| James and Robson, 2014, DOI 10.1002/esp.3609 | named in `research/02` §4 | Why intrinsics are fixed rather than self-calibrated: on a near-planar nadir pass `k1` and focal length are nearly linearly dependent and the surface domes |
 
-### Products and toolchains
+### 13.3 Law, standards and geodesy
 
-Pix4D overlap guidance (75% frontal, 60% side; 85% frontal for corridors), RealityScan 2.x,
-Skydio 3D Scan, OpenDroneMap. Full table with relevance and licences: `11` §2.
+**Indian geospatial regulation.** Guidelines for acquiring and producing Geospatial Data and
+Geospatial Data Services, Department of Science and Technology, 15 February 2021. Threshold
+1 m horizontal and 3 m vertical; data finer than that may be created and owned only by Indian
+entities and must be stored and processed in India, on a domestic cloud or on servers
+physically located in India. Compliance is by self-certification, so it has to be stated in the
+submission (`01` §7.3, `research/02` §1, ADR-010).
 
-### Licence register
+**Flight.** The Drone Rules 2021 and the Digital Sky airspace map govern any flight the team
+makes to collect held-out data. Registration, pilot and airspace requirements change, so they
+are checked before a flight rather than restated here (`12` R3, `16` §6).
 
-`11` §5, verified 2026-09-16 from repositories and model cards rather than summaries, plus §5.1
-for pinned Python dependencies and §5.2 for the console's fonts.
+**Coordinate reference systems.** EPSG:4979 (WGS 84 3-D) as the source; EPSG:9518 (WGS 84 plus
+EGM2008 height) as the vertical target, with EPSG:9707 (EGM96) as the model that must not be
+chosen by accident; EPSG:32642 to 32647 for UTM zones 42N to 47N over India, selected at runtime
+from mean longitude. A correction recorded in `research/02` §2.2: EPSG:7755-7787 is not a UTM
+block but the per-state ISRO set under NNRMS TR 122:2005, 7755-7776 Lambert Conformal Conic and
+7777-7787 Transverse Mercator.
 
-### The suite itself
+**Geoid.** EGM2008, shipped as `us_nga_egm08_25.tif`, 80.6 MB, inside the image so no stage
+reaches the network. Separation measured with PROJ 9.5.1 across India runs -24.32 m at Leh to
+-98.24 m at Kanyakumari, and EGM96 against EGM2008 differs by 1.68 m at Amritsar. No public
+Indian national geoid model is downloadable; Survey of India publishes a partial-coverage status
+map, so EGM2008 is the defensible choice (`research/02` §2.1).
+
+**Estonian road design norms.** MKM regulation 106 §9: *"Tuleb tagada kõrgusgabariit 5,0 m …
+viadukti ja estakaadi all avades, kus on lubatud sõidukiliiklus"*, 5.0 m of clearance under any
+overpass opening carrying vehicles. The 1999 norms, under which the 2013 structure was designed,
+carry the same paragraph at §8, and Table 2.4 sets 3.75 m lanes for this road class. Used as the
+clearance floor in `08` §3.6.
+
+### 13.4 The Kolu clip and its rulers
+
+The development clip is a CC0 Wikimedia Commons video of the Kolu ecoduct, Estonia's first
+wildlife overpass (2013), over national road 2, Tallinn to Tartu. Two published dimensions make
+it the only clip in the project that can be scale-audited (`08` §3.2):
+
+- Lane width. The four-lane sections were designed on 3.5 m lanes, the Swedish-style
+  cross-section, reported by ERR article 650086 and ERR news 1608116446 for the Kärevere to
+  Kardla section. The ministry's stated minimum for a 2+2 section is 3.75 m. The bracket uses
+  both.
+- Ecoduct waist. Estonian Wikipedia, *Ökodukt*: *"ehitati Kolu sild selle kitsaimas kohas 22
+  meetri laiuseks"*. 21 m is also reported. The bracket uses both.
+
+Rights for the other footage, from `16` L-8: Nicosia and the Bahá'í temple CC BY 3.0 with
+attribution, Toolse CC BY-SA 4.0, and the Village clip a third-party YouTube Short with no clear
+rights, which is why it is for pipeline testing only and why its presence on the public gallery
+is open finding F-4.
+
+### 13.5 Models and weights
+
+The register in `11` §5 was read from repositories and model cards on 2026-09-16. Verdicts are
+for this deployment, where the customer is an intelligence agency.
+
+| Model | Code | Weights | Usable here |
+|---|---|---|---|
+| MapAnything | Apache-2.0 | `facebook/map-anything-apache` Apache-2.0; `facebook/map-anything` CC-BY-NC-4.0 | Yes, the Apache checkpoint |
+| DINOv2 giant, the MapAnything backbone | Apache-2.0 | Apache-2.0 | Yes |
+| VGGT | VGGT licence plus AUP | same | **No.** The AUP prohibits *"Military, warfare, nuclear industries or applications, espionage, use for materials or activities that are subject to the International Traffic Arms Regulations (ITAR)"*, on both checkpoints. The July 2025 relicensing is explicitly commercial use except military |
+| Depth Anything 3 | Apache-2.0 | BASE, SMALL, METRIC-LARGE, MONO-LARGE Apache-2.0; GIANT-1.1, LARGE-1.1, NESTED CC-BY-NC-4.0 | The Apache checkpoints only |
+| MoGe and MoGe-2 | MIT | MIT (`Ruicheng/moge-2-vitl`) | Yes. The base of AerialMetric's adapted model |
+| Pi3 | BSD-3 | non-commercial research and education | Code yes, weights no |
+| MASt3R and MASt3R-SfM | CC BY-NC-SA 4.0 | same | No |
+| UniDepth | CC BY-NC 4.0 | not separately listed | No |
+| Metric3D | BSD-2 code | unverified | Code yes |
+| Inria 3DGS and 2DGS | research-only licence | not separately listed | No |
+| gsplat | Apache-2.0 | not applicable | Yes, as a viewer branch only |
+
+### 13.6 Toolchain
+
+| Component | Licence | Role |
+|---|---|---|
+| COLMAP | BSD | Triangulation and bundle adjustment on CPU. Its dense stereo is CUDA-only, which is why it is not the CPU densifier |
+| GLOMAP | BSD-3 | Untested here; the candidate global SfM |
+| OpenMVS | **AGPL-3.0** | `DensifyPointCloud` with `--cuda-device -2` for CPU, then Delaunay mesh. Run unmodified as a separate process from the upstream v2.4.0 prebuilt binaries, which keeps this project's code outside its copyleft (ADR-005, `16` L-1) |
+| assimp | BSD-3 | Writes OBJ, PLY, glTF/GLB and FBX. `Exporter.cpp` registers `"fbx"` and `"fbxa"` at FBX 2016+, driven from Python through `pyassimp` (ISC). Two decoys avoided: FBX2glTF wraps the account-gated Autodesk SDK and converts the wrong direction, and ufbx is import-only (`research/02` §5) |
+| PyAV | BSD-3 | Decode. Chosen over decord, whose HEAD is 2022-07-19 with 221 open issues (ADR-019) |
+| FFmpeg | LGPL-2.1+ | The native H.264 and HEVC decoders are LGPL; libx264 and libx265 are encoders only, so a decode-only pipeline never needs GPL (`research/02` §6) |
+| telemetry-parser | MIT or Apache-2.0 | Decodes the `djmd` protobuf track embedded in DJI MP4s, and yields focal length and distortion coefficients |
+| laspy, rasterio, trimesh, pyproj, open3d | BSD-3-style, BSD-3, MIT, MIT, MIT | LAS 1.4 with `add_crs`, GeoTIFF with the COG driver, mesh IO, CRS transforms, geometry |
+| PDAL, Potree 1.8.2, PoseLib | BSD, BSD-2, BSD-3 | Point-cloud pipeline, the COPC web viewer, minimal solvers for the 5-DOF fit |
+| 3d-tiles-tools | Apache-2.0 | Candidate delivery format |
+| IBM Plex Sans and Mono | SIL OFL 1.1 | The console's self-hosted type (`11` §5.2) |
+| Blender `bpy` | GPL if published | The FBX fallback on a developer machine only. Shelling out is fine under GPL mere aggregation, but a published `bpy` glue script is itself GPL, so it never goes into a product build (`16` L-3) |
+
+Pinned Python dependency versions and their licences: `11` §5.1, read from the installed
+distributions' own metadata. CI refuses a new pin that is not listed there.
+
+### 13.7 Incumbent products
+
+| Product | Source | What it establishes |
+|---|---|---|
+| Pix4D | [overlap verification](https://support.pix4d.com/hc/en-us/articles/203756125), [image acquisition](https://support.pix4d.com/hc/en-us/articles/115002471546) | The reference for survey-grade output, and the overlap assumption this problem statement breaks: 75% frontal and 60% side in general, 85% frontal for a corridor |
+| RealityScan 2.x, formerly RealityCapture | [2.0 release notes](https://www.realityscan.com/news/realityscan-20-new-release-brings-powerful-new-features-to-a-rebranded-realitycapture), [CG Channel on 2.1](https://www.cgchannel.com/2025/11/epic-games-releases-realityscan-2-1/) | Fast desktop photogrammetry; free below USD 1 M annual revenue |
+| Skydio 3D Scan | [introduction](https://www.skydio.com/blog/introducing-skydio-3d-scan) | Solves capture by planning more views, which is the opposite of this problem |
+| OpenDroneMap and WebODM | [options and flags](https://docs.opendronemap.org/arguments/) | The open incumbent, AGPL-3.0, reference only. Its `--video-limit` default of 500 is the anchor for the 600-keyframe figure. Two findings taken from it: it stamps extracted frames `Model: "Unknown"` so every video reconstruction falls back to a generic focal prior, and it applies no geoid correction at all |
+
+DroneDeploy, Agisoft Metashape, Bentley iTwin Capture and Esri Site Scan share the same
+planned-capture design centre and are not evaluated here beyond category (`11` §2).
+
+### 13.8 Benchmarks, and what each can prove
+
+From `11` §4. None is a single-pass video benchmark, which is why `14` §3.2 specifies
+sub-sampling one flight strip from a survey block, with the caveat that survey stills are
+sharper, better exposed and more overlapped than video frames, so the result is an upper bound.
+
+| Benchmark | Ground truth | Alignment | Proves |
+|---|---|---|---|
+| ETH3D | laser scan | none | Absolute accuracy, the analogue of `evaluate(align=False)` |
+| Tanks and Temples | laser scan | 7-DoF including scale | Shape only. A 5%-too-small model scores 0.000 m, which is why the harness never fits scale |
+| H3D Hessigheim | UAV LiDAR, oblique imagery, multiple epochs | not specified | Aerial geometry and semantics on a real site |
+| UseGeo | UAV multi-sensor with LiDAR | not specified | Real UAV depth and geometry |
+| UrbanScene3D | LiDAR | not specified | Urban aerial reconstruction |
+| AerialMetric | LiDAR and metric depth at known altitude | not specified | Metric scale at altitude, the exact failure `08` found |
+
+### 13.9 Infrastructure evidence
+
+GPU quota was surveyed through the Service Usage and Cloud Quotas APIs rather than the console,
+so the numbers are the limits the scheduler enforces. Two traps recorded in `01` §9 and `06`:
+`gcloud compute regions describe asia-south1` reports K80, P100, V100 and P4 at 1, which are
+vestigial rows for retired SKUs rather than usable access; and the quota API lists asia-south1
+under Cloud Run L4 `applicableLocations` while the deploy refuses it. Trust the deploy error.
+
+The Baramati cluster at VPKBIET has its own `CONTEXT.md`: campus network only, `srun` broken so
+jobs go through `sbatch`, and only the `torch-gpu` conda environment runs on its cards.
+
+### 13.10 Inside this repository
+
+| Where | What it holds |
+|---|---|
+| `docs/01` to `docs/18` | The suite. Index and reading paths in `docs/README.md` |
+| `docs/10` | 25 architecture decision records, each with the evidence that made it and the evidence that would unmake it |
+| `docs/14` §4 | The claims ledger: every public figure, its source, its gate and its status |
+| `research/01-licensing-findings.md` | The licence verdicts, read from primary sources |
+| `research/02-ingestion-export-findings.md` | Telemetry, intrinsics, geoid, UTM, export and decode findings, with an explicit "do not rely on these" list at §7 |
+| `research/exp*-results.txt` | Recorded output from EXP-01, 05, 08, 09 and 14 |
+| `research/exp1*.md` | Write-ups for the MapAnything CPU, GPU and video-to-3D runs |
+| `research/calibration/*.json` | Per-run scale calibration: factor, bracket, method and references |
+| `research/run-evidence/` | Screenshots of real runs |
+| `out/runs/*/run_manifest.json` | What each run claims, and `qa_report.md` beside it |
+
+### 13.11 Where to go next
 
 | Read | When |
 |---|---|
@@ -718,4 +854,6 @@ for pinned Python dependencies and §5.2 for the console's fonts.
 | `13` and `09` | Before changing a stage |
 | `15` | Before a first commit |
 | `12` and `14` | Before running an experiment or making a claim |
+| `10` | Before reversing a decision, and write a new ADR rather than editing an old one |
+| `16` | Before publishing anything or handling supplied data |
 | `17` | Before the finale |
