@@ -148,3 +148,83 @@ OpenDroneMap's "60% nadir plus 70 to 80% oblique cross grid"; 3.5 to 5.7 h for 1
 award. None contradicts anything in this repository. Each needs its own source before
 submission, because the comparison table on slide 8 is where an evaluator from the field
 will look first.
+
+## Visual pass (Google Slides preview, all 8 slides, 2026-09-22)
+
+The audit above was written from the exported text. This section is what only looking at the
+rendered slides shows. Slide size is 13.33 x 7.5 in, 16:9.
+
+### Slide 2 is clipped by the slide edge
+
+The "Innovation and uniqueness" card has no bottom border on screen: its last bullet ("It can
+be deployed on one on-prem GPU server and an edge box...") runs under the blue footer bar, and
+the "After" image is cut off the same way. Slides 3 and 4 do not have this. Dropping slide 2,
+which the audit already asks for as a duplicate, removes the clipping too.
+
+### The footers no longer count the slides
+
+Slide 1 has no number, slides 2, 3 and 4 all read "2", then 3, 4, 5 and 6. That is the
+template's six-slide numbering left on an eight-slide deck. Deleting the two duplicates
+restores it.
+
+### The output picture is the mesh from before texturing
+
+The render on slides 2, 3 and 4 has a smooth grey carriageway with no lane markings. The
+texture atlas this pipeline produced (`out/kolutex3d/atlas.jpg`) has painted lane dashes,
+chevrons and a red car in its charts, so a textured render shows them. The picture therefore
+predates the texture run and shows per-vertex colour. Two knock-on errors follow: the Deliver
+box says "Textured mesh" beside it, and the label reads "3D mesh, 3.45M points", which is the
+dense cloud's point count (3,445,735), not a mesh count.
+
+Fix: take a fresh screenshot of `kolu_tex` on the console. Two more things to fix in the same
+screenshot, because they are why the pair reads badly:
+
+- The render is much darker than the input frame next to it. Side by side, the before looks
+  better than the after.
+- The two are at different camera angles, so a reader has to work out that they are the same
+  structure. Match the render to the input frame's viewpoint.
+
+### Orange means two different things, four slides apart
+
+Slide 5 panel 3 ("Labelled 3D model") colours the synthetic scene by class: orange buildings,
+green vegetation, tan terrain, grey roads. That is `Scene.LABELS`, which is
+`("terrain", "building", "road", "vegetation")`. Slide 8's figure takes the same scene and the
+same two colours and gives them the opposite meaning: green measured, orange inferred. A reader
+who saw slide 5 first reads slide 8's orange as buildings and misses the whole point of the
+figure. Recolour one of them.
+
+### Slide 8's figure is the best thing in the deck, and it is uncaptioned
+
+Zoomed in, the roofs are green and the facades orange. That is EXP-08 stated as a picture: a
+nadir pass sees roofs and misses along-track facade (14.3% covered). No other slide makes the
+honest case this well. Two words are missing from it: the scene is synthetic, and the marking
+is stage 9, which is not built. Nothing in `tools/` or `src/` renders this figure, so it is a
+concept drawing, and captioning it as one costs nothing.
+
+### Slide 5 panel 1, confirmed at source
+
+No code in `src/` or `tools/` draws "BLURRY: SKIPPED", "moving car masked" or the "GPS+IMU"
+timestamps, and `Scene.LABELS` has four classes with no vehicle among them, so the synthetic
+scene cannot contain the car that the panel shows being masked. Audit item 1 stands.
+
+### Body text is 7.5 to 9 pt
+
+Slides 4 to 8 all bottom out at 7.5 pt, and 8.5 or 9 pt carries most of the body. Slide 8's
+comparison table is 8.5 pt throughout. That reads on a laptop and not from the back of a hall.
+The tables on slides 6, 7 and 8 are where it matters, because those are the slides an evaluator
+reads closely.
+
+### Sentences that will trip a reader
+
+- Slide 7: "Once, a drone flies down the valley" (in the landslide scenario).
+- Slide 6: "An outlier-rejective factor graph".
+- Slide 6: "It has already been tested in end-to-end fashion on recorded drone footage".
+- Slide 7: "The fewer flights, the less energy and less battery wear".
+- Slide 7: "Numbers are provided to rescue teams earlier".
+
+### One correction to the audit above
+
+The audit says to keep slide 3. The link the team shared opens on slide 4, so they may already
+treat 4 as the keeper. Either works. Both carry the same two problems: slide 4's "The drone's
+own GPS and motion sensors give the real size" is the scale overclaim from item 3, and "Rough
+3D while it flies" is the live-3D overclaim from item 4.
