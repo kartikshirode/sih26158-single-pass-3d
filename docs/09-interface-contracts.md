@@ -124,7 +124,7 @@ The stage numbers follow `docs/02` §3, with S3b added for bundle adjustment.
 | `ingest.json` | `stats{video, resolution, fps, frames_decoded, shots_detected, keyframes_selected, rejected_*, overlay_crop_trbl, blur_threshold_varlap, flow_budget_px, has_gps_sidecar, srt_records}`, `keyframes[]` (source frame indices), `telemetry[]` |
 | `telemetry[i]` | `FrameTelemetry{t_us, lat, lon, alt_ellipsoid, alt_rel, alt_baro?, yaw?, pitch?, roll?, focal_mm?, fov?, quality_flags[]}` (`docs/02` §4.2) |
 | Must persist | **crop box** (F0 → cropped F0), source frame index per keyframe, telemetry aligned to keyframes |
-| **GAP C-3** | `telemetry` is always `[]`: the SRT parser exists (`parse_dji_srt`) but its records are not aligned to keyframes and written |
+| **GAP C-3** | `telemetry` is written and aligned (`video_ingest.py`, `telemetry_for_frames`), but no development clip has a sidecar, so every run reports `srt_records 0` (and until 2026-09-22 the parser's longitude pattern matched only the Mavic 2 misspelling `longtitude`, so a modern sidecar would have parsed to nothing; EXP-23). The unfed half is downstream: `VideoSource` has no `world()`, so S5 cannot read what S1 writes (`docs/13` S5) |
 | Rule | a stale keyframe from a previous run in the output directory is an error, not a file to ignore (T-ROB-09) |
 
 ### S3 · Pose + metric prior (MapAnything)

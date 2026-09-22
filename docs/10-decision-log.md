@@ -30,7 +30,7 @@ never by editing the old one's text.
 | 013 | Screen admissibility before spending inference | Accepted |
 | 014 | Scale is a per-run, evidenced value; no global correction | Accepted |
 | 015 | One frame for every exported file; assimp for FBX | Accepted |
-| 016 | Per-vertex colour instead of a texture atlas | Accepted (interim) |
+| 016 | Per-vertex colour instead of a texture atlas | Retired as default; fallback only |
 | 017 | The demo is a self-contained replay built from run artefacts | Accepted |
 | 018 | Python 3.12 | Accepted |
 | 019 | PyAV for decode | Accepted |
@@ -220,7 +220,7 @@ build (`docs/16` L-3).
 **Decision.** Colour mesh vertices from the nearest dense point.
 **Consequences.** No texture seams across exposure changes (helps R-C3), but no texture
 detail finer than the vertex spacing (hurts R-F5).
-**Status.** Accepted until the failure is diagnosed (`docs/12` R4).
+**Status.** Retired as the default 2026-09-22: the failure was a wrong file name (`docs/12` EXP-20) and the Kolu re-run wrote a textured OBJ with an 8192 x 8192 atlas. Per-vertex colour stays the fallback for any run whose `TextureMesh` step fails.
 
 ## ADR-017 · The demo is a self-contained replay
 

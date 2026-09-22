@@ -71,6 +71,8 @@ STRIDE, applied to the three deployment topologies of `docs/13` §4.
 | **L-8** | **Footage rights** | Kolu: CC0. Nicosia, Bahá'í temple: CC BY 3.0 (attribution). Toolse: CC BY-SA 4.0. **Village (YouTube Short): no clear rights** | Village is for pipeline testing only (T-ROB-09) — **but the public gallery currently serves it (F-4)** |
 | **L-9** | **This project's own licence** | None declared. SIH rules split IP in a winning idea equally with the PS organisation | **Decision needed** before anything is published beyond the demo |
 | L-10 | VGGT, MASt3R, UniDepth, Inria 3DGS/2DGS, Pi3 weights, NC MapAnything | Barred for this use | Must not appear in any product build; the NC MapAnything checkpoint is internal ablation only |
+| L-11 | UseGeo dataset (ISPRS / FBK / Twente), CC BY-NC-SA 4.0 | Attribution; non-commercial; a reconstruction scored against it carries the same licence | Evaluation only (`research/03`). Never deliverable data, never published under another licence |
+| L-12 | DJI SRT test fixtures from `JuanIrache/DJI_SRT_Parser`, MIT | Keep the licence text with the files | Compliant: `src/ingest/fixtures/dji_srt/LICENSE.DJI_SRT_Parser` |
 
 ---
 

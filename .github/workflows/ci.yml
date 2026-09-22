@@ -35,6 +35,9 @@ jobs:
       - name: evaluation harness
         run: python src/eval3d/test_metrics.py
 
+      - name: telemetry - every DJI SRT family, and the fuzz (EXP-23)
+        run: python src/ingest/test_srt.py
+
       - name: window fusion
         run: python src/pipeline/test_window_fuse.py
 

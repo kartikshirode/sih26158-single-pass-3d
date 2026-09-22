@@ -35,11 +35,27 @@ import numpy as np
 # --------------------------------------------------------------------------------------
 
 # Values arrive in several shapes across DJI generations, and the differences are
-# SILENT - a wrong guess corrupts rather than errors. Handled explicitly below.
+# SILENT - a wrong guess corrupts rather than errors. The families, from the twenty
+# real files under fixtures/dji_srt (MIT, JuanIrache/DJI_SRT_Parser) and the DJI
+# support note for the Zenmuse H20N (research/04-dji-srt-formats.md):
+#
+#   bracket   [latitude: 41.42] [longitude: 2.23] [rel_alt: 10.2 abs_alt: 142.8]
+#             Mavic 2 onward. "longtitude" on Mavic 2 / Zenmuse. fnum and focal_len
+#             are x100 / x10 integers up to the Air 2S, literal decimals from the
+#             Mavic 3. Air 2 / 2S write [altitude: ...] and nothing else.
+#   tuple     GPS(149.0251,-20.2533,16) BAROMETER:1.9        Mavic Pro, Phantom 4
+#             F/5.6, SS 400, ..., GPS (-58.85, -34.24, 15), H 85.80m   P4 RTK / P4P / Mini
+#             The tuple is (lon, lat, satellites). Not altitude: 16 is the fix count.
+#             Height above take-off is BAROMETER, Hb, or H. The Matrice 300 form
+#             GPS(36.6146,-6.1120,0.0M) is the one exception: (lat, lon, precision).
+#   none      Mavic Air: exposure only, no position at all.
 _NUM = r"[-+]?\d*\.?\d+"
 _PATTERNS = {
     "latitude":  re.compile(rf"\[?latitude\s*:\s*({_NUM})", re.I),
-    "longitude": re.compile(rf"\[?long?titude\s*:\s*({_NUM})", re.I),   # Mavic 2 spells it "longtitude"
+    # Mavic 2 and the Zenmuse line spell it "longtitude". The pattern this replaced,
+    # long?titude, matched only the misspelling: every Mavic 3 / Mini 3 / Air 3 file,
+    # and the synthetic test video, parsed to no telemetry at all until 2026-09-22.
+    "longitude": re.compile(rf"\[?longt?itude\s*:\s*({_NUM})", re.I),
     "rel_alt":   re.compile(rf"rel_alt\s*:\s*({_NUM})", re.I),
     "abs_alt":   re.compile(rf"abs_alt\s*:\s*({_NUM})", re.I),
     "altitude":  re.compile(rf"\[altitude\s*:\s*({_NUM})", re.I),        # Air 2/2S
@@ -47,43 +63,161 @@ _PATTERNS = {
     "gb_pitch":  re.compile(rf"gb_pitch\s*:\s*({_NUM})", re.I),
     "focal_len": re.compile(rf"focal_len\s*:\s*({_NUM})", re.I),
     "frame_cnt": re.compile(r"(?:FrameCnt|SrtCnt)\s*:\s*(\d+)", re.I),
+    "baro":      re.compile(rf"(?:BAROMETER|Hb)\s*[:(]\s*({_NUM})", re.I),
+    # "H 85.80m" and "H=1.5m", but not "H.S 1.84m/s" and not "HOME (".
+    "h_above":   re.compile(rf"(?:^|[\s,])H[\s=:]+({_NUM})\s*m\b", re.I | re.M),
 }
+_GPS_TUPLE = re.compile(rf"\bGPS\s*\(\s*({_NUM})\s*,\s*({_NUM})\s*,\s*({_NUM})\s*([mM]?)\s*\)")
+_TIMING = re.compile(r"(\d{1,2}):(\d{2}):(\d{2})[,.](\d{1,3})\s*-->")
+_DATE = re.compile(r"(\d{4})[-.](\d{1,2})[-.](\d{1,2})[ T](\d{1,2}):(\d{2}):(\d{2})"
+                   r"(?:[.,](\d{3}))?")
+
+
+def _num(x: str) -> float | None:
+    try:
+        v = float(x)
+    except ValueError:
+        return None
+    return v if np.isfinite(v) else None
 
 
 def parse_dji_srt(path: str) -> list[dict]:
     """
-    Parse a DJI SRT sidecar into per-frame telemetry.
+    Parse a DJI SRT sidecar into per-record telemetry.
 
     Tolerant by design: blocks may or may not carry a timing line, fields are packed
     several to a bracket, encodings differ between models, and files appear with CRLF
-    and BOMs. Anything unparseable is skipped rather than raising.
+    and BOMs. Anything unparseable is skipped rather than raising, and every skip or
+    unit guess is written into the record's `flags` so a run can say what it did.
+
+    Each record carries `latitude`, `longitude`, `height` (metres above take-off, the
+    best of rel_alt / BAROMETER / H, else None) and, where the file has them,
+    `t_us` (video-relative, from the timing line), `frame_cnt`, `satellites`,
+    `focal_len` in millimetres, `gb_yaw`, `gb_pitch`, `abs_alt`, `wall_us`.
     """
     if not os.path.exists(path):
         return []
-    text = open(path, "r", encoding="utf-8-sig", errors="replace").read()
+    try:
+        text = open(path, "r", encoding="utf-8-sig", errors="replace").read()
+    except OSError:
+        return []
+    text = text.replace("\r\n", "\n").replace("\r", "\n")
     blocks = re.split(r"\n\s*\n", text)
     out = []
     for b in blocks:
         if not b.strip():
             continue
-        rec = {}
+        rec: dict = {}
+        flags: list[str] = []
         for key, pat in _PATTERNS.items():
             m = pat.search(b)
             if m:
-                rec[key] = float(m.group(1))
+                v = _num(m.group(1))
+                if v is not None:
+                    rec[key] = v
+        if "latitude" not in rec or "longitude" not in rec:
+            m = _GPS_TUPLE.search(b)
+            if m:
+                a, c, third, unit = _num(m.group(1)), _num(m.group(2)), m.group(3), m.group(4)
+                if a is None or c is None:
+                    continue
+                if unit:                       # Matrice 300: (lat, lon, precision M)
+                    rec["latitude"], rec["longitude"] = a, c
+                    flags.append("gps_tuple_m300")
+                else:                          # everyone else: (lon, lat, satellites)
+                    rec["latitude"], rec["longitude"] = c, a
+                    flags.append("gps_tuple_lon_lat")
+                    if re.fullmatch(r"\d+", third):
+                        rec["satellites"] = int(third)
         if "latitude" not in rec or "longitude" not in rec:
             continue
+        if not (-90.0 <= rec["latitude"] <= 90.0 and -180.0 <= rec["longitude"] <= 180.0):
+            continue                           # radians, or a scrubbed placeholder
+        if rec["latitude"] == 0.0 and rec["longitude"] == 0.0:
+            continue                           # no fix yet; DJI writes zeros
 
         # Unit normalisation. focal_len is millimetres on some models and tenths of a
         # millimetre on others; a 240 that means 24 mm is the classic silent corruption.
         if rec.get("focal_len", 0) > 100:
             rec["focal_len"] /= 10.0
-        # Height: prefer rel_alt. abs_alt is BAROMETRIC on real DJI files (abs_alt minus
-        # rel_alt is constant to the millimetre across a flight), so it is not an
-        # independent GNSS observation and must never be treated as one.
-        rec["height"] = rec.get("rel_alt", rec.get("altitude", 0.0))
+            flags.append("focal_len_x10")
+
+        # Height: metres above take-off, whichever field this family carries. abs_alt
+        # is BAROMETRIC on real DJI files (abs_alt minus rel_alt is constant to the
+        # millimetre across a flight), so it is not an independent GNSS observation
+        # and must never be treated as one. Absent height stays None, not 0.0: a
+        # zero would later be read as "on the ground".
+        h = None
+        for k in ("rel_alt", "altitude", "baro", "h_above"):
+            if k in rec:
+                h = rec.pop(k) if k in ("baro", "h_above") else rec[k]
+                break
+        rec["height"] = h
+        if h is None:
+            flags.append("no_height")
+
+        m = _TIMING.search(b)
+        if m:
+            hh, mm, ss, frac = m.groups()
+            rec["t_us"] = ((int(hh) * 3600 + int(mm) * 60 + int(ss)) * 1_000_000
+                           + int(frac.ljust(3, "0")) * 1000)
+        m = _DATE.search(b)
+        if m:
+            import datetime as _dt
+            try:
+                y, mo, d, hh, mi, se, ms = m.groups()
+                t = _dt.datetime(int(y), int(mo), int(d), int(hh), int(mi), int(se),
+                                 int(ms or 0) * 1000)
+                rec["wall_us"] = int(t.timestamp() * 1e6)
+            except (ValueError, OverflowError, OSError):
+                flags.append("bad_date")
+        if "frame_cnt" in rec:
+            rec["frame_cnt"] = int(rec["frame_cnt"])
+        rec["flags"] = flags
         out.append(rec)
+
+    # A file with no timing lines (Mavic 2 style) still has a clock: use it.
+    if out and not any("t_us" in r for r in out) and all("wall_us" in r for r in out):
+        t0 = out[0]["wall_us"]
+        for r in out:
+            r["t_us"] = r["wall_us"] - t0
+            r["flags"].append("t_from_wall_clock")
     return out
+
+
+def telemetry_for_frames(records: list[dict], frame_idx, fps: float) -> list[dict]:
+    """
+    The telemetry record for each source frame index, keyed the way the file allows.
+
+    Never positional. Record i is source frame i only in the modern per-frame files,
+    and even there `parse_dji_srt` drops blocks without a fix, which shifts every
+    later index. The legacy families write one block per second, so positional
+    lookup on a 30 fps clip would hand frame 300 the record from five minutes in.
+
+      1. FrameCnt / SrtCnt, 1-based, when the records carry it;
+      2. else nearest by time, from the timing line at the clip's frame rate;
+      3. else nothing, rather than a guess.
+    """
+    if not records:
+        return [{} for _ in frame_idx]
+    by_cnt = {r["frame_cnt"]: r for r in records if "frame_cnt" in r}
+    if len(by_cnt) == len(records):
+        return [by_cnt.get(int(fi) + 1, {}) for fi in frame_idx]
+    if fps and fps > 0 and all("t_us" in r for r in records):
+        ts = np.asarray([r["t_us"] for r in records], np.float64)
+        order = np.argsort(ts)
+        ts = ts[order]
+        out = []
+        for fi in frame_idx:
+            t = int(fi) / fps * 1e6
+            j = int(np.searchsorted(ts, t))
+            cands = [k for k in (j - 1, j) if 0 <= k < len(ts)]
+            k = min(cands, key=lambda k: abs(ts[k] - t))
+            # Half a record interval is as far as "nearest" honestly reaches.
+            gap = np.median(np.diff(ts)) if len(ts) > 1 else 1e6
+            out.append(records[order[k]] if abs(ts[k] - t) <= gap else {})
+        return out
+    return [{} for _ in frame_idx]
 
 
 # --------------------------------------------------------------------------------------
@@ -460,13 +594,9 @@ def ingest_video(path: str, *, target_keyframes: int = 600,
             break
     selected = np.asarray(selected)
 
-    telemetry = []
     srt = srt_path or (os.path.splitext(path)[0] + ".SRT")
     tel_all = parse_dji_srt(srt)
-    if tel_all:
-        for s_ in selected:
-            fi = int(kept_idx[s_])
-            telemetry.append(tel_all[fi] if fi < len(tel_all) else {})
+    telemetry = telemetry_for_frames(tel_all, [int(kept_idx[s_]) for s_ in selected], fps)
 
     stats = {
         "video": os.path.basename(path), "resolution": f"{W}x{H}",

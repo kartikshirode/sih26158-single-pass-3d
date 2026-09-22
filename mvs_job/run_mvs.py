@@ -189,13 +189,29 @@ def main():
     # Delaunay + graph cut, not screened Poisson: it respects depth discontinuities
     # instead of closing smoothly over them.
     sh(["ReconstructMesh", f"{W}/scene_dense.mvs", "-w", W], "ReconstructMesh")
-    mesh = f"{W}/scene_dense_mesh.mvs"
+
+    # ReconstructMesh writes scene_dense_mesh.ply and nothing else here. At 2.4.0 it
+    # saves its own .mvs only when
+    #     nArchiveType != ARCHIVE_MVS || sceneType != SCENE_INTERFACE
+    # (apps/ReconstructMesh/ReconstructMesh.cpp), and DensifyPointCloud hands it an
+    # interface-format scene at the default archive type, so the .mvs is skipped by
+    # design. The first three runs pointed TextureMesh at that file and it failed
+    # in 0.2 s with "unable to open file '/tmp/mvs/scene_dense_mesh.mvs'" (docs/12
+    # EXP-20). The scene stays scene_dense.mvs; the mesh goes in by --mesh-file.
+    scene = f"{W}/scene_dense.mvs"
+    mesh = f"{W}/scene_dense_mesh.ply"
     if REFINE and os.path.exists(mesh):
-        sh(["RefineMesh", mesh, "-w", W,
+        sh(["RefineMesh", scene, "-m", mesh, "-w", W,
+            "-o", f"{W}/scene_dense_mesh_refine.mvs",
             "--resolution-level", "1"], "RefineMesh", fatal=False)
-        mesh = f"{W}/scene_dense_mesh_refine.mvs" if os.path.exists(
-            f"{W}/scene_dense_mesh_refine.mvs") else mesh
-    sh(["TextureMesh", mesh, "-w", W], "TextureMesh", fatal=False)
+        if os.path.exists(f"{W}/scene_dense_mesh_refine.ply"):
+            mesh = f"{W}/scene_dense_mesh_refine.ply"
+    if os.path.exists(mesh):
+        # OBJ, because a textured PLY carries its atlas as a header comment that
+        # almost nothing reads back. The name keeps finish_mvs.py's candidate list.
+        sh(["TextureMesh", scene, "-m", mesh, "-w", W,
+            "-o", os.path.splitext(mesh)[0] + "_texture.mvs",
+            "--export-type", "obj"], "TextureMesh", fatal=False)
 
     summary = {
         "n_images": n_img, "full_frame": [w0, h0], "model_grid": [W_, H],
@@ -212,7 +228,9 @@ def main():
 
     out = {"mvs_result.json": f"{W}/mvs_result.json"}
     for f in os.listdir(W):
-        if f.endswith((".ply", ".mvs")) and os.path.getsize(f"{W}/{f}") < 900e6:
+        # The textured mesh is three files: the .obj, its .mtl and the atlas image.
+        if (f.endswith((".ply", ".mvs", ".obj", ".mtl", ".png", ".jpg"))
+                and os.path.getsize(f"{W}/{f}") < 900e6):
             out[f] = f"{W}/{f}"
     push(out)
     print("\n" + json.dumps(summary, indent=2), flush=True)
