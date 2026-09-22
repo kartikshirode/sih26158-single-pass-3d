@@ -68,11 +68,33 @@ STRIDE, applied to the three deployment topologies of `docs/13` §4.
 | L-5 | COLMAP (BSD), GLOMAP (BSD-3), assimp (BSD-3), laspy, rasterio, trimesh, PyAV | Attribution | Collect into a `THIRD_PARTY_NOTICES` file |
 | L-6 | FFmpeg | LGPL when decode-only (the native H.264/HEVC decoders are LGPL) | Compliant; never link libx264/libx265 into a shipped build |
 | L-7 | AerialMetric weights (if adopted) | CC BY 4.0 per the paper — attribution | Verify at download (ADR-024) |
-| **L-8** | **Footage rights** | Kolu: CC0. Nicosia, Bahá'í temple: CC BY 3.0 (attribution). Toolse: CC BY-SA 4.0. **Village (YouTube Short): no clear rights** | Village is for pipeline testing only (T-ROB-09) — **but the public gallery currently serves it (F-4)** |
+| **L-8** | **Footage rights** | Kolu: CC0. Nicosia, Bahá'í temple: CC BY 3.0 (attribution). Toolse: CC BY-SA 4.0. **Village (YouTube Short): no clear rights** | Village is for pipeline testing only (T-ROB-09); F-4 closed 2026-09-22. Authors and source files are in **§4.1**, recovered 2026-09-23. **No public surface can carry a CC BY clip until the gallery has a credit field** |
 | **L-9** | **This project's own licence** | None declared. SIH rules split IP in a winning idea equally with the PS organisation | **Decision needed** before anything is published beyond the demo |
 | L-10 | VGGT, MASt3R, UniDepth, Inria 3DGS/2DGS, Pi3 weights, NC MapAnything | Barred for this use | Must not appear in any product build; the NC MapAnything checkpoint is internal ablation only |
 | L-11 | UseGeo dataset (ISPRS / FBK / Twente), CC BY-NC-SA 4.0 | Attribution; non-commercial; a reconstruction scored against it carries the same licence | Evaluation only (`research/03`). Never deliverable data, never published under another licence |
 | L-12 | DJI SRT test fixtures from `JuanIrache/DJI_SRT_Parser`, MIT | Keep the licence text with the files | Compliant: `src/ingest/fixtures/dji_srt/LICENSE.DJI_SRT_Parser` |
+
+### 4.1 Footage provenance (L-8 in full)
+
+L-8 recorded the licences but not the authors, so no compliant credit line could be written
+from the repo. Recovered 2026-09-23 from the Wikimedia Commons API. Both files on disk are
+byte-identical to the Commons originals, matched on size and duration for Toolse and on SHA-1
+for the Bahá'í clip, so these are the correct works and not lookalikes.
+
+| Clip | Commons file | Author | Licence | Date |
+|---|---|---|---|---|
+| `data/cand/toolse.webm` | `File:Toolse castle in Estonia (Fall 2021).webm` | Sillerkiil | CC BY-SA 4.0 | 2021-11-14 |
+| `data/cand/bahai.webm` | `File:Baha'i Temple -- Wilmette , IL -- Drone Video (DJI Spark).webm` | Kurt Elster | CC BY 3.0 | 2019-03-10 |
+
+SHA-1 of `bahai.webm` is `8e682f018f572659e3f09f1157ff0560a0db66a2`; `toolse.webm` is
+58,179,695 bytes and 114.283 s. The Bahá'í clip reached Commons from YouTube, which is why its
+Commons credit names an archive copy.
+
+**Publishing either one requires a visible credit naming the author and the licence, and a
+link to the source.** `tools/build_gallery.py` and `tools/gallery_template.html` have no field
+for that today, because Kolu is CC0 and never needed one. That field is a prerequisite for
+B-33, not a nicety. CC BY-SA 4.0 additionally makes any published reconstruction of Toolse
+share-alike, which is a decision for L-9 rather than one to take while adding a gallery tile.
 
 ---
 
