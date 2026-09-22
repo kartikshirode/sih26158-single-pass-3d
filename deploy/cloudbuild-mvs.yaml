@@ -5,8 +5,8 @@ steps:
       - -f
       - mvs_job/Dockerfile
       - -t
-      - asia-south1-docker.pkg.dev/$PROJECT_ID/sih26158/mvs:v5
+      - asia-south1-docker.pkg.dev/$PROJECT_ID/sih26158/mvs:v7
       - .
 images:
-  - asia-south1-docker.pkg.dev/$PROJECT_ID/sih26158/mvs:v5
+  - asia-south1-docker.pkg.dev/$PROJECT_ID/sih26158/mvs:v7
 timeout: 2400s

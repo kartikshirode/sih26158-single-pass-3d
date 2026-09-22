@@ -1,0 +1,71 @@
+{
+  "n_images": 45,
+  "full_frame": [
+    1920,
+    1080
+  ],
+  "model_grid": [
+    518,
+    294
+  ],
+  "intrinsics_fit_residual_px": 0.2214,
+  "sparse_after_bundle_adjustment": {
+    "Cameras": "1",
+    "Images": "45",
+    "Registered images": "45",
+    "Points": "76922",
+    "Observations": "334081",
+    "Mean track length": "4.343114",
+    "Mean observations per image": "7424.022222",
+    "Mean reprojection error": "0.364147px"
+  },
+  "texture_only": "mvs/kolu_tex_in/decimated_300k.ply",
+  "stages": [
+    {
+      "stage": "feature_extractor",
+      "seconds": 36.6,
+      "rc": 0
+    },
+    {
+      "stage": "exhaustive_matcher",
+      "seconds": 372.9,
+      "rc": 0
+    },
+    {
+      "stage": "point_triangulator",
+      "seconds": 27.5,
+      "rc": 0
+    },
+    {
+      "stage": "model_analyzer (after triangulation)",
+      "seconds": 0.3,
+      "rc": 0
+    },
+    {
+      "stage": "bundle_adjuster",
+      "seconds": 33.5,
+      "rc": 0
+    },
+    {
+      "stage": "model_analyzer (after bundle adjustment)",
+      "seconds": 0.3,
+      "rc": 0
+    },
+    {
+      "stage": "image_undistorter",
+      "seconds": 3.8,
+      "rc": 0
+    },
+    {
+      "stage": "InterfaceCOLMAP",
+      "seconds": 0.5,
+      "rc": 0
+    },
+    {
+      "stage": "TextureMesh",
+      "seconds": 63.1,
+      "rc": 0
+    }
+  ],
+  "total_seconds": 553.3
+}

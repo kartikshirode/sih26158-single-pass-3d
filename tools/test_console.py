@@ -190,8 +190,27 @@ def main() -> int:
             ck("the workspace renders geometry", pg.evaluate("!!active"))
             ck("rendering never sees the calibration factor",
                abs(pg.evaluate("active.uScale * active.viewScale / "
-                               "(window.__MESH['kolu_mvs'].scale * 32767 / 32000)")
+                               "(window.__MESH[active.key].scale * 32767 / 32000)")
                    - 1) < 1e-9)
+            # The textured model is the first Kolu model: its atlas must arrive over
+            # the same path as the mesh, and the page must say so in the HUD.
+            if pg.evaluate("!!active.vaoT"):
+                pg.wait_for_function("active.texReady || active.texError", timeout=60000)
+                ck("the textured model's atlas loads",
+                   pg.evaluate("active.texReady") and not pg.evaluate("active.texError"),
+                   pg.evaluate("document.querySelector('#hud').textContent"))
+                pg.wait_for_timeout(400)
+                shot(pg, "3b-textured.png")
+                ck("the HUD reports the texture",
+                   "textured" in pg.evaluate("document.querySelector('#hud').textContent"))
+                # Switch to the per-vertex rebuild so the measurement checks below run
+                # on the same model they always did.
+                pg.click("[data-m='1']")
+                pg.wait_for_function("window.active && window.active.key === 'kolu_mvs'",
+                                     timeout=90000)
+                pg.wait_for_timeout(800)
+            else:
+                skip("the textured model's atlas loads", "no textured model on the page")
             shot(pg, "3-model.png")
 
             box = pg.locator("#gl").bounding_box()

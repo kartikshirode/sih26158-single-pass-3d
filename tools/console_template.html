@@ -338,6 +338,7 @@ var WS = null, cv, gl, pM, pP, uM, uP, curMVP = null, curW = 1, curH = 1;
 var az = .55, el3 = .80, dist = 2.6, panx = 0, pany = 0, target = null, raf = 0;
 var PRESETS = {plan:[0,1.5605,2.30], oblique:[.55,.80,2.60], low:[1.25,.26,2.50]};
 var showMesh = true, showPts = false, cache = {}, active = null, wsRun = null;
+var pT = null, uT = null;
 var measuring = false, marks = [], tipTimer = null, curModel = 0;
 
 function detachWorkspace(){
@@ -440,6 +441,17 @@ function initGL(){
     "  gl_PointSize=uSize; }"].join("\n");
   var FS_P = ["#version 300 es","precision highp float; in vec3 vCol; out vec4 o;",
     "void main(){ o=vec4(vCol,1.0); }"].join("\n");
+  /* The atlas already carries the photographs' own shading, so the relief term is
+     kept mild: enough to read a roof edge, not enough to darken a facade twice. */
+  var VS_T = [HEAD,
+    "in vec3 aPos; in vec2 aUV; in vec3 aNrm; uniform mat4 uMVP;",
+    "out vec2 vUV; out vec3 vN;",
+    "void main(){ vUV=aUV; vN=aNrm;",
+    "  gl_Position=uMVP*vec4(aPos*uScale-uOffset,1.0); }"].join("\n");
+  var FS_T = ["#version 300 es","precision highp float;",
+    "in vec2 vUV; in vec3 vN; out vec4 o; uniform vec3 uLight; uniform sampler2D uTex;",
+    "void main(){ float d=0.72+0.28*abs(dot(normalize(vN),normalize(uLight)));",
+    "  o=vec4(texture(uTex,vUV).rgb*d,1.0); }"].join("\n");
   function prog(vs, fs){
     var c = function(t, s){ var o = gl.createShader(t); gl.shaderSource(o, s);
       gl.compileShader(o);
@@ -450,7 +462,10 @@ function initGL(){
     gl.attachShader(p, c(gl.FRAGMENT_SHADER, fs));
     gl.linkProgram(p); return p;
   }
-  pM = prog(VS_M, FS_M); pP = prog(VS_P, FS_P);
+  pM = prog(VS_M, FS_M); pP = prog(VS_P, FS_P); pT = prog(VS_T, FS_T);
+  uT = {mvp:gl.getUniformLocation(pT,"uMVP"), light:gl.getUniformLocation(pT,"uLight"),
+        scale:gl.getUniformLocation(pT,"uScale"), off:gl.getUniformLocation(pT,"uOffset"),
+        tex:gl.getUniformLocation(pT,"uTex")};
   uM = {mvp:gl.getUniformLocation(pM,"uMVP"), light:gl.getUniformLocation(pM,"uLight"),
         scale:gl.getUniformLocation(pM,"uScale"), off:gl.getUniformLocation(pM,"uOffset")};
   uP = {mvp:gl.getUniformLocation(pP,"uMVP"), size:gl.getUniformLocation(pP,"uSize"),
@@ -460,8 +475,40 @@ function initGL(){
 var un = function(s){ var b = atob(s), u = new Uint8Array(b.length);
   for(var i=0;i<b.length;i++) u[i] = b.charCodeAt(i); return u; };
 
+function loadTexture(url, key){
+  var t = gl.createTexture();
+  gl.bindTexture(gl.TEXTURE_2D, t);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, 1, 1, 0, gl.RGB, gl.UNSIGNED_BYTE,
+                new Uint8Array([128,128,128]));
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+  var img = new Image();
+  img.onload = function(){
+    var max = gl.getParameter(gl.MAX_TEXTURE_SIZE), src = img;
+    if(img.width > max || img.height > max){
+      /* an 8192-wide atlas on a GPU capped at 4096: halve it here rather than fail */
+      var f = Math.min(max / img.width, max / img.height);
+      var c = document.createElement("canvas");
+      c.width = Math.floor(img.width * f); c.height = Math.floor(img.height * f);
+      c.getContext("2d").drawImage(img, 0, 0, c.width, c.height); src = c;
+    }
+    gl.bindTexture(gl.TEXTURE_2D, t);
+    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, gl.RGB, gl.UNSIGNED_BYTE, src);
+    gl.generateMipmap(gl.TEXTURE_2D);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+    if(cache[key]) cache[key].texReady = true;
+  };
+  img.onerror = function(){ if(cache[key]) cache[key].texError = true; };
+  img.src = url;
+  return t;
+}
+
 function buildMesh(key, D, viewScale){
-  var VP = new Int16Array(un(D.vpos).buffer), VC = un(D.vcol);
+  var VP = new Int16Array(un(D.vpos).buffer), VC = D.vcol ? un(D.vcol) : null;
+  var VU = D.uv ? new Uint16Array(un(D.uv).buffer) : null;
   var IX = new Uint32Array(un(D.idx).buffer);
   var PP = new Int16Array(un(D.ppos).buffer), PC = un(D.pcol);
   var NR = new Float32Array(VP.length);
@@ -480,24 +527,28 @@ function buildMesh(key, D, viewScale){
   }
   var buf = function(d, tg){ var t = tg || gl.ARRAY_BUFFER, b = gl.createBuffer();
     gl.bindBuffer(t,b); gl.bufferData(t,d,gl.STATIC_DRAW); return b; };
-  var bVP=buf(VP), bVC=buf(VC), bNR=buf(NR), bPP=buf(PP), bPC=buf(PC);
+  var bVP=buf(VP), bVC=VC?buf(VC):null, bVU=VU?buf(VU):null, bNR=buf(NR);
+  var bPP=buf(PP), bPC=buf(PC);
   var bIX=buf(IX, gl.ELEMENT_ARRAY_BUFFER);
-  var vaoM=gl.createVertexArray(), vaoP=gl.createVertexArray();
-  var bind = function(vao,p,pos,col,nrm){
-    gl.bindVertexArray(vao);
-    var at=function(n,b,sz,ty,nm){ var l=gl.getAttribLocation(p,n); if(l<0)return;
-      gl.bindBuffer(gl.ARRAY_BUFFER,b); gl.enableVertexAttribArray(l);
-      gl.vertexAttribPointer(l,sz,ty,nm,0,0); };
-    at("aPos",pos,3,gl.SHORT,true); at("aCol",col,3,gl.UNSIGNED_BYTE,true);
-    if(nrm) at("aNrm",nrm,3,gl.FLOAT,false);
-    gl.bindVertexArray(null);
-  };
-  bind(vaoM,pM,bVP,bVC,bNR); bind(vaoP,pP,bPP,bPC,null);
+  var at=function(p,n,b,sz,ty,nm){ var l=gl.getAttribLocation(p,n); if(l<0||!b)return;
+    gl.bindBuffer(gl.ARRAY_BUFFER,b); gl.enableVertexAttribArray(l);
+    gl.vertexAttribPointer(l,sz,ty,nm,0,0); };
+  var vao=function(p,pos,col,uv,nrm){ var v=gl.createVertexArray(); gl.bindVertexArray(v);
+    at(p,"aPos",pos,3,gl.SHORT,true); at(p,"aCol",col,3,gl.UNSIGNED_BYTE,true);
+    at(p,"aUV",uv,2,gl.UNSIGNED_SHORT,true); at(p,"aNrm",nrm,3,gl.FLOAT,false);
+    gl.bindVertexArray(null); return v; };
+  /* a textured pack has (u, v) per corner and no vertex colour; a per-vertex pack
+     the reverse. Either way the points VAO is the same. */
+  var vaoM = VC ? vao(pM,bVP,bVC,null,bNR) : null;
+  var vaoT = VU ? vao(pT,bVP,null,bVU,bNR) : null;
+  var vaoP = vao(pP,bPP,bPC,null,null);
+  var tex = VU ? loadTexture(DATA.meshDir + D.tex, key) : null;
   /* model units per raw shader unit, divided by the run's shared view scale so the
      A/B toggle compares geometry and not normalisation. The calibration factor is
      deliberately absent here: it belongs to measurement, never to rendering. */
   var mpu = D.scale * 32767 / 32000;
-  cache[key] = {vaoM:vaoM, vaoP:vaoP, bIX:bIX, nIdx:IX.length, PP:PP,
+  cache[key] = {key:key, vaoM:vaoM, vaoT:vaoT, tex:tex, texReady:false,
+                vaoP:vaoP, bIX:bIX, nIdx:IX.length, PP:PP,
                 nt:D.nt, np:D.np, uScale: mpu / viewScale,
                 uOff: D.centroid.map(function(c){ return c / viewScale; }),
                 viewScale: viewScale};
@@ -573,12 +624,15 @@ function draw(){
 
   var A = active;
   if(A){
-    if(showMesh){
-      gl.useProgram(pM); gl.bindVertexArray(A.vaoM);
-      gl.uniformMatrix4fv(uM.mvp,false,mvp);
-      gl.uniform3f(uM.light,0.36,0.78,0.51);
-      gl.uniform1f(uM.scale, A.uScale);
-      gl.uniform3f(uM.off, A.uOff[0], A.uOff[1], A.uOff[2]);
+    if(showMesh && (A.vaoT || A.vaoM)){
+      var T = !!A.vaoT, U = T ? uT : uM;
+      gl.useProgram(T ? pT : pM); gl.bindVertexArray(T ? A.vaoT : A.vaoM);
+      gl.uniformMatrix4fv(U.mvp,false,mvp);
+      gl.uniform3f(U.light,0.36,0.78,0.51);
+      gl.uniform1f(U.scale, A.uScale);
+      gl.uniform3f(U.off, A.uOff[0], A.uOff[1], A.uOff[2]);
+      if(T){ gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, A.tex);
+             gl.uniform1i(U.tex, 0); }
       gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, A.bIX);
       gl.drawElements(gl.TRIANGLES, A.nIdx, gl.UNSIGNED_INT, 0);
     }
@@ -593,7 +647,9 @@ function draw(){
     gl.bindVertexArray(null);
     WS.querySelector("#hud").textContent =
       "az " + (az*57.2958).toFixed(0) + "  el " + (el3*57.2958).toFixed(0) + "   " +
-      (showMesh ? A.nt.toLocaleString("en-US") + " tri" : "") +
+      (showMesh ? A.nt.toLocaleString("en-US") + " tri" +
+        (A.vaoT ? (A.texReady ? "  textured" : A.texError ? "  atlas failed to load"
+                                                            : "  loading atlas") : "") : "") +
       (showMesh && showPts ? "  +  " : "") +
       (showPts ? A.np.toLocaleString("en-US") + " pts" : "");
   }

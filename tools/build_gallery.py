@@ -43,13 +43,21 @@ def jload(p):
 
 def packed(run):
     """Lift the already-shipped geometry out of a built viewer. Byte-for-byte what
-    that run delivered, and it avoids needing open3d to re-pack."""
-    with io.open(os.path.join(ROOT, "out", run, "viewer.html"), encoding="utf-8") as f:
-        h = f.read()
-    m = re.search(r"const D = (\{.*?\}), S = \{", h, re.S)
-    if not m:
-        sys.exit(f"no packed mesh in out/{run}/viewer.html")
-    D = json.loads(m.group(1))
+    that run delivered, and it avoids needing open3d to re-pack.
+
+    A textured run has no viewer.html; tools/pack_textured.py leaves packed.json in
+    the same layout plus `uv`, `tex` and `texSize`."""
+    pj = os.path.join(ROOT, "out", run, "packed.json")
+    if os.path.exists(pj):
+        with io.open(pj, encoding="utf-8") as f:
+            D = json.load(f)
+    else:
+        with io.open(os.path.join(ROOT, "out", run, "viewer.html"), encoding="utf-8") as f:
+            h = f.read()
+        m = re.search(r"const D = (\{.*?\}), S = \{", h, re.S)
+        if not m:
+            sys.exit(f"no packed mesh in out/{run}/viewer.html")
+        D = json.loads(m.group(1))
     pts = np.frombuffer(base64.b64decode(D["ppos"]), dtype=np.int16).reshape(-1, 3)
     mpu = D["scale"] * 32767 / 32000                     # metres per shader unit
     metres = pts.astype(np.float64) / 32767.0 * mpu
@@ -117,11 +125,17 @@ def main():
     # Only Kolu. The Village runs came from a third-party clip whose rights are not
     # cleared, and a reconstruction is derived work, so neither the footage nor its
     # geometry may be published (`docs/16` L-8, finding F-4).
-    RUNS = {"kolu_base": "kolu3d", "kolu_mvs": "kolumvs3d"}
+    # kolu_tex is packed for the console (the gallery page keeps its two-way A/B);
+    # its atlas travels beside the .js under the name the pack recorded.
+    RUNS = {"kolu_base": "kolu3d", "kolu_mvs": "kolumvs3d", "kolu_tex": "kolutex3d"}
     halves, written = {}, 0
     for key, run in RUNS.items():
         D, half = packed(run)
         halves[key] = half
+        if D.get("tex"):
+            import shutil
+            shutil.copyfile(os.path.join(ROOT, "out", run, "atlas.jpg"),
+                            os.path.join(OUT, "mesh", D["tex"]))
         js = (f"window.__MESH=window.__MESH||{{}};\n"
               f"window.__MESH[{json.dumps(key)}]={json.dumps(D)};\n")
         p = os.path.join(OUT, "mesh", f"{key}.js")
