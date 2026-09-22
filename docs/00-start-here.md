@@ -597,6 +597,7 @@ python tesseract.py report out/runs/kolu            # the QA report
 
 python src/tesseract/test_tesseract.py              # 46 checks
 python src/eval3d/test_metrics.py                   # 21 checks
+python src/ingest/test_srt.py                       # 65 checks, real DJI sidecars and fuzz
 python tools/build_all.py                           # the console and three pages, plus audits
 ```
 

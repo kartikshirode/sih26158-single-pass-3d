@@ -20,6 +20,14 @@ confirm them with the SPOC.**
 (`docs/14` §4). What remains for M0 is B-05 (footage rights) and B-07 (team fields,
 deadline confirmation, submission).
 
+> **Status 2026-09-22.** B-05 is closed. The six-role RACI in §3 and the milestone owners
+> below describe a team that does not exist: one person is doing this alongside a semester,
+> the Baramati cluster is unreachable (`docs/03` §3.1) and no aircraft is available. The
+> operative sequence is the approved build plan (Phase 0 submission; Phase 1 texture,
+> telemetry, robustness; Phase 2 UseGeo accuracy and rented-GPU speed; Phase 3
+> progressive output and dynamic objects; Phase 4 finale drills). Read the tables below
+> as the backlog, not as an org chart.
+
 ---
 
 ## 2. Milestones

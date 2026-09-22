@@ -83,7 +83,10 @@ def main():
 
     # Mesh: prefer the textured one, then the refined, then the plain reconstruction.
     mesh = None
-    for cand in ("scene_dense_mesh_refine_texture.ply", "scene_dense_mesh_texture.ply",
+    # TextureMesh exports OBJ since the EXP-20 fix; the .ply names are what the
+    # first three runs would have produced had TextureMesh ever run.
+    for cand in ("scene_dense_mesh_refine_texture.obj", "scene_dense_mesh_texture.obj",
+                 "scene_dense_mesh_refine_texture.ply", "scene_dense_mesh_texture.ply",
                  "scene_dense_mesh_refine.ply", "scene_dense_mesh.ply"):
         if os.path.exists(os.path.join(RAW, cand)):
             mesh = os.path.join(RAW, cand)

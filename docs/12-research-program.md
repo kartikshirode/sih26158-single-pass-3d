@@ -95,7 +95,7 @@ the embedded `djmd` track is the fallback (`research/02-ingestion-export-finding
 
 | ID | Question | Method | Pass | Kill | Status |
 |---|---|---|---|---|---|
-| **EXP-20** | Why does `TextureMesh` fail in 0.2 s? | Run it by hand on `scene_dense_mesh.mvs` with verbose logs; check the image paths the `.mvs` references after undistortion | A textured OBJ on Kolu | Needs a source build → schedule, keep per-vertex colour | **Next** |
+| **EXP-20** | Why does `TextureMesh` fail in 0.2 s? | Recovered from Cloud Logging: `unable to open file '/tmp/mvs/scene_dense_mesh.mvs'`. At 2.4.0 `ReconstructMesh` skips its `.mvs` for an interface-format input by design and writes only the `.ply`; `run_mvs.py` handed `TextureMesh` the file that was never written. Fix: keep `scene_dense.mvs` as the scene and pass the mesh with `--mesh-file` | A textured OBJ on Kolu | — | **Diagnosed 2026-09-22; re-run pending** |
 | **EXP-26** | Can coverage be recovered without losing detail? | `--number-views-fuse 2` and `RefineMesh` on Village (83% coverage today) | ≥ 95% of baseline cells, ≤ 10% worse residual at 6–25 cm | Residual > 20% worse | Queued |
 
 ### R5 — Completeness
@@ -110,7 +110,7 @@ the embedded `djmd` track is the fallback (`research/02-ingestion-export-finding
 
 | ID | Question | Method | Pass | Kill | Status |
 |---|---|---|---|---|---|
-| **EXP-23** | Does any telemetry schema crash S1? | Fuzz: DJI unit flips (`fnum: 280` vs `2.8`, `focal_len: 240` vs `24.00`), `longtitude`, missing `rel_alt`, CRLF/BOM, no `-->` line, truncated file; plus ≥ 4 real-format fixtures | 0 crashes; every file → parsed or `ING-SCHEMA` | — | **Next** (no data needed) |
+| **EXP-23** | Does any telemetry schema crash S1? | `src/ingest/test_srt.py`: 20 real DJI files (MIT, `fixtures/dji_srt`) across five format families, plus 21 fuzz deformations (unit flips, `longtitude`, missing `rel_alt`, CRLF/BOM, UTF-16, binary, truncation, no `-->`, off-planet, NaN, 1 MB line). Findings in `research/04-dji-srt-formats.md` | 0 crashes; every file → parsed or empty | — | **Done 2026-09-22**: 65 checks pass. Found two silent bugs: the longitude pattern only matched the Mavic 2 misspelling (every modern file parsed to nothing), and keyframe lookup was positional (wrong by 30x on 1 Hz files) |
 | **EXP-06** | Does masking dynamic objects measurably help? | Ablate the geometric-consistency layer on a clip with traffic | Moving vehicles absent from the dense cloud | — | Queued |
 | **T-ROB-02** | Blur and compression on amateur footage | Real handheld-quality clip; heavy re-encode | Blur gate rejects; accuracy holds | — | Blocked on data |
 

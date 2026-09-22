@@ -39,6 +39,7 @@ scale status (`docs/09` §2). "cm" on a model-unit measurement is a defect.
 |---|---|---|
 | Harness unit tests | `python src/eval3d/test_metrics.py` | **21 PASS / 0 FAIL** (2026-09-16) |
 | Window-fusion test | `python src/pipeline/test_window_fuse.py` | **T-SCALE-01 PASS** |
+| Telemetry: 20 real DJI files across five families, plus 21 fuzz deformations (EXP-23) | `python src/ingest/test_srt.py` | **65 PASS / 0 FAIL** (2026-09-22). Found two silent bugs on the way in: `research/04` |
 | Pipeline: contracts, scale, orchestration, end to end | `python src/tesseract/test_tesseract.py` | **46 PASS / 0 FAIL** (2026-09-21). Its T5 section (8 checks against the real Kolu and village runs) is **local-only**: `out/` is gitignored, so on a clean checkout and in CI it reports SKIP with the command that would enable it |
 | Console behaviour in a real browser | `python tools/test_console.py` | **19 PASS / 2 SKIP** (2026-09-22). Drives the committed `demo/console/`; refuses to run if the template or stylesheet moved without a rebuild. The two skips are the unvalidated-scale checks, which lost their subject when B-05 removed the Village runs; each prints the reason and the work that restores it (B-33) |
 | Onboarding figures still match their sources | `python tools/check_onboarding.py` | **49 figures across 8 sources** |
@@ -68,6 +69,7 @@ jobs:
       - run: python -m compileall -q src tools
       - run: python src/eval3d/test_metrics.py
       - run: python src/pipeline/test_window_fuse.py
+      - run: python src/ingest/test_srt.py
 ```
 
 `build_all.py` needs the `out/` artefacts, which are gitignored. It stays a local pre-deploy

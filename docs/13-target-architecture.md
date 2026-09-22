@@ -17,7 +17,7 @@ and dense keyframe sets**, and a **GPU dense path** that is not a hard dependenc
 | Stage | Designed (`docs/02`) | Built | Measured on real footage |
 |---|---|---|---|
 | S0 Screen | — (added later) | ✅ `src/ingest/screen.py` | ✅ 4 clips (T-ROB-08) |
-| S1 Ingest | decode, telemetry, keyframes, intrinsics | ✅ decode, crops, shots, keyframes; ⚠ SRT parsed but not aligned (GAP C-3) | ✅ Kolu, Village, Nicosia |
+| S1 Ingest | decode, telemetry, keyframes, intrinsics | ✅ decode, crops, shots, keyframes; ⚠ SRT parsed and aligned, never fed (GAP C-3: no clip has a sidecar; S5 cannot read it) | ✅ Kolu, Village, Nicosia |
 | S2 Masking | semantic + geometric | ⚠ geometric only, implicitly (MVS ≥ 3-view consistency) | ✗ |
 | S3 Pose + prior | MapAnything, chunked, with priors | ✅ single window, **no priors** (GAP C-5); ✅ windowed stitching (synthetic) | ✅ 45 views, CPU and T4 |
 | S3b BA | — (added by ADR-006) | ✅ COLMAP, CPU | ✅ 0.366 px |

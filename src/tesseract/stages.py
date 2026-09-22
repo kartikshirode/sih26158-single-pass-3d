@@ -141,11 +141,15 @@ class Ingest(BaseStage):
                        "telemetry": r.telemetry}, f, indent=2)
         art = Artefact(rel, "keyframe-set", frame=Frame.F0_SOURCE_PX).stamp(ctx.workdir)
 
-        codes = [] if r.telemetry else [Code.ING_NOGNSS]
+        # One dict per keyframe, empty where nothing aligned: a list of empties is
+        # not telemetry, and bool() of it would say it was.
+        has_tel = any(r.telemetry)
+        codes = [] if has_tel else [Code.ING_NOGNSS]
         return StageResult(self.id, 0.0, outputs={"keyframes": art}, codes=codes,
                            facts={"frames_in": r.stats.get("frames_decoded"),
                                   "keyframes": r.stats.get("keyframes_selected"),
-                                  "has_telemetry": bool(r.telemetry)})
+                                  "srt_records": r.stats.get("srt_records", 0),
+                                  "has_telemetry": has_tel})
 
 
 # ------------------------------------------------------------------ S2 · planner
@@ -349,6 +353,16 @@ class Georeference(BaseStage):
             return StageResult(self.id, 0.0, skipped=True, codes=[Code.ING_NOGNSS],
                                facts={"georeferenced": False, "frame": Frame.F5_LLF},
                                note="no telemetry: the result stays in a local frame")
+        if not hasattr(ctx.source, "world"):
+            # S1 now parses and aligns a real sidecar (EXP-23), but this stage still
+            # reads GNSS through the synthetic source's world(). Until the video path
+            # is wired (docs/09 GAP C-3, plan Phase 1.2) say so rather than crash.
+            return StageResult(self.id, 0.0, skipped=True,
+                               codes=[Code.STAGE_UNAVAILABLE],
+                               facts={"georeferenced": False, "frame": Frame.F5_LLF,
+                                      "telemetry_unwired": True},
+                               note="telemetry parsed but not yet consumed on the video "
+                                    "path (GAP C-3): the result stays in a local frame")
         if ctx.config.get("dof") == 7:
             raise StageError(Code.REF_7DOF,
                              "a 7-DOF fit on a single pass is refused (EXP-09)", fatal=True)

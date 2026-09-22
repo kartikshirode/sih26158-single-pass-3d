@@ -93,7 +93,8 @@ at 1. There is no human reviewer to appeal to.
 | Rung | Resource | Status | Use for |
 |---|---|---|---|
 | 1 | **GCP L4 / H100, `asia-south1` (Mumbai) ONLY** | **BLOCKED** — quota 0 | Production target; timed benchmark of record |
-| 2 | **Baramati HPC cluster** (VPKBIET) | **AVAILABLE NOW** | All Phase B development |
+| 2 | **Baramati HPC cluster** (VPKBIET) | **NOT REACHABLE** off the campus network (re-checked 2026-09-22; `Desktop\hpc-cluster\CONTEXT.md`) | Nothing planned on it. Kept as a rung in case access changes |
+| 2b | Rented cards (RunPod, Vast.ai, Lambda), priced in `research/03` §rented compute | Available, $0.34 to $2.06 per GPU-hour | Benchmarks on non-Indian public footage only (ADR-010): EXP-16, EXP-25, the UseGeo accuracy run. **Never** supplied NTRO data |
 | 3 | Colab / Kaggle free GPU | Available | Model smoke tests only — **not** for ≤1 m deliverable data (R-NF8) |
 | 4 | This laptop (Intel Arc, no CUDA) | Available | All CPU work — harness, ingestion, geo, export |
 
