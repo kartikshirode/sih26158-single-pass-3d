@@ -75,7 +75,7 @@ Priorities: **P0** blocks the submission · **P1** before M1 · **P2** M2–M3 �
 | ~~B-02~~ | P0 | Kolu calibration applied to viewer measurement, labels, gallery tables, the Q&A and all seven exported files — **done 2026-09-17** | `docs/08` S1–S3, ledger 16–22 | Geo/ML | M |
 | ~~B-03~~ | P0 | Decide the correction to ship — **decided 2026-09-17**: the measured ×5.54, not ×2. The ×2 came from a road-to-bridge reading that the 5.0 m clearance norm shows ×2 cannot fix | `docs/08` §3.6, §7 | Lead + requester | decision |
 | ~~B-04~~ | P0 | `demo/README.md`: remove the circular DSM "corroboration" and the 24.5 m figure — **done 2026-09-16** | `docs/14` item 17 | Product | S |
-| **B-05** | P0 | Village footage on the public gallery: obtain permission or remove | `docs/16` F-4 | Product | S |
+| **B-05** | P0 | Village footage: obtain permission or remove. **Widened 2026-09-22** — the gallery serves `village.mp4` and `village_full.mp4`, and `/console/` now names `yt_short.mp4` on three run pages and publishes geometry derived from it on two. Four public surfaces, not one | `docs/16` F-4, L-8 | Product | S |
 | **B-06** | P0 | Commit `demo/` and the design-system tools | `docs/16` F-3 | Platform | S |
 | **B-07** | P0 | Confirm the deadline with the SPOC; set `TEAM_NAME` / `TEAM_ID`; submit | `docs/07` §5 | Lead | S |
 | B-08 | P1 | Persist `metric_scaling_factor` per view (C-4); pass priors (C-5); run EXP-17 | `docs/09`, `docs/12` | Geo/ML | M |
@@ -100,6 +100,8 @@ Priorities: **P0** blocks the submission · **P1** before M1 · **P2** M2–M3 �
 | B-27 | P3 | EXP-22, EXP-27: observable completeness and inferred-geometry labels | `docs/12` R5 | Geospatial | L |
 | B-28 | P3 | EXP-02, EXP-18: model track | `docs/12` R7 | Geo/ML | M |
 | B-29 | P3 | COPC via Potree; 3D Tiles | `docs/11` | Product | M |
+| **B-31** | P1 | **Progressive output.** The PS Background's stated benefit is *"near real-time situational awareness"* and Key Challenge (vi) is *"Real-time or near-real-time processing requirements"*. The pipeline is batch: nothing exists until S6. The ladder already computes L3 (fused feed-forward point maps) as a degradation level, so emitting L3 as a preview and refining upward to L0 is orchestrator scheduling, not new geometry. Show it, do not claim it as a capability until G3 (`docs/12` §1.1) | PS p.37 Background, challenge (vi) | Platform | M |
+| **B-32** | P1 | **Dynamic objects, explicitly.** Key Challenge (iv) names vehicles, humans and animals. Today the only defence is implicit: MVS geometric consistency across 3+ views (`docs/13` §1, S2 "geometric only"), and it has never been measured. Run EXP-06 to measure what the implicit path removes on a clip with traffic, then decide whether an explicit mask is needed. Kolu has a car on the highway, so the test data exists | PS p.37 challenge (iv), `docs/12` EXP-06 | Geo/ML | M |
 | **B-30** | P1 | **Warn on picks near unobserved regions.** A click aimed at a surface the drone never saw (the underpass ceiling) silently lands on a different one. Flag picks whose nearest point is far from the cursor ray, or that sit on the rim of a hole | `docs/08` §3.6 | Product | M |
 
 ### 4.1 Definition of done
@@ -149,6 +151,7 @@ Consolidates `docs/03` §6 with what has been learned since. P = probability, I 
 | R14 | Environment drift (3.13 default, open3d on 3.11) | High | Low | B-13 | Platform |
 | R15 | Runtime network egress reveals the area of interest | Med | High | B-11 | Platform |
 | R16 | The PS freezes at 500 ideas before submission | Low | High | Submit early (`docs/07` §1) | Lead |
+| **R17** | **Three of the eight named Key Challenges have no measured answer**: dynamic objects (iv), occluded surfaces (vii), and texture, which `TextureMesh` fails to produce so Description (v) "textured 3D meshes" is unmet. A judge reading the PS aloud will reach each one | Med | Med | B-32, B-27, B-22 after the submission; state each plainly in the deck rather than letting it be found | Lead |
 
 ---
 

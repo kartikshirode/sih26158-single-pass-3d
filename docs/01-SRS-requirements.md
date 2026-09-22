@@ -5,9 +5,19 @@
 |---|---|
 | **Problem statement** | SIH26158 (PS #17, pp. 37–39 of the NTRO problem-statement document) |
 | **Organisation** | National Technical Research Organisation (NTRO) |
-| **Category / Theme** | Software / Drone–Robotics |
-| **Document version** | 1.0 — 2026-09-04 |
+| **Problem creator** | Sarim Moin |
+| **Listed department** | Ministry of Education's Innovation Cell (MIC) |
+| **Category / Theme** | Software / Drone–Robotics; the portal's technology bucket is "Robotics and Drones" |
+| **Document version** | 1.1 — 2026-09-22 (1.0: 2026-09-04) |
 | **Status** | Baselined against the official PDF. No requirement here is inferred. |
+
+> **PDF re-verified 2026-09-22** by rendering `docs/SIH26158.pdf` (three pages, no text
+> layer, page 37–39 of 53). The Desired Output and Evaluation Criteria tables on p.38 read
+> exactly as §4.1 and §5 record them, and p.39 confirms *"Dataset Link: Will be provided real
+> time"* and an empty video link. The portal listing was re-read the same day and still carries
+> the placeholder *"Add 'Desired Output' and 'Evaluation Criteria' table here"*, so §1.1 stands:
+> the numbers exist only in the PDF. Three fields above are new from the portal listing; nothing
+> else moved.
 
 ---
 
@@ -152,8 +162,27 @@ Traced to PDF pp. 37–38 Key Challenges (i)–(viii). Each is restated as a tes
 | **R-C5** | GPS inaccuracies and sensor noise | Robust to consumer-GNSS noise and outliers; must not let a single bad fix warp the model | T-ACC-03 |
 | **R-C6** | Real-time / near-real-time | Satisfy R-O2; report progress | T-PERF-01/02 |
 | **R-C7** | Reconstruction of occluded surfaces | Close unobserved surfaces by bounded inference, **explicitly labelled as inferred** | T-COMP-02 |
-| **R-C8** | Metric accuracy without extensive GCPs | Achieve R-O3 using GPS/flight metadata only, **zero GCPs** | T-ACC-01 |
+| **R-C8** | Metric accuracy without extensive GCPs | Satisfy both readings of "extensive" — see §6.1. No GCP survey either way | T-ACC-01 |
 | **R-C9** | **Input admissibility** | Measure whether a clip is reconstructable *before* spending inference on it, and say why when it is not: horizon in frame, sky fraction, shot continuity, burned-in overlay | T-ROB-08 |
+
+### 6.1 R-C8 — "without extensive GCPs" reads two ways, and the system satisfies both
+
+**CORRECTED 2026-09-22.** This row previously read *"Achieve R-O3 using GPS/flight metadata
+only, **zero GCPs**"*. That hardened the PS's own wording. The PDF says *"Maintaining metric
+accuracy without **extensive** Ground Control Points (GCPs)"*, and "extensive" is doing work.
+
+Two defensible readings, and the system covers each:
+
+| Reading | What it demands | What the system does |
+|---|---|---|
+| Strict: no control of any kind | Scale and position from telemetry alone | The 5-DOF fit against GNSS, with the honest accuracy it buys: ~4 m on consumer GNSS, 0.097 m with RTK (EXP-05). No GCPs |
+| Literal: no GCP *survey*, a small number is allowed | Not the marked-target, surveyed-network workflow the incumbents assume | The scale service's known-object tier: one published or measured length, entered once, recorded with its evidence (`docs/08` §6 S1, `tesseract calibrate`). One length is not an extensive GCP network |
+
+Neither reading requires laying and surveying control targets, which is the cost the challenge
+is about. The distinction matters because `docs/08` found the model's own metric scale 5.3–5.8×
+wrong on Kolu, so the known-object tier is not a convenience — it is how a clip without GNSS
+gets a trustworthy metre at all. Under the strict reading that clip stays `unvalidated` and
+prints model units.
 
 > **R-C7 scope bound (deliberate, and stated up front).** Generative completion of unseen 3D
 > surfaces is an open research problem and cannot be done reliably inside the R-O2 time budget.
