@@ -43,11 +43,13 @@ Slide 6 says "Each component is an extension of published works: VGGT, MapAnythi
 MASt3R-SLAM, 2D Gaussian Splatting", which reads as the stack we build on, and a defence
 evaluator who opens the VGGT licence finds the military exclusion in its first clause.
 
-Suggested text: "We build only on licence-clean components: MapAnything, SAM 2 and gsplat
-(Apache-2.0; gsplat implements 2D Gaussian splatting), COLMAP (BSD) and OpenMVS (AGPL-3.0,
-run unmodified as a separate program). VGGT and MASt3R-SLAM are cited as prior art; their
-licences exclude military or commercial use." Leave the streaming SLAM on slide 5 unnamed
-until one is chosen that passes the same check.
+Suggested text: "We build on licence-clean components: MapAnything (Apache-2.0), COLMAP
+(BSD) and OpenMVS (AGPL-3.0, run unmodified as a separate program) today; SAM 2 and gsplat
+(both Apache-2.0; gsplat implements 2D Gaussian splatting) are the planned choices for
+masking and splats. VGGT and MASt3R-SLAM are cited as prior art; their licences exclude
+military or commercial use." SAM 2 and gsplat are named as planned because neither runs in
+the pipeline yet (item 5). Leave the streaming SLAM on slide 5 unnamed until one is chosen
+that passes the same check.
 
 ### 3. Slides 3 and 4: the caption next to "0 GCPs"
 
@@ -74,9 +76,10 @@ Slide 8's comparison table gives the product "3D during flight: Yes, rough model
 box" in a row against Pix4D, DJI Terra and OpenDroneMap. Slides 3 and 4 list "Live 3D" as one
 of three headline numbers, and slide 2 says "The rough model appears on an edge computer as
 the drone continues to fly". None of it exists: no edge box, no streaming SLAM, no
-progressive output (build plan Phase 3, B-31). The measured full run is 2,078.7 s for 45
-views on 8 vCPU with no GPU (`docs/11`), so "The complete model is ready right after
-landing" is also untimed.
+progressive output (build plan Phase 3, B-31). The measured full run on 8 vCPU with no GPU
+is 2,078.7 s for 45 views without texturing (`docs/11`), and texturing the full mesh added
+1,078 s more (`docs/12` EXP-20), so "The complete model is ready right after landing" is
+also untimed.
 
 Suggested text: table cell "Planned: rough model on an edge box". Slide 2: "Planned: a rough
 model on an edge computer while the drone flies, and the full model after landing (target
@@ -133,11 +136,13 @@ planned. 10 runs except LAZ and 3D Tiles. 3, 4, 5 and 9 are planned.
 | SVAMITVA drone survey in 3.29 lakh villages | PIB, 25 March 2026, PRID 2244931 | Correct |
 | Pix4D 75% / 60% overlap | `docs/11` §1 | Correct |
 | OpenDroneMap takes video with an SRT GPS file | `docs/11` §2, incumbents table | Correct |
+| Pix4D: video "not advised" | Pix4D support, "How to use Videos for Processing" (article 205294735): "For accurate mapping it is not advised to use videos" | Correct |
+| DJI Terra takes video since July 2026 | DJI Terra 5.3.0, released 27 July 2026 (DJI enterprise blog; DroneDJ, 27 July 2026) | Correct, but it is limited to the Mavic 3 Enterprise, Mavic 3 Thermal and Matrice 4 series. "Needs GPS metadata" is not what the sources say; name the supported aircraft instead |
 
 ## Not verified here
 
-Pix4D calling video input "not advised" and PIX4Dreact being 2D only; DJI Terra's 80/70%
-overlap, video input since July 2026, and 3D during flight only on the Phantom 4 RTK;
+PIX4Dreact being 2D only; DJI Terra's 80/70% overlap, and 3D during flight only on the
+Phantom 4 RTK (this cell is a differentiator, so it needs a source most of all);
 OpenDroneMap's "60% nadir plus 70 to 80% oblique cross grid"; 3.5 to 5.7 h for 1,039 images
 (Gbagir et al., Geographies 2023); 38,575 registered drones; VGGT's CVPR 2025 best-paper
 award. None contradicts anything in this repository. Each needs its own source before
