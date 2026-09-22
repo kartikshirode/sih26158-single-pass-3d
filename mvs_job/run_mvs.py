@@ -28,6 +28,15 @@ MA_PREFIX = os.environ.get("MA_PREFIX", "mapanything/ytd_out")
 OUT_PREFIX = os.environ.get("OUT_PREFIX", "mvs/ytd_out")
 RES_LEVEL = os.environ.get("RESOLUTION_LEVEL", "0")     # 0 = full resolution
 REFINE = os.environ.get("REFINE_MESH", "0") == "1"
+# Texture-only mode: a mesh already in this run's frame (a decimated copy of an
+# earlier scene_dense_mesh.ply), textured against the sparse scene. Poses are
+# recomputed (eight minutes), the densifier is not (thirty-five).
+MESH_BLOB = os.environ.get("MESH_BLOB", "")
+# TextureMesh flags. Local seam levelling at 2.4.0 blacked out the interior of every
+# chart on Kolu (83% of face centroids near-black with it on, 0.8% with it off; the
+# global stage is innocent), so it is off unless the caller says otherwise
+# (docs/12 EXP-20, research/run-evidence/kolu_texA_mvs_result.json).
+TEXTURE_ARGS = os.environ.get("TEXTURE_ARGS", "--local-seam-leveling 0").split()
 W = "/tmp/mvs"
 TIMES: list = []
 
@@ -177,6 +186,30 @@ def main():
     sh(["InterfaceCOLMAP", "-i", f"{W}/dense", "-o", f"{W}/scene.mvs",
         "-w", W], "InterfaceCOLMAP")
 
+    if MESH_BLOB:
+        mesh_in = f"{W}/mesh_in.ply"
+        gcs().blob(MESH_BLOB).download_to_filename(mesh_in)
+        print(f"  texture-only: {MESH_BLOB} ({os.path.getsize(mesh_in)/1e6:.1f} MB)", flush=True)
+        # TextureMesh needs cameras and images, which the sparse scene carries; the
+        # dense cloud is not an input to it. Charts follow this mesh's faces, so a
+        # 300k-face mesh gets charts a viewer can filter, where the 1.9M-face mesh
+        # got charts a few texels wide (docs/12 EXP-20, second run).
+        sh(["TextureMesh", f"{W}/scene.mvs", "-m", mesh_in, "-w", W,
+            "-o", f"{W}/scene_mesh_texture.mvs", "--export-type", "obj"]
+           + TEXTURE_ARGS, "TextureMesh")
+        summary = {"n_images": n_img, "full_frame": [w0, h0], "model_grid": [W_, H],
+                   "intrinsics_fit_residual_px": round(resid, 4),
+                   "sparse_after_bundle_adjustment": after, "texture_only": MESH_BLOB,
+                   "stages": TIMES, "total_seconds": round(time.perf_counter() - t_all, 1)}
+        json.dump(summary, open(f"{W}/mvs_result.json", "w"), indent=2)
+        out = {"mvs_result.json": f"{W}/mvs_result.json"}
+        for f in os.listdir(W):
+            if f.startswith("scene_mesh_texture"):
+                out[f] = f"{W}/{f}"
+        push(out)
+        print("\n" + json.dumps(summary, indent=2), flush=True)
+        return
+
     # THE stage this whole rebuild exists for: per-pixel photometric depth at full
     # resolution, with geometric-consistency filtering instead of voxel averaging.
     sh(["DensifyPointCloud", f"{W}/scene.mvs", "-w", W,
@@ -211,7 +244,7 @@ def main():
         # almost nothing reads back. The name keeps finish_mvs.py's candidate list.
         sh(["TextureMesh", scene, "-m", mesh, "-w", W,
             "-o", os.path.splitext(mesh)[0] + "_texture.mvs",
-            "--export-type", "obj"], "TextureMesh", fatal=False)
+            "--export-type", "obj"] + TEXTURE_ARGS, "TextureMesh", fatal=False)
 
     summary = {
         "n_images": n_img, "full_frame": [w0, h0], "model_grid": [W_, H],

@@ -54,6 +54,11 @@ WITHHELD = {
 # and the Model tab says so rather than showing an empty canvas.
 MODELS = {
     "kolu": [
+        ("kolu_tex", "kolutex3d", "Textured",
+         "The MVS mesh decimated to 300k faces, then textured from the keyframes "
+         "(OpenMVS TextureMesh, EXP-20), and aligned into this run's frame. Grey "
+         "faces are ones no keyframe saw. Same geometry as the rebuild; the atlas "
+         "is what changes."),
         ("kolu_mvs", "kolumvs3d", "MVS rebuild",
          "Per-pixel photometric MVS at full keyframe resolution. The feed-forward "
          "model supplied the camera poses and the metric scale, nothing else."),
