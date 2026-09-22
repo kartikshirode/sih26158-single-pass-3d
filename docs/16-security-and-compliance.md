@@ -36,7 +36,7 @@ STRIDE, applied to the three deployment topologies of `docs/13` §4.
 | T8 | Field-kit loss or theft | Field kit | Not designed | Full-disk encryption; no cached credentials; wipe procedure (§5) |
 | T9 | Hostile input file (decoder exploit) | All | PyAV/FFmpeg decode untrusted containers | Decode in the unprivileged container; keep FFmpeg current; S0 runs before anything else touches the file |
 | T10 | Demo reveals competition material to search | Public | `robots.txt` disallows all; no Indian data | Keep it that way; "shareable by link, not by search" |
-| T11 | **Third-party footage published without clear rights** | Public | **F-4: the live gallery serves `village.mp4` and `village_full.mp4`, cut from `yt_short.mp4` — a third-party YouTube Short carrying a creator watermark.** L-8 already says this clip is for pipeline testing only | Obtain the creator's permission, or drop the Village video from the public page. Stills cut from the same clip carry the same problem, and the reconstruction is derived from it too, so the clean long-term fix is a replacement clip the team holds rights to |
+| T11 | Third-party footage published without clear rights | Public | **F-4 closed 2026-09-22.** Both clips and all three derived reconstructions are off every public surface. `tools/build_console.py` carries a `WITHHELD` set keyed on the source filename and drops the whole run rather than stripping its mesh, because a reconstruction is derived work. The clip stays a development input under L-8 | The lasting fix is still a replacement clip the team holds rights to (B-33). Until then the console has no run with a mesh and an unvalidated scale, and `tools/test_console.py` reports two explicit SKIPs saying so |
 
 ---
 
@@ -111,5 +111,5 @@ change. Record the flight permission reference with the dataset.
 | 5 | `THIRD_PARTY_NOTICES` | L-4, L-5 | small |
 | 6 | Decide the project licence | L-9 | decision |
 | 7 | Secret scan in the commit gate | T5 | small |
-| **0** | **Take the Village video off the public gallery, or clear its rights** | **F-4 / T11** | small — do first |
+| ~~0~~ | Take the Village video off the public gallery — **done 2026-09-22**, along with its reconstructions | F-4 / T11 | small |
 | 8 | Field-kit build and wipe procedure, rehearsed | T8, §5 | medium |
