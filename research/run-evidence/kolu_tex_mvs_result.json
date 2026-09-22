@@ -1,0 +1,101 @@
+{
+  "n_images": 45,
+  "full_frame": [
+    1920,
+    1080
+  ],
+  "model_grid": [
+    518,
+    294
+  ],
+  "intrinsics_fit_residual_px": 0.2214,
+  "camera": {
+    "f": 1450.547,
+    "cx": 951.806,
+    "cy": 551.217,
+    "w": 1920,
+    "h": 1080,
+    "scale": 0.272,
+    "crop_x0_full": 8.571,
+    "crop_y0_full": 0.0
+  },
+  "sparse_after_triangulation": {
+    "Cameras": "1",
+    "Images": "45",
+    "Registered images": "45",
+    "Points": "76923",
+    "Observations": "334035",
+    "Mean track length": "4.342459",
+    "Mean observations per image": "7423.000000",
+    "Mean reprojection error": "1.730100px"
+  },
+  "sparse_after_bundle_adjustment": {
+    "Cameras": "1",
+    "Images": "45",
+    "Registered images": "45",
+    "Points": "76923",
+    "Observations": "334035",
+    "Mean track length": "4.342459",
+    "Mean observations per image": "7423.000000",
+    "Mean reprojection error": "0.365474px"
+  },
+  "resolution_level": "0",
+  "stages": [
+    {
+      "stage": "feature_extractor",
+      "seconds": 35.7,
+      "rc": 0
+    },
+    {
+      "stage": "exhaustive_matcher",
+      "seconds": 391.1,
+      "rc": 0
+    },
+    {
+      "stage": "point_triangulator",
+      "seconds": 27.7,
+      "rc": 0
+    },
+    {
+      "stage": "model_analyzer (after triangulation)",
+      "seconds": 0.3,
+      "rc": 0
+    },
+    {
+      "stage": "bundle_adjuster",
+      "seconds": 31.2,
+      "rc": 0
+    },
+    {
+      "stage": "model_analyzer (after bundle adjustment)",
+      "seconds": 0.3,
+      "rc": 0
+    },
+    {
+      "stage": "image_undistorter",
+      "seconds": 4.0,
+      "rc": 0
+    },
+    {
+      "stage": "InterfaceCOLMAP",
+      "seconds": 0.4,
+      "rc": 0
+    },
+    {
+      "stage": "DensifyPointCloud",
+      "seconds": 2070.6,
+      "rc": 0
+    },
+    {
+      "stage": "ReconstructMesh",
+      "seconds": 119.1,
+      "rc": 0
+    },
+    {
+      "stage": "TextureMesh",
+      "seconds": 1078.1,
+      "rc": 0
+    }
+  ],
+  "total_seconds": 3777.6
+}

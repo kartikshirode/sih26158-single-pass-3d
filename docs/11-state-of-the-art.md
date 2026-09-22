@@ -208,7 +208,7 @@ test passes on data the team did not tune on.
 
 | Axis | Today (measured) | World-class target | Why this number |
 |---|---|---|---|
-| **Speed** (R-O2) | 2,078.7 s for 45 views on 8 vCPU; ~600 views not run | **≤ 600 s** for a 10-min 4K clip on **one** 24 GB GPU | 1.5× headroom inside the PS's 900 s |
+| **Speed** (R-O2) | 2,078.7 s for 45 views on 8 vCPU without texturing (texturing adds 1,078 s, EXP-20); ~600 views not run | **≤ 600 s** for a 10-min 4K clip on **one** 24 GB GPU | 1.5× headroom inside the PS's 900 s |
 | **Relative accuracy** | Shape consistent; absolute scale 5.5× off on Kolu | **Scale error ≤ 1%** against an external length; shape RMSE ≤ 0.25 m | T-ACC-05's 1000 ppm is 0.1%; 1% is the first honest milestone |
 | **Absolute accuracy** (R-O3) | Not measurable (no GNSS clip) | **≤ 1 m** consumer GNSS is *not* achievable (EXP-05); **≤ 0.15 m** with RTK/PPK | EXP-05: RTK 0.097 m RMSE, p95 0.157 m |
 | **Detail** | ~2 cm corrected on Kolu MVS | ≤ 2 × GSD, measured on a LiDAR reference | Photogrammetric norm |

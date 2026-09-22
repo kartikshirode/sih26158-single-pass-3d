@@ -95,7 +95,7 @@ the embedded `djmd` track is the fallback (`research/02-ingestion-export-finding
 
 | ID | Question | Method | Pass | Kill | Status |
 |---|---|---|---|---|---|
-| **EXP-20** | Why does `TextureMesh` fail in 0.2 s? | Recovered from Cloud Logging: `unable to open file '/tmp/mvs/scene_dense_mesh.mvs'`. At 2.4.0 `ReconstructMesh` skips its `.mvs` for an interface-format input by design and writes only the `.ply`; `run_mvs.py` handed `TextureMesh` the file that was never written. Fix: keep `scene_dense.mvs` as the scene and pass the mesh with `--mesh-file` | A textured OBJ on Kolu | — | **Diagnosed 2026-09-22; re-run pending** |
+| **EXP-20** | Why does `TextureMesh` fail in 0.2 s? | Recovered from Cloud Logging: `unable to open file '/tmp/mvs/scene_dense_mesh.mvs'`. At 2.4.0 `ReconstructMesh` skips its `.mvs` for an interface-format input by design and writes only the `.ply`; `run_mvs.py` handed `TextureMesh` the file that was never written. Fix: keep `scene_dense.mvs` as the scene and pass the mesh with `--mesh-file` | A textured OBJ on Kolu | — | **Done 2026-09-22.** Execution `sih26158-mvs-lskpr`, image `mvs:v5`: `TextureMesh` rc=0 in 1,078.1 s, a 239.9 MB OBJ with an 8192 x 8192 atlas (`gs://sih26158-mumbai/mvs/kolu_tex_out/`), same poses as before (0.365 px after BA). Record: `research/run-evidence/kolu_tex_mvs_result.json`. Texturing adds 1,078 s to the L0 wall clock on 8 vCPU; the 2,078.7 s speed figure is the run without it |
 | **EXP-26** | Can coverage be recovered without losing detail? | `--number-views-fuse 2` and `RefineMesh` on Village (83% coverage today) | ≥ 95% of baseline cells, ≤ 10% worse residual at 6–25 cm | Residual > 20% worse | Queued |
 
 ### R5 — Completeness
