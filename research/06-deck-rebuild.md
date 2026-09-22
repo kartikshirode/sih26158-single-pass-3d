@@ -92,9 +92,25 @@ panels is around forty separate elements.
 
 Replace the boxes with one flow diagram, two states: solid outline for what runs today,
 dashed for planned. Running today: ingest with blur and parallax keyframing, SRT parsing,
-MapAnything poses, bundle adjustment, dense cloud, textured mesh, six export formats, the
+MapAnything poses, bundle adjustment, dense cloud, textured mesh, the six export formats, the
 browser viewer with measurement. Planned: masking, labels, streaming SLAM, live preview,
-true ortho, 3D Tiles, measured/inferred marking. One legend replaces seven hedges in the text.
+true ortho, geo-anchoring on real video, measured/inferred marking. One legend replaces seven
+hedges in the text.
+
+Two of those need care, because a reader will assume more than is true.
+
+**Geo-anchoring belongs in the dashed set**, even though SRT parsing is solid. `stages.py:359`
+reads GPS through `ctx.source.world()`, which only `SyntheticSource` implements, so no real
+video reaches the anchoring step. `out/kolumvs3d/export/export_manifest.json` says it plainly:
+`"georeferenced": false`, `"crs": null`, `"reason_no_crs": "source clip has no GNSS"`. Step 7
+of the current deck claims "GNSS/IMU/baro factor graph to metric WGS84/UTM", which is the
+design and not the state. "Georeferenced" is the first adjective in the PS description, so
+this is the one hedge worth spelling out rather than leaving to the legend.
+
+**The formats were verified on the per-vertex run, not the textured one.** The manifest above
+is `kolumvs3d`. `out/kolutex3d/` holds `atlas.jpg` and `packed.json` and nothing else. If the
+output picture and "six formats" end up side by side, the caption must not imply a textured
+FBX or glTF exists, because none has been written yet.
 
 The technology table becomes one line. The three synthetic panels go; the Methodology pointer
 asks for working-prototype images and there are real ones (see Images below). This also
@@ -115,8 +131,22 @@ line each:
   build.
 - **Security.** On-premise, air-gapped, imagery never leaves the network.
 
-The six-row risk table goes to three rows. Keep the real Kolu evidence strip; it is the
-strongest thing on the slide.
+**The six-row challenge table goes to eight rows, not three.** An earlier draft of this brief
+said to cut it, which was wrong: that table is NTRO's own list of key challenges, and the PS
+names eight. Cutting it to three throws away the one place the deck answers the customer
+question by question. Shorten each row to one line instead, and carry the same solid and
+dashed marking as the flow diagram. The two missing rows, without inventing anything:
+
+- **Variable illumination and shadows.** The answer is already written, filed under the wrong
+  heading: row 2 says texture comes from the clearest view of each surface. Move that clause
+  to its own row and claim no more than TextureMesh does.
+- **Reconstruction of occluded surfaces.** The answer is the measured/inferred figure. It is a
+  concept drawing and `docs/12` EXP-27 is scheduled only if the earlier phases finish early,
+  so mark it planned.
+
+Keep the real Kolu evidence strip; it is the strongest thing on the slide. If eight rows plus
+five points of view plus the strip will not fit at 12 pt, the Kolu numbers move to Technical
+Approach, where the Methodology pointer asks for working-prototype evidence anyway.
 
 ### 5. Impact and Benefits
 
@@ -141,6 +171,44 @@ The measured/inferred figure stays. It is the best thing in the deck: green roof
 facades, which is EXP-08 drawn as a picture. Two words are missing, that the scene is
 synthetic and the marking is planned. Recolour it or the slide 3 labels panel, because orange
 currently means buildings on one slide and inferred on another.
+
+## Checked against the problem statement text
+
+The PS was read back against the deck on 2026-09-23. Three mismatches, in the order a judge
+from NTRO would hit them.
+
+**Neither headline target appears anywhere in the deck.** The PS Desired Output table gives
+two numbers: processing time under 15 minutes for a 10-minute video, and spatial accuracy
+under 1 m. Search the deck for either and nothing comes back. The only minute figure on any
+slide is a competitor's, GeoFF3D's five minutes; the only 15s are the Jetson's watts and
+MASt3R-SLAM's frame rate. NTRO wrote those two numbers and will look for them. One line each,
+using repo numbers and naming the ladder level, per `docs/13` §6:
+
+- Speed: 2,078.7 s for 45 views on 8 vCPU, no GPU timing yet, densification is 77% of it.
+- Accuracy: not measured yet, because no processed clip carries GNSS. The UseGeo run against
+  LiDAR is the plan. Kolu's scale came from a calibration, factor 5.54, and `docs/08` is
+  explicit that it is not a global constant.
+
+Saying both plainly is stronger than saying neither. The PS is NTRO's own document, so a team
+that quotes the target and states where it stands reads as one that has done the work, and a
+team that skips both reads as one that has not looked.
+
+**The export line does not match the PS list, in both directions.** The PS asks for OBJ, PLY,
+LAS, GeoTIFF, .glb/.gltf, .fbx. The deck's step 10 says "LAS/LAZ, OBJ/glTF, GeoTIFF, 3D
+Tiles". It drops PLY and FBX, which the pipeline writes and `export_manifest.json` records as
+written, and it advertises 3D Tiles, which is not built and which the build plan cuts. The
+technologies line carries the same problem, listing CesiumJS for 3D Tiles. Write the PS's six
+verbatim and drop 3D Tiles and CesiumJS from both lines. This is a met requirement currently
+being undersold next to an unmet one being oversold, and it costs one edit.
+
+**The challenge table answers six of eight.** Handled under Feasibility above.
+
+One thing not to do with the PS: the evaluation weights (accuracy 30%, completeness 20%,
+speed 20%, innovation 15%, scalability 10%, interface 5%) score the finale build, not the
+idea submission. The idea stage scores novelty, complexity, format clarity and future work.
+Do not use "70% is measurable" as an argument for cutting the planned architecture; the
+weights are useful here only for knowing which two numbers NTRO will look for, which is the
+first point above.
 
 ## Images to make
 
@@ -169,4 +237,9 @@ these yet.
 - [ ] Scale caption says objects of known size (audit item 3).
 - [ ] Live 3D marked planned (audit item 4).
 - [ ] Unbuilt stages marked planned in the flow diagram (audit item 5).
+- [ ] All eight PS challenges answered, one line each.
+- [ ] The six export formats written verbatim as the PS lists them.
+- [ ] Both PS targets stated, under 15 minutes and under 1 m, with where the project stands.
+- [ ] Geo-anchoring on real video marked planned, and no textured export implied.
+- [ ] 3D Tiles and CesiumJS gone from the pipeline and technology lines.
 - [ ] Exported as PDF, instructions slide deleted.
