@@ -5,6 +5,8 @@ paste into each field. Sources are the official artefacts, not summaries of them
 `SIH2026-IDEA-Presentation-Format.pptx` and `SIH2026-Guidelines-College-SPOC.pdf`, both
 pulled from sih.gov.in, plus the live PS listing.
 
+> **Superseded deck, 2026-09-22.** The submission deck is now the team's Google Slides file, audited in `research/05-deck-audit.md`. `tools/build_sih_ppt.py` and `out/ppt/` describe the 17 September deck; do not rebuild it for submission. It still reads the withdrawn Village run and still says per-vertex colour.
+
 ---
 
 ## 1. Live state of this problem statement (checked 2026-09-07)
