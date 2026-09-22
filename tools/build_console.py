@@ -42,6 +42,14 @@ TITLE = "Tesseract - reconstruction console"
 DESC = ("Every run the single-pass drone-video-to-3D pipeline has produced, read out "
         "of each run's own manifest: what it may claim, what it cannot, and why.")
 
+# Source clips this page may not publish, by the filename the manifest records.
+# A run is dropped entirely when its source is here, not merely stripped of its mesh:
+# the reconstruction is derived work and carries the same rights as the footage
+# (`docs/16` L-8, finding F-4). Removing only the video would leave the geometry up.
+WITHHELD = {
+    "yt_short.mp4": "third-party YouTube Short, rights not cleared (docs/16 F-4, B-05)",
+}
+
 # Which packed geometry belongs to which run. A run without an entry has no mesh,
 # and the Model tab says so rather than showing an empty canvas.
 MODELS = {
@@ -53,20 +61,19 @@ MODELS = {
          "The feed-forward baseline: one point map per view, fused. Faster, and it "
          "paints buildings onto a sheet where the rebuild resolves them."),
     ],
-    "village": [
-        ("vill_mvs", "ytdmvs3d", "MVS rebuild", None),
-        ("vill_base", "ytd3d", "Feed-forward", None),
-    ],
-    "village-wide": [
-        ("wide_base", "yt3d", "Feed-forward",
-         "The whole clip rather than the dense pass, so coverage is wider and the "
-         "surface is looser."),
-    ],
 }
 
 # Per-run prose that a manifest cannot carry: why the frame is what it is, what the
 # codes meant for this clip, and what the timing does and does not show.
 NOTES = {
+    "bahai-rejected": {
+        "frame": "no frame: the run never reached geometry",
+        "codes": "A temple orbit, 59 percent sky. The screener refused it and the ladder "
+                 "walked down to L5, where the refusal itself is the deliverable. This is "
+                 "the intended behaviour, not a crash: R-C9 asks the system to say why a "
+                 "clip is hard before spending inference on it.",
+        "time": "Nothing ran past the screener.",
+    },
     "kolu": {
         "frame": "local level frame: gravity is up, north is not known",
         "codes": "Two shots and no GNSS sidecar. The shot boundary bounds the pass "
@@ -75,27 +82,6 @@ NOTES = {
         "time": "The dense stage was adopted from an earlier run rather than "
                 "recomputed, so this figure is the orchestration, not the "
                 "reconstruction. The recorded reconstruction took 34m 39s.",
-    },
-    "village": {
-        "frame": "local level frame: gravity is up, north is not known",
-        "codes": "The horizon fills every frame and the sky is 18 percent of it. "
-                 "Ingest cropped both away rather than refusing the clip, which is "
-                 "what --horizon crop asks for; the codes stay on the run.",
-        "time": "Geometry was adopted from an earlier run. Ingest is the real cost "
-                "here.",
-    },
-    "village-wide": {
-        "frame": "local level frame: gravity is up, north is not known",
-        "codes": "Same clip, same crop, but the whole pass rather than the dense "
-                 "window.",
-        "time": "Geometry was adopted from an earlier run.",
-    },
-    "village-rejected": {
-        "frame": "no frame: the run never reached geometry",
-        "codes": "The same clip with the default policy. The screener refused it and "
-                 "the ladder walked down to L5, where the refusal itself is the "
-                 "deliverable. This is the intended behaviour, not a crash.",
-        "time": "Nothing ran past the screener.",
     },
 }
 SYNTH_NOTES = {
@@ -192,6 +178,10 @@ def main() -> int:
         if not os.path.exists(mp):
             continue
         man = jload(mp)
+        clip = man.get("source", "").split(":", 1)[-1]
+        if clip in WITHHELD:
+            print(f"  skip   {rid:22} {WITHHELD[clip]}")
+            continue
         v = verify(os.path.join(RUNS_DIR, rid), man)
         lvl = K.LEVELS[man.get("level", "L0")]
         sc = man.get("scale") or {}
@@ -265,8 +255,8 @@ def main() -> int:
         })
 
     # the run that shows the most goes first; a refusal is still worth reading, last
-    order = {"kolu": 0, "village": 1, "village-wide": 2, "demo": 3,
-             "synthetic-rtk": 4, "synthetic-consumer-120": 5, "village-rejected": 9}
+    order = {"kolu": 0, "demo": 1, "synthetic-rtk": 2,
+             "synthetic-consumer-120": 3, "bahai-rejected": 9}
     runs.sort(key=lambda r: (order.get(r["id"], 6), r["id"]))
 
     git = subprocess.run(["git", "rev-parse", "--short", "HEAD"], cwd=ROOT,

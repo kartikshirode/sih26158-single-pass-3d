@@ -108,22 +108,16 @@ def main():
     os.makedirs(os.path.join(OUT, "assets"), exist_ok=True)
 
     mk = jload(os.path.join(ROOT, "out/ppt/measure_kolu.json"))
-    ms = jload(os.path.join(ROOT, "out/ppt/measure_short.json"))
     ing_k = jload(os.path.join(ROOT, "out/kf_kolu/ingest.json"))
-    ing_v = jload(os.path.join(ROOT, "out/kf_yt_dense/ingest.json"))
-    ing_w = jload(os.path.join(ROOT, "out/kf_yt/ingest.json"))
     mvs_k = jload(os.path.join(ROOT, "out/kolu_mvs/mvs_result.json"))
-    mvs_v = jload(os.path.join(ROOT, "out/ytd_mvs/mvs_result.json"))
-    vs_wide = jload(os.path.join(ROOT, "out/yt3d/viewer_stats.json"))
 
     at = lambda d, r: dict((x[0], x[1]) for x in d["roughness_cm"]).get(r)
 
     # ---- geometry: one file per model, loaded on demand by the page
-    RUNS = {
-        "kolu_base":  "kolu3d",   "kolu_mvs":    "kolumvs3d",
-        "vill_base":  "ytd3d",    "vill_mvs":    "ytdmvs3d",
-        "wide_base":  "yt3d",
-    }
+    # Only Kolu. The Village runs came from a third-party clip whose rights are not
+    # cleared, and a reconstruction is derived work, so neither the footage nor its
+    # geometry may be published (`docs/16` L-8, finding F-4).
+    RUNS = {"kolu_base": "kolu3d", "kolu_mvs": "kolumvs3d"}
     halves, written = {}, 0
     for key, run in RUNS.items():
         D, half = packed(run)
@@ -171,24 +165,18 @@ def main():
         return r
 
     kw, kh, kdur = probe(os.path.join(OUT, "assets", "kolu.mp4"))
-    vw, vh, vdur = probe(os.path.join(OUT, "assets", "village.mp4"))
-    ww, wh, wdur = probe(os.path.join(OUT, "assets", "village_full.mp4"))
 
-    sk, sv, sw = ing_k["stats"], ing_v["stats"], ing_w["stats"]
-    kk, kv, kwf = ing_k["keyframes"], ing_v["keyframes"], ing_w["keyframes"]
+    sk, kk = ing_k["stats"], ing_k["keyframes"]
 
     cal_k = scale_cal.load("kolumvs3d")
     if scale_cal.load("kolu3d") != cal_k:
         sys.exit("the two Kolu models must share one calibration - they share a frame")
-    cal_v = scale_cal.load("ytdmvs3d")
-    cal_w = scale_cal.load("yt3d")
     kk_ = cal_k["factor"]
     STAR_NOTE = (" <b>*</b> Lengths marked * are in the model's own units: this clip has "
                  "no external ruler yet, and on the Kolu clip those units turned out to "
                  "be 5.3-5.8x too small (docs/08).")
 
     gain_k = at(mk["baseline"], 6.0) / at(mk["mvs"], 6.0)
-    gain_v = at(ms["baseline"], 6.0) / at(ms["mvs"], 6.0)
 
     EX = [
         {
@@ -224,77 +212,6 @@ def main():
                 f'<code>src/analysis/compare_mvs.py</code>, so both columns are on the same '
                 f'axis. Wall clock for the rebuild: {mvs_k["total_seconds"]/60:.0f} min on '
                 f'8 vCPU, no GPU.'),
-        },
-        {
-            "key": "village", "tab": "Village pass", "aspect": vw / vh,
-            "video": "assets/village.mp4", "poster": poster("assets/village.mp4"),
-            "clipName": sv["video"],
-            "clipMeta": f'{sv["resolution"]} &middot; {sv["fps"]} fps &middot; '
-                        f'{sv["keyframes_selected"]} keyframes',
-            "span": f'frames {kv[0]} to {kv[-1]}  ({vdur:.1f} s)',
-            "viewScale": round(max(halves["vill_base"], halves["vill_mvs"]), 4),
-            "models": [
-                {"key": "vill_base", "file": "mesh/vill_base.js",
-                 "label": "baseline", "sub": "feed-forward"},
-                {"key": "vill_mvs", "file": "mesh/vill_mvs.js",
-                 "label": "MVS rebuild", "sub": "per-pixel"},
-            ],
-            "tableHead": ["Village pass, 42 keyframes",
-                          "MapAnything, feed-forward", "OpenMVS rebuild"],
-            "scale": scale_cal.for_page(cal_v),
-            "rows": rows_pair(ms, cal_v),
-            "note": (
-                f'A portrait phone clip, and the second scene the pipeline was run on '
-                f'end to end. The detail gain is larger here than on Kolu '
-                f'(<b>{gain_v:.1f}x</b> tighter at 6 cm*, finest residual '
-                f'{10*at(ms["mvs"], 3.0):.1f} mm* at 3 cm*) but <b>coverage goes the other '
-                f'way</b>: the rebuild holds only '
-                f'{100*ms["coverage"]["mvs_over_baseline"]:.0f}% of the baseline\'s ground '
-                f'cells, because photometric MVS refuses surfaces it cannot match across '
-                f'three views while the feed-forward model will happily invent them. '
-                f'Both behaviours are the same trade, and only one of them is reported as '
-                f'a win on the deck. Wall clock: {mvs_v["total_seconds"]/60:.0f} min on '
-                f'8 vCPU.' + STAR_NOTE),
-        },
-        {
-            "key": "wide", "tab": "Village pass, whole clip", "aspect": ww / wh,
-            "failed": True,
-            "video": "assets/village_full.mp4", "poster": poster("assets/village_full.mp4"),
-            "clipName": sw["video"],
-            "clipMeta": f'{sw["resolution"]} &middot; {sw["fps"]} fps &middot; '
-                        f'{sw["keyframes_selected"]} keyframes',
-            "span": f'the whole {wdur:.0f} s, {sw["shots_detected"]} shots',
-            "viewScale": round(halves["wide_base"], 4),
-            "scale": scale_cal.for_page(cal_w),
-            "models": [
-                {"key": "wide_base", "file": "mesh/wide_base.js",
-                 "label": "baseline", "sub": "feed-forward"},
-            ],
-            "tableHead": ["Same clip, wrong span", "MapAnything, feed-forward", None],
-            "rows": [
-                ["frames analysed", f'{sw["frames_decoded"]:,}', None, "", ""],
-                ["shots detected", f'{sw["shots_detected"]}  (the other runs saw 1)',
-                 None, "lose", ""],
-                ["keyframes kept", f'{sw["keyframes_selected"]}', None, "", ""],
-                ["footprint",
-                 dict(vs_wide["geom"]).get("footprint", "—").replace("&times;", "x")
-                 .removesuffix(" m") + " m*",
-                 None, "", ""],
-                ["relief / footprint",
-                 dict(vs_wide["geom"]).get("relief / footprint", "—"), None, "lose", ""],
-                ["points above local ground",
-                 dict(vs_wide["geom"]).get("above local ground", "—"), None, "lose", ""],
-            ],
-            "note": (
-                'The same source video as the Village pass, but ingested whole instead of '
-                'over the single moving pass. Keyframing detected <b>2 shots</b> here '
-                'against 1 in the run beside it, and spread 45 keyframes across a 115 x 58 m* '
-                'footprint. The result has a relief-to-footprint ratio of 0.037 and puts '
-                '1.34% of its points above local ground: a flat sheet with the scene '
-                'painted on it. It is kept here because it is the failure that motivates '
-                'adaptive keyframing, and because the fix was choosing the span, not '
-                'changing the model. There is no MVS column because this run was never '
-                'carried through the rebuild.' + STAR_NOTE),
         },
     ]
 

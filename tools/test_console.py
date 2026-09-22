@@ -81,6 +81,7 @@ def main() -> int:
         print("       run tools/build_console.py and commit demo/console/index.html")
         return 1
 
+    skipped = []
     shots = a.shots and os.path.abspath(a.shots)
     if shots:
         os.makedirs(shots, exist_ok=True)
@@ -91,6 +92,10 @@ def main() -> int:
         print(("  PASS " if ok else "  FAIL ") + name + ("   " + detail if detail else ""))
         if not ok:
             fails.append(name)
+
+    def skip(name, why):
+        print(f"  SKIP {name}   {why}")
+        skipped.append(name)
 
     def shot(page, name):
         if shots:
@@ -134,11 +139,24 @@ def main() -> int:
                "NOT MEASURABLE" in t.upper())
             shot(pg, "1-overview.png")
 
-            t = text("village")
-            ck("an unvalidated run is not given metres",
-               "unvalidated" in t and "model units" in t and "metres" not in t)
+            # An unvalidated run is one with a mesh and no ruler. The clip that used to
+            # provide it was withdrawn for rights (B-05), and restoring the check needs a
+            # reconstruction of a clip the team holds, which is Phase 1 work.
+            unval = next((r for r in runs
+                          if pg.evaluate(f"BY['{r}'].scale.status") == "unvalidated"
+                          and pg.evaluate(f"BY['{r}'].models.length") > 0), None)
+            if unval:
+                t = text(unval)
+                ck("an unvalidated run is not given metres",
+                   "unvalidated" in t and "model units" in t and "metres" not in t)
+            else:
+                skip("an unvalidated run is not given metres",
+                     "no run has a mesh and an unvalidated scale - reconstruct a clip "
+                     "with clear rights (B-05 replacement) to restore this")
 
-            t = text("village-rejected")
+            refused = next((r for r in runs
+                            if pg.evaluate(f"BY['{r}'].level") == "L5"), None)
+            t = text(refused)
             ck("a refused clip reports the refusal as the result",
                "L5" in t and "not reconstructable" in t and "Nothing to read" in t)
             shot(pg, "5-refused.png")
@@ -206,18 +224,22 @@ def main() -> int:
                bool(lab) and lab.endswith(" m"), repr(lab))
             shot(pg, "3b-measure.png")
 
-            pg.evaluate("location.hash = '#/village/model'")
-            pg.wait_for_function("window.active && window.curMVP", timeout=90000)
-            pg.wait_for_timeout(1400)
-            box = pg.locator("#gl").bounding_box()
-            if pg.evaluate("!measuring"):
-                pg.click("#bMeasure")
-            lab = measure()
-            ck("the same tool on an unvalidated run prints units",
-               bool(lab) and lab.endswith(" units"), repr(lab))
-            shot(pg, "7-village-model.png")
+            if unval:
+                pg.evaluate(f"location.hash = '#/{unval}/model'")
+                pg.wait_for_function("window.active && window.curMVP", timeout=90000)
+                pg.wait_for_timeout(1400)
+                box = pg.locator("#gl").bounding_box()
+                if pg.evaluate("!measuring"):
+                    pg.click("#bMeasure")
+                lab = measure()
+                ck("the same tool on an unvalidated run prints units",
+                   bool(lab) and lab.endswith(" units"), repr(lab))
+                shot(pg, "7-unvalidated-model.png")
+            else:
+                skip("the same tool on an unvalidated run prints units",
+                     "same cause as above")
 
-            pg.evaluate("location.hash = '#/village-rejected/model'")
+            pg.evaluate(f"location.hash = '#/{refused}/model'")
             pg.wait_for_timeout(350)
             ck("a run with no mesh cannot open the workspace",
                pg.evaluate("curTab") == "overview")
@@ -237,9 +259,12 @@ def main() -> int:
             pg.keyboard.press("j")
             pg.wait_for_timeout(250)
             ck("j steps to the next run", pg.evaluate("cur") == runs[1])
-            pg.fill("#q", "village")
+            pg.fill("#q", "synthetic")
             pg.wait_for_timeout(250)
-            ck("the filter narrows the rail", pg.locator("#runs .run").count() == 3)
+            want = pg.evaluate("RUNS.filter(function(r){"
+                               "return (r.id+' '+r.source).indexOf('synthetic')>=0}).length")
+            n = pg.locator("#runs .run").count()
+            ck("the filter narrows the rail", n == want and n < len(runs), f"{n} of {len(runs)}")
 
             ph = b.new_page(viewport={"width": 390, "height": 844},
                             device_scale_factor=2, is_mobile=True, has_touch=True,
