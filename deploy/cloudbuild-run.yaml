@@ -1,0 +1,12 @@
+steps:
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - -f
+      - run_job/Dockerfile
+      - -t
+      - asia-south1-docker.pkg.dev/$PROJECT_ID/sih26158/run:v1
+      - .
+images:
+  - asia-south1-docker.pkg.dev/$PROJECT_ID/sih26158/run:v1
+timeout: 2400s
