@@ -78,7 +78,8 @@ out/             every run artefact — gitignored, regenerable
 | Synthetic end to end | `python src/pipeline/run_demo.py out/demo` | local, seconds |
 | Screen clips | `python src/ingest/screen.py data/cand/*.webm` | local, ~40 s/clip |
 | Ingest a clip | `python src/ingest/video_ingest.py <video> --out out/kf_<run> --n 45 [--skip s --end s] [--horizon crop]` | local |
-| MapAnything (S3) | `gcloud run jobs execute sih26158-mapanything --region=asia-south1` (inputs under `gs://sih26158-mumbai/mapanything/<run>_input/`) | Cloud Run |
+| MapAnything (S3), real keyframes | `gcloud run jobs execute kolu-ma --region=asia-south1 --update-env-vars="IN_PREFIX=mapanything/<run>_input,OUT_PREFIX=mapanything/<run>_out,MAX_VIEWS=<n>"` | Cloud Run |
+| MapAnything (S3), synthetic frames | `gcloud run jobs execute sih26158-mapanything --region=asia-south1` (inputs under `gs://sih26158-mumbai/mapanything/ma_input/`) | Cloud Run |
 | BA + MVS + export | `gcloud run jobs execute sih26158-mvs --region=asia-south1` with `KF_PREFIX`, `MA_PREFIX`, `OUT_PREFIX` | Cloud Run |
 | Pull, render, viewer | `RUN=kolu GCS_PREFIX=mvs/kolu_out BASELINE=kolu3d python tools/finish_mvs.py` | local (needs open3d) |
 | Exports only | `python src/pipeline/export_formats.py out/<run>mvs3d --cameras out/<run>_raw/cameras.npy` — applies the run's calibration if one exists; `--no-scale` for model units | local (needs open3d; Blender or assimp for FBX) |

@@ -214,8 +214,11 @@ class Geometry(BaseStage):
         raise StageError(
             Code.STAGE_UNAVAILABLE,
             "no geometry provider on this host. Run the containers "
-            "(gcloud run jobs execute sih26158-mapanything --region=asia-south1, then "
-            "sih26158-mvs) and re-run with --adopt <out/RUN>, or use --source synthetic")
+            "(gcloud run jobs execute kolu-ma --region=asia-south1 with IN_PREFIX/"
+            "OUT_PREFIX/MAX_VIEWS, then sih26158-mvs) and re-run with --adopt "
+            "<out/RUN>, or use --source synthetic. NOT sih26158-mapanything: that job "
+            "runs the mapanything:v1 image, which is the synthetic harness and needs a "
+            "meta.json the rasteriser writes. kolu-ma runs v2 and takes bare keyframes")
 
     # ---- provider: adopt a real run's artefacts
     def _adopt(self, ctx: Context) -> StageResult:

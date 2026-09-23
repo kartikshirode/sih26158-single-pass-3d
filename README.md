@@ -135,8 +135,15 @@ audits with `python tools/build_all.py`; redeploy with `vercel deploy --prod --y
 
 ```bash
 gcloud run jobs execute sih26158-pipeline    --region=asia-south1   # full pipeline
-gcloud run jobs execute sih26158-mapanything --region=asia-south1   # MapAnything, CPU
+gcloud run jobs execute sih26158-mapanything --region=asia-south1   # synthetic frames only
+gcloud run jobs execute kolu-ma              --region=asia-south1   # real keyframes
 ```
+
+`sih26158-mapanything` runs the `mapanything:v1` image, which reads a `meta.json` written
+beside the rendered frames by the rasteriser, so it only serves the synthetic harness
+(`mapanything/ma_input/`). Real video keyframes go through `kolu-ma`, which runs `v2` and
+takes bare images. The name is historical; it is not Kolu-specific. Override
+`IN_PREFIX`, `OUT_PREFIX` and `MAX_VIEWS` per run.
 
 ---
 
