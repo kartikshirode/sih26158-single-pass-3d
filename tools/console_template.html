@@ -163,7 +163,11 @@ function render(r, tab){
       "<span>git <b>" + h(r.git) + "</b></span>" +
       "<span>config <b>" + h(r.cfg) + "</b></span>" +
       "<span>host <b>" + h(r.host || "not recorded") + "</b></span>" +
-    "</div>";
+    "</div>" +
+    // Built by tools/footage.py from a fixed record, so the anchors it contains are
+    // ours and go in unescaped. A CC BY or CC BY-SA clip may not be published without
+    // this line, and a run whose clip has no record never reaches the page at all.
+    (r.credit ? '<div class="rcred">' + r.credit + "</div>" : "");
   var tabs = el("div", "tabs");
   TABS.forEach(function(t){
     var b = el("button", null, t[1]);

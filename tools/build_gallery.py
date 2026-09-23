@@ -24,6 +24,7 @@ from __future__ import annotations
 import base64, glob, io, json, os, re, subprocess, sys
 
 from design_system import css as ds_css
+from footage import credit
 import scale_cal
 
 import numpy as np
@@ -35,64 +36,13 @@ HERE = os.path.join(ROOT, "tools")
 OUT = os.path.join(ROOT, "demo", "gallery")
 SITE_URL = "https://tesseract-demo.vercel.app"
 
-# Footage provenance, from docs/16 section 4.1. This page republishes two things per
-# example: the source clip, copied into assets/, and a 3D model derived from it. A
-# derived model carries the source's licence, which is why the credit sits with the
-# example and not in a page footer.
-#
-# CC0 waives attribution, so Kolu needs none and the page said nothing for a long time.
-# Anything else does need it, by name, with the licence and a link back. Adding a clip
-# here without filling this in is the F-4 mistake again (docs/16 T11).
-FOOTAGE = {
-    "kolu": {
-        "title": "Kolu overpass", "author": None, "licence": "CC0",
-        "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/",
-        "source_url": None,
-    },
-    "toolse": {
-        "title": "Toolse castle in Estonia (Fall 2021)", "author": "Sillerkiil",
-        "licence": "CC BY-SA 4.0",
-        "licence_url": "https://creativecommons.org/licenses/by-sa/4.0/",
-        "source_url": "https://commons.wikimedia.org/wiki/File:Toolse_castle_in_Estonia_(Fall_2021).webm",
-    },
-    "bahai": {
-        "title": "Baha'i Temple -- Wilmette, IL -- Drone Video (DJI Spark)",
-        "author": "Kurt Elster", "licence": "CC BY 3.0",
-        "licence_url": "https://creativecommons.org/licenses/by/3.0/",
-        "source_url": "https://commons.wikimedia.org/wiki/File:Baha%27i_Temple_--_Wilmette_,_IL_--_Drone_Video_(DJI_Spark).webm",
-    },
-}
-
-
-def credit(key):
-    """The attribution line for one example. Refuses rather than ships a clip whose
-    rights are not recorded, because the failure mode is silent republication.
-
-    Three things have to be on the page, not just the author's name:
-      - the credit and the licence, with a link back to the source (BY and BY-SA),
-      - that the clip was changed, since we trim and re-encode it (CC 4.0 3(a)(1)(B)),
-      - for BY-SA, the licence the derived model itself carries. A reconstruction is
-        an adaptation, so share-alike reaches it, and saying nothing would leave a
-        viewer unable to tell what they may do with the model.
-    """
-    if key not in FOOTAGE:
-        sys.exit(f"no footage rights recorded for '{key}' - add it to FOOTAGE "
-                 f"(docs/16 section 4.1) before it goes on a public page")
-    f = FOOTAGE[key]
-    lic = f'<a href="{f["licence_url"]}" rel="license noopener" target="_blank">{f["licence"]}</a>'
-    if f["author"] is None:
-        return f'Source clip: {f["title"]}, {lic}. No attribution required.'
-    src = f["title"]
-    if f["source_url"]:
-        src = f'<a href="{f["source_url"]}" rel="noopener" target="_blank">{src}</a>'
-    out = (f'Source clip: {src} by {f["author"]}, {lic}. '
-           f'Trimmed and re-encoded for this page.')
-    if "SA" in f["licence"]:
-        out += (f' The 3D model on the right is derived from it and is shared under '
-                f'the same licence, {lic}.')
-    else:
-        out += " The 3D model on the right is derived from it."
-    return out
+# This page republishes two things per example: the source clip, copied into assets/,
+# and a 3D model derived from it. A derived model carries the source's licence, which
+# is why the credit sits with the example and not in a page footer. The records live in
+# tools/footage.py, shared with the console so one clip has one spelling and one author.
+# credit() is given sys.exit: a clip with no record must stop the build, because an
+# unattributed example renders perfectly and looks correct (docs/16 T11, finding F-4).
+CREDIT_SUBJECT = "The 3D model on the right"
 
 
 def jload(p):
@@ -289,7 +239,7 @@ def main():
         {
             "key": "kolu", "tab": "Kolu overpass", "aspect": kw / kh,
             "video": "assets/kolu.mp4", "poster": poster("assets/kolu.mp4"),
-            "credit": credit("kolu"),
+            "credit": credit("kolu.webm", CREDIT_SUBJECT, sys.exit, clip_published=True),
             "clipName": sk["video"],
             "clipMeta": f'{sk["resolution"]} &middot; {sk["fps"]} fps &middot; '
                         f'{sk["keyframes_selected"]} keyframes',
@@ -324,7 +274,7 @@ def main():
         {
             "key": "toolse", "tab": "Toolse castle", "aspect": tw_ / th_,
             "video": "assets/toolse.mp4", "poster": poster("assets/toolse.mp4"),
-            "credit": credit("toolse"),
+            "credit": credit("toolse.webm", CREDIT_SUBJECT, sys.exit, clip_published=True),
             "clipName": st["video"],
             "clipMeta": f'{st["resolution"]} &middot; {st["fps"]} fps &middot; '
                         f'{st["keyframes_selected"]} keyframes',

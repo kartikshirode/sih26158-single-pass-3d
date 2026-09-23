@@ -30,6 +30,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(
     os.path.abspath(__file__))), "src"))
 
 import scale_cal                                                  # noqa: E402
+import footage                                                    # noqa: E402
 from build_gallery import packed                                  # noqa: E402
 from tesseract import contracts as K                              # noqa: E402
 
@@ -66,6 +67,18 @@ MODELS = {
          "The feed-forward baseline: one point map per view, fused. Faster, and it "
          "paints buildings onto a sheet where the rebuild resolves them."),
     ],
+    "toolse": [
+        ("toolse_mvs", "toolsemvs3d", "MVS rebuild",
+         "Per-pixel photometric MVS at full keyframe resolution. The counter-example "
+         "to Kolu: this rebuild is the SMALLER model, holding 49% of the baseline's "
+         "ground cells. Open sea fills the right of every frame, the feed-forward "
+         "pass paints points onto it, and photometric MVS keeps only what several "
+         "views agree on. Fewer cells, a far tighter surface."),
+        ("toolse_base", "toolse3d", "Feed-forward",
+         "The feed-forward baseline: one point map per view, fused. Wider than the "
+         "rebuild here, but much of the extra area is water it should not have "
+         "reconstructed."),
+    ],
 }
 
 # Per-run prose that a manifest cannot carry: why the frame is what it is, what the
@@ -87,6 +100,17 @@ NOTES = {
         "time": "The dense stage was adopted from an earlier run rather than "
                 "recomputed, so this figure is the orchestration, not the "
                 "reconstruction. The recorded reconstruction took 34m 39s.",
+    },
+    "toolse": {
+        "frame": "local level frame: gravity is up, north is not known",
+        "codes": "The screener refused this clip on the horizon, and the run was "
+                 "made with the horizon cropped rather than rejected, which takes "
+                 "17.7% off the top of every frame. No GNSS sidecar, so the run is "
+                 "levelled rather than georeferenced, and no object of known size "
+                 "is in view, so every length here is in the model's own units.",
+        "time": "The dense stage was adopted rather than recomputed, so this figure "
+                "is the orchestration. The recorded reconstruction took 54m 20s on "
+                "8 vCPU, of which densification was 2,003 s and texturing 522 s.",
     },
 }
 SYNTH_NOTES = {
@@ -183,7 +207,7 @@ def main() -> int:
         if not os.path.exists(mp):
             continue
         man = jload(mp)
-        clip = man.get("source", "").split(":", 1)[-1]
+        clip = footage.clip_of(man.get("source", ""))
         if clip in WITHHELD:
             print(f"  skip   {rid:22} {WITHHELD[clip]}")
             continue
@@ -196,13 +220,34 @@ def main() -> int:
                        if s["id"] == "S5-georef"), {}) or {}
         crs = (georef.get("facts") or {}).get("crs")
 
-        note = NOTES.get(rid) or SYNTH_NOTES
+        # SYNTH_NOTES says "a generated scene whose ground truth is known", which is a
+        # claim about the data, not filler. Falling back to it for a real clip that
+        # happens to have no entry would put that sentence under real drone footage,
+        # so a real clip without notes stops the build instead.
+        if rid in NOTES:
+            note = NOTES[rid]
+        elif footage.is_synthetic(man.get("source", "")):
+            note = SYNTH_NOTES
+        else:
+            sys.exit(f"run '{rid}' comes from real footage ({clip}) and has no NOTES "
+                     f"entry; it would inherit the synthetic-scene prose. Add one.")
         models = []
         for key, _run, label, mnote in MODELS.get(rid, []):
             models.append({"key": key, "file": key + ".js", "label": label,
                            "note": mnote, "tri": packs[key]["nt"],
                            "pts": packs[key]["np"]})
         view_scale = round(max([halves[m["key"]] for m in models], default=1.0), 4)
+
+        # Attribution. A synthetic scene has no footage rights; a real clip always
+        # does, and the build stops rather than publish a run whose clip is not
+        # recorded. Only a run that ships a mesh describes a derived work: the rest
+        # publish facts about a run, which is not an adaptation of anything.
+        cred = None
+        if not footage.is_synthetic(man.get("source", "")):
+            cred = footage.credit(
+                clip,
+                "The reconstruction on the Model tab" if models else None,
+                sys.exit)
 
         runs.append({
             "id": man["run_id"],
@@ -256,6 +301,7 @@ def main() -> int:
                       .get("facts") or {}).get("points"),
             "verify": v,
             "models": models,
+            "credit": cred,
             "viewScale": view_scale,
         })
 

@@ -134,6 +134,13 @@ input,button,table,td,th,div{border-radius:0}
 .rhead .sub{margin-top:var(--sp-2); display:flex; flex-wrap:wrap; gap:var(--sp-4);
             font:400 var(--t-xs)/1.6 var(--mono); color:var(--fg-3)}
 .rhead .sub b{color:var(--fg-2); font-weight:400}
+/* Attribution. CC BY and CC BY-SA require the author and the licence to travel with
+   anything published from the clip, so this is quiet but never hidden: no display:none,
+   no truncation, no collapsing behind a control. */
+.rcred{margin-top:var(--sp-2); max-width:78ch;
+       font:400 var(--t-xs)/1.6 var(--mono); color:var(--fg-3)}
+.rcred a{color:var(--fg-3); text-decoration:underline}
+.rcred a:hover{color:var(--fg-2)}
 .tabs{display:flex; gap:var(--sp-5); margin-top:var(--sp-5)}
 .tabs button{
   padding:0 0 var(--sp-3); border-bottom:2px solid transparent; color:var(--fg-3);
