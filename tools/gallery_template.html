@@ -43,6 +43,15 @@ body{overflow:hidden; display:flex; flex-direction:column}
   font-size:var(--t-xs); color:var(--fg-3);
 }
 .vcap .hl{color:var(--fg-2)}
+/* Attribution. CC BY and CC BY-SA require the author's name and the licence to travel
+   with anything published from the clip, and this page publishes both the clip and a
+   model derived from it. Quiet, but never hidden: no display:none, no truncation. */
+.vcred{
+  flex:none; padding:var(--sp-1) 0 0;
+  font-size:var(--t-xs); color:var(--fg-3); line-height:1.5;
+}
+.vcred a{color:var(--fg-3); text-decoration:underline}
+.vcred a:hover{color:var(--fg-2)}
 .mpane{flex:1; min-width:0; border:1px solid var(--line)}
 
 /* Baseline / MVS switch. A segmented control with a second line under each
@@ -100,6 +109,7 @@ body{overflow:hidden; display:flex; flex-direction:column}
   <div class="vpane" id="vpane">
     <div class="vbox"><video id="vid" controls preload="metadata" playsinline muted></video></div>
     <div class="vcap"><span id="vcapl"></span><span id="vcapr"></span></div>
+    <div class="vcred" id="vcred"></div>
   </div>
   <div class="mpane stage">
     <canvas id="gl"></canvas>
@@ -498,6 +508,7 @@ function show(i, mi){
     document.getElementById('vcapl').innerHTML =
       '<span class="hl">' + ex.clipName + '</span> &middot; ' + ex.clipMeta;
     document.getElementById('vcapr').textContent = ex.span;
+    document.getElementById('vcred').innerHTML = ex.credit || '';
     marks = []; setTip();
   }
   sizeVideoPane();

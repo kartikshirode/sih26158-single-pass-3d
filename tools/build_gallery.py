@@ -35,6 +35,50 @@ HERE = os.path.join(ROOT, "tools")
 OUT = os.path.join(ROOT, "demo", "gallery")
 SITE_URL = "https://tesseract-demo.vercel.app"
 
+# Footage provenance, from docs/16 section 4.1. This page republishes two things per
+# example: the source clip, copied into assets/, and a 3D model derived from it. A
+# derived model carries the source's licence, which is why the credit sits with the
+# example and not in a page footer.
+#
+# CC0 waives attribution, so Kolu needs none and the page said nothing for a long time.
+# Anything else does need it, by name, with the licence and a link back. Adding a clip
+# here without filling this in is the F-4 mistake again (docs/16 T11).
+FOOTAGE = {
+    "kolu": {
+        "title": "Kolu overpass", "author": None, "licence": "CC0",
+        "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+        "source_url": None,
+    },
+    "toolse": {
+        "title": "Toolse castle in Estonia (Fall 2021)", "author": "Sillerkiil",
+        "licence": "CC BY-SA 4.0",
+        "licence_url": "https://creativecommons.org/licenses/by-sa/4.0/",
+        "source_url": "https://commons.wikimedia.org/wiki/File:Toolse_castle_in_Estonia_(Fall_2021).webm",
+    },
+    "bahai": {
+        "title": "Baha'i Temple -- Wilmette, IL -- Drone Video (DJI Spark)",
+        "author": "Kurt Elster", "licence": "CC BY 3.0",
+        "licence_url": "https://creativecommons.org/licenses/by/3.0/",
+        "source_url": "https://commons.wikimedia.org/wiki/File:Baha%27i_Temple_--_Wilmette_,_IL_--_Drone_Video_(DJI_Spark).webm",
+    },
+}
+
+
+def credit(key):
+    """The attribution line for one example. Refuses rather than ships a clip whose
+    rights are not recorded, because the failure mode is silent republication."""
+    if key not in FOOTAGE:
+        sys.exit(f"no footage rights recorded for '{key}' - add it to FOOTAGE "
+                 f"(docs/16 section 4.1) before it goes on a public page")
+    f = FOOTAGE[key]
+    lic = f'<a href="{f["licence_url"]}" rel="license noopener" target="_blank">{f["licence"]}</a>'
+    if f["author"] is None:
+        return f'Source clip: {f["title"]}, {lic}. No attribution required.'
+    src = f['title']
+    if f["source_url"]:
+        src = f'<a href="{f["source_url"]}" rel="noopener" target="_blank">{src}</a>'
+    return f'Source clip: {src} by {f["author"]}, {lic}. This model is derived from it.'
+
 
 def jload(p):
     with io.open(p, encoding="utf-8") as f:
@@ -196,6 +240,7 @@ def main():
         {
             "key": "kolu", "tab": "Kolu overpass", "aspect": kw / kh,
             "video": "assets/kolu.mp4", "poster": poster("assets/kolu.mp4"),
+            "credit": credit("kolu"),
             "clipName": sk["video"],
             "clipMeta": f'{sk["resolution"]} &middot; {sk["fps"]} fps &middot; '
                         f'{sk["keyframes_selected"]} keyframes',
