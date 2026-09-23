@@ -66,7 +66,15 @@ FOOTAGE = {
 
 def credit(key):
     """The attribution line for one example. Refuses rather than ships a clip whose
-    rights are not recorded, because the failure mode is silent republication."""
+    rights are not recorded, because the failure mode is silent republication.
+
+    Three things have to be on the page, not just the author's name:
+      - the credit and the licence, with a link back to the source (BY and BY-SA),
+      - that the clip was changed, since we trim and re-encode it (CC 4.0 3(a)(1)(B)),
+      - for BY-SA, the licence the derived model itself carries. A reconstruction is
+        an adaptation, so share-alike reaches it, and saying nothing would leave a
+        viewer unable to tell what they may do with the model.
+    """
     if key not in FOOTAGE:
         sys.exit(f"no footage rights recorded for '{key}' - add it to FOOTAGE "
                  f"(docs/16 section 4.1) before it goes on a public page")
@@ -74,10 +82,17 @@ def credit(key):
     lic = f'<a href="{f["licence_url"]}" rel="license noopener" target="_blank">{f["licence"]}</a>'
     if f["author"] is None:
         return f'Source clip: {f["title"]}, {lic}. No attribution required.'
-    src = f['title']
+    src = f["title"]
     if f["source_url"]:
         src = f'<a href="{f["source_url"]}" rel="noopener" target="_blank">{src}</a>'
-    return f'Source clip: {src} by {f["author"]}, {lic}. This model is derived from it.'
+    out = (f'Source clip: {src} by {f["author"]}, {lic}. '
+           f'Trimmed and re-encoded for this page.')
+    if "SA" in f["licence"]:
+        out += (f' The 3D model on the right is derived from it and is shared under '
+                f'the same licence, {lic}.')
+    else:
+        out += " The 3D model on the right is derived from it."
+    return out
 
 
 def jload(p):

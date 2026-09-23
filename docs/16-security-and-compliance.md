@@ -91,10 +91,18 @@ SHA-1 of `bahai.webm` is `8e682f018f572659e3f09f1157ff0560a0db66a2`; `toolse.web
 Commons credit names an archive copy.
 
 **Publishing either one requires a visible credit naming the author and the licence, and a
-link to the source.** `tools/build_gallery.py` and `tools/gallery_template.html` have no field
-for that today, because Kolu is CC0 and never needed one. That field is a prerequisite for
-B-33, not a nicety. CC BY-SA 4.0 additionally makes any published reconstruction of Toolse
-share-alike, which is a decision for L-9 rather than one to take while adding a gallery tile.
+link to the source.** `tools/build_gallery.py` now carries that field (`FOOTAGE` and
+`credit()`), and `credit()` exits rather than build an example whose rights are not recorded.
+The line also states that the clip was trimmed and re-encoded, which CC 4.0 3(a)(1)(B)
+requires.
+
+**Share-alike decision, 2026-09-23, scoped to one artefact.** The Toolse reconstruction
+published in the gallery is an adaptation of a CC BY-SA 4.0 work, so it is released under
+CC BY-SA 4.0 and the page says so. This is a decision about *that model only*. It is **not**
+a licence for this project, and it does not pre-empt **L-9**, which is still open: no source,
+no pipeline output from other footage, and no submission artefact is covered by it. If the
+share-alike reach ever becomes awkward, the fix is to drop that one example and rebuild the
+gallery, which `credit()` and `FOOTAGE` make a one-line change.
 
 ---
 
