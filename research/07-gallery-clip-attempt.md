@@ -168,29 +168,50 @@ The guard is `resid > 2.0` at `mvs_job/run_mvs.py:141`. For comparison, from the
 passed: Kolu **0.2214 px**, ytd **0.2258 px**. Toolse is roughly 48x worse, so this is
 structural rather than marginal.
 
-Two candidate explanations were checked and dropped:
+**The cause is a missing confidence gate in the MVS job, and it is a bug.** Measured on the
+local arrays in `out/toolse_raw` by calling `derive_intrinsics` directly at H=252, W=518,
+varying only the mask (`research/run-evidence/toolse-intrinsics-gates.txt`):
 
-- **Not the aspect ratio.** `derive_intrinsics` fits each axis independently
-  (`_fit_axis(a, u)` and `_fit_axis(b, w)`), so an anisotropic resize is absorbed into
-  differing fx and fy and cannot by itself raise the residual. The fx/fy of 0.9180 is a symptom,
-  not the cause. Kolu's fx and fy agree to 0.02%.
-- **Not the horizon.** The `--horizon crop` worked: the keyframes contain no horizon and no sky.
+| Gate passed to the fit | Residual | fx/fy |
+|---|---|---|
+| `mask.npy` only, as `run_mvs.py:129` does | **10.693 px** | 0.9180 |
+| `mask & conf >= 1.010`, the baseline's own gate | **0.214 px** | 1.0035 |
+| `mask & not-water` | 12.179 px | 0.8741 |
+| `mask & conf & not-water` | 0.203 px | 1.0034 |
 
-**What it actually is: about a third of every frame is open sea.** Toolse castle sits on a
-headland with water filling the right of the frame throughout the pass. Water is textureless,
-specular, and physically moving between frames, so its depth is unreliable, and enough of the
-confidence-masked pixels are sea to break the assumption that pixel position is linear in X/Z.
-The same noise is visible in the baseline render as a fan of stray points off the headland.
+`mask.npy` keeps **99.9%** of pixels on this clip, so as a gate it does nothing, and
+low-confidence depth dominates the linear fit. Add the confidence gate the feed-forward path
+already uses and the residual falls to 0.214 px, which sits alongside Kolu's 0.2214, and fx/fy
+becomes 1.0035, the square pixels a real camera has.
 
-This is the guard behaving correctly. It is cheaper to refuse in a second than to spend 39
-minutes densifying onto a wrong camera, which is what its comment says.
+`run_mvs.py:129` reads `msk = np.load(".../mask.npy")` and passes only that. `conf.npy` is
+fetched and never reaches the fit. The feed-forward path in `finish_kolu` gates on
+`conf >= 1.010` and drops 30%, which is why the baseline succeeded on the same arrays.
+
+Three explanations were tested and dropped, and the first two were mine:
+
+- **Not the sea.** Masking water out made it *worse*, 12.179 px against 10.693. Roughly a third
+  of each frame is open water and it looked like the obvious culprit, but the numbers say
+  otherwise. Water is low-confidence, so the confidence gate removes it anyway along with
+  everything else unreliable.
+- **Not the horizon.** `--horizon crop` worked; the keyframes contain no horizon and no sky.
+- **Not the aspect ratio.** `derive_intrinsics` fits each axis independently, so an anisotropic
+  resize is absorbed into differing fx and fy. The 0.9180 is a symptom of the bad fit, and it
+  returns to 1.0035 once the fit is gated properly.
+
+The guard itself behaved correctly: refusing in a second beats densifying 39 minutes onto a
+wrong camera. It caught a real defect upstream of itself.
 
 ### What this means for the clip
 
 The feed-forward baseline is a genuine single-pass 3D model of the castle: the walls resolve
-and stand above ground in the height-coloured plan and the 40% section. It carries the usual
-feed-forward weakness plus sea noise. It is publishable with an honest label; the MVS rebuild
-is not available for this clip without masking water, which is not built.
+and stand above ground in the height-coloured plan and the 40% section. It is publishable with
+an honest label.
+
+The MVS rebuild is one line away rather than blocked. Passing `msk & (conf >= 1.010)` at
+`run_mvs.py:129` should clear the guard at 0.214 px. That needs the `mvs` image rebuilt and
+another densify run, so it is new spend and has not been done. Worth fixing regardless of this
+clip: any future clip whose mask keeps almost everything hits the same wall.
 
 ## Where this leaves B-33
 

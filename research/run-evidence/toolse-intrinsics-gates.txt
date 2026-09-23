@@ -1,0 +1,18 @@
+Toolse intrinsics fit, gate comparison. 2026-09-23.
+Reproduces the sih26158-mvs-vqt4g refusal and locates the cause.
+Arrays: out/toolse_raw (mapanything/toolse_out), 60 views, grid 518x252.
+Script: derive_intrinsics from src/pipeline/colmap_export.py, mask varied.
+
+grid 518x252  views 60  points (7832160, 3)  n*views 7832160
+mask keeps 99.9%   conf median 3.785
+
+--- gates ---
+1 mask only (as the job ran it)    resid  10.693 px   fx  362.64 fy  395.03 fx/fy 0.9180   views fitted 60
+2 mask & conf>=1.010 (baseline gate) resid   0.214 px   fx  395.27 fy  393.91 fx/fy 1.0035   views fitted 60
+
+crude water mask flags 22.1% of pixels as sea
+3 mask & not-water                 resid  12.179 px   fx  344.77 fy  394.44 fx/fy 0.8741   views fitted 60
+4 mask & conf & not-water          resid   0.203 px   fx  395.05 fy  393.73 fx/fy 1.0034   views fitted 60
+
+Guard: resid > 2.0 at mvs_job/run_mvs.py:141
+Reference: kolu 0.2214 px, ytd 0.2258 px
