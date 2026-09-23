@@ -107,6 +107,38 @@ CC0 and the omission never mattered. Adding one is a prerequisite for B-33, and 
 the source video too: the gallery copies the clip into `demo/gallery/assets`, which republishes
 it alongside the model.
 
+## 5. Running it turned up a wrong instruction in the repo
+
+The pipeline's own `STAGE-UNAVAILABLE` message says to run `sih26158-mapanything`, and
+`README.md` and `docs/15` said the same. Following that on a real clip fails:
+
+```
+  fetched 60 files from gs://sih26158-mumbai/mapanything/toolse_input
+  MapAnything on CPU  |  torch 2.6.0+cpu | threads 5
+FileNotFoundError: [Errno 2] No such file or directory: '/tmp/ma/meta.json'
+```
+
+That job runs `mapanything:v1`, which is the **synthetic harness**. It reads a `meta.json`
+written beside the rendered frames by the rasteriser, and
+`gs://sih26158-mumbai/mapanything/ma_input/meta.json` is where it comes from. `research/exp10`
+reproduces against exactly that prefix, so v1 is doing its job; the instruction was pointing
+video runs at it.
+
+Real keyframes go through the `kolu-ma` job, which runs `mapanything:v2` and takes bare images.
+Its name is historical and not Kolu-specific. Fixed in `stages.py`, `README.md` and `docs/15`.
+
+The lesson generalises: the local `mapanything_job/run_mapanything.py` has no `meta.json`
+handling anywhere in its 182 lines, so the repo source cannot tell you which deployed image
+does what. Only the job definitions in `asia-south1` carry that, and they disagree with each
+other. Anything that reads a container's behaviour off the repo is guessing.
+
+## 6. The credit field is built
+
+`tools/build_gallery.py` now carries `FOOTAGE` with the provenance from `docs/16` §4.1, and
+`credit()` renders an attribution line into a new `.vcred` element under the video. It exits
+rather than build an example whose rights are not recorded, because the failure it guards
+against is silent republication rather than a visible error. Kolu renders its CC0 line today.
+
 ## Where this leaves B-33
 
 B-33 is reachable, but it is three tasks rather than one: pick the clip (which is really an L-9
