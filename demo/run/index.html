@@ -1,0 +1,210 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SIH26158 - reconstruct a clip</title>
+<meta name="description" content="Upload a single-pass drone video and watch the pipeline reconstruct it: screening, keyframes, camera poses, then photometric densification.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text y='13' font-size='13'>&#9723;</text></svg>">
+<style>
+:root{--bg:#06080a;--s1:#151b21;--s2:#202830;--fg:#e7ecef;--fg-2:#b6c1c8;--fg-3:#909ba3;--line:#252e36;--line-2:#36424b;--accent:#e8a84a;--accent-hi:#f0b75f;--ok:#57c2a9;--bad:#e0705a;--on-accent:#06080a;--t-xs:11px;--t-sm:12.5px;--t-md:14px;--t-lg:16px;--t-xl:19px;--t-2xl:23px;--t-3xl:28px;--lh-tight:1.2;--lh-body:1.55;--sp-1:4px;--sp-2:6px;--sp-3:8px;--sp-4:12px;--sp-5:16px;--sp-6:22px;--sp-7:32px;--sp-8:48px;--r-sm:3px;--r-md:6px;--dur-1:90ms;--dur-2:180ms;--ease:cubic-bezier(.2,.6,.2,1);--sh-1:0 1px 2px rgba(2,4,6,.5);--sh-2:0 6px 20px rgba(2,4,6,.6);--z-base:1;--z-dock:10;--z-hud:20;--z-tip:30;--z-nav:40;--mono:"Consolas",ui-monospace,SFMono-Regular,Menlo,monospace;--sans:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}*,*::before,*::after{box-sizing:border-box}html{-webkit-text-size-adjust:100%}body{margin:0;background:var(--bg);color:var(--fg);font:var(--t-md)/var(--lh-body) var(--sans);-webkit-font-smoothing:antialiased}img,video,canvas,svg{display:block;max-width:100%}:where(a,button,[tabindex],summary,input,select):focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:var(--r-sm)}.h1,.h2,.h3{margin:0;font-weight:600;line-height:var(--lh-tight);color:var(--fg)}.h1{font-size:var(--t-2xl);letter-spacing:-.01em}.h2{font-size:var(--t-xl);letter-spacing:-.005em}.h3{font-size:var(--t-lg)}.lede{margin:0;font-size:var(--t-lg);line-height:var(--lh-body);color:var(--fg-2);max-width:78ch}.p{margin:0;color:var(--fg-2)}.sm{font-size:var(--t-sm)}.xs{font-size:var(--t-xs)}.big{font-size:var(--t-3xl);font-weight:600;line-height:1;letter-spacing:-.02em}.label{margin:0;font:600 var(--t-xs)/1.3 var(--sans);letter-spacing:.09em;text-transform:uppercase;color:var(--fg-3)}.num{font-family:var(--mono);font-variant-numeric:tabular-nums;font-feature-settings:"tnum" 1}.u{color:var(--fg-3)}.fg-ok{color:var(--ok)}.fg-bad{color:var(--bad)}.fg-acc{color:var(--accent)}.fg-1{color:var(--fg)}.fg-2{color:var(--fg-2)}.fg-3{color:var(--fg-3)}.panel{background:var(--s1);border:1px solid var(--line);border-radius:var(--r-md)}.panel-pad{padding:var(--sp-5)}.well{background:var(--bg);border:1px solid var(--line);border-radius:var(--r-sm)}.rule{height:1px;background:var(--line);border:0;margin:0}.card{display:block;width:100%;text-align:left;cursor:pointer;background:var(--s1);color:var(--fg);border:1px solid var(--line);border-radius:var(--r-md);padding:var(--sp-4);font:inherit;transition:background var(--dur-1) var(--ease),border-color var(--dur-1) var(--ease)}.card:hover{background:var(--s2);border-color:var(--line-2)}.card:active{transform:translateY(1px)}.card[aria-pressed="true"]{border-color:var(--accent);background:var(--s2)}.btn{display:inline-flex;align-items:center;gap:var(--sp-2);padding:var(--sp-3) var(--sp-5);border-radius:var(--r-sm);font:600 var(--t-sm)/1 var(--sans);letter-spacing:.01em;background:var(--s1);color:var(--fg);border:1px solid var(--line-2);cursor:pointer;white-space:nowrap;transition:background var(--dur-1) var(--ease),border-color var(--dur-1) var(--ease),color var(--dur-1) var(--ease)}.btn:hover:not(:disabled){background:var(--s2);border-color:var(--fg-3)}.btn:active:not(:disabled){transform:translateY(1px)}.btn:disabled{opacity:.42;cursor:not-allowed}.btn--primary{background:var(--accent);color:var(--on-accent);border-color:var(--accent)}.btn--primary:hover:not(:disabled){background:var(--accent-hi);border-color:var(--accent-hi)}.btn--quiet{background:transparent;border-color:var(--line)}.btn--quiet:hover:not(:disabled){background:var(--s1);border-color:var(--line-2)}.btn--sm{padding:var(--sp-2) var(--sp-3);font-size:var(--t-xs)}.btn[aria-pressed="true"],.btn[aria-current="true"]{background:var(--s2);border-color:var(--accent);color:var(--accent)}.input{font:var(--t-sm)/1 var(--mono);color:var(--fg);background:var(--s2);border:1px solid var(--line-2);border-radius:var(--r-sm);padding:var(--sp-3) var(--sp-4);transition:border-color var(--dur-1) var(--ease)}.input::placeholder{color:var(--fg-3)}.input:focus{outline:none;border-color:var(--accent)}.seg{display:inline-flex;background:var(--s1);border:1px solid var(--line);border-radius:var(--r-sm);padding:2px;gap:2px}.seg .btn{border:1px solid transparent;background:transparent}.seg .btn[aria-current="true"],.seg .btn[aria-pressed="true"]{background:var(--s2);color:var(--accent);border-color:var(--accent)}.chip{display:inline-flex;align-items:center;gap:var(--sp-1);padding:2px var(--sp-2);border-radius:var(--r-sm);font:600 var(--t-xs)/1.5 var(--sans);letter-spacing:.05em;text-transform:uppercase;border:1px solid var(--line-2);color:var(--fg-2);background:var(--s1)}.chip--ok{color:var(--ok);border-color:color-mix(in srgb,var(--ok) 45%,transparent)}.chip--bad{color:var(--bad);border-color:color-mix(in srgb,var(--bad) 45%,transparent)}.chip--acc{color:var(--accent);border-color:color-mix(in srgb,var(--accent) 45%,transparent)}.table{width:100%;border-collapse:collapse;font-size:var(--t-sm)}.table th,.table td{padding:var(--sp-3) var(--sp-4);text-align:right;border-bottom:1px solid var(--line)}.table th:first-child,.table td:first-child{text-align:left}.table thead th{font:600 var(--t-xs)/1.3 var(--sans);letter-spacing:.08em;text-transform:uppercase;color:var(--fg-3);background:var(--bg);border-bottom:1px solid var(--line-2)}.table tbody tr:hover{background:var(--s2)}.table tbody tr:last-child td{border-bottom:0}.table td.win{color:var(--ok)}.table td.lose{color:var(--fg-3)}.table .num{font-size:var(--t-sm)}.kv{margin:0;display:grid;grid-template-columns:1fr auto;gap:var(--sp-2) var(--sp-4);font-size:var(--t-sm)}.kv dt{color:var(--fg-3)}.kv dd{margin:0;text-align:right;color:var(--fg);font-family:var(--mono);font-variant-numeric:tabular-nums}.note{padding:var(--sp-3) var(--sp-4);border-left:2px solid var(--line-2);background:var(--s1);border-radius:0 var(--r-sm) var(--r-sm) 0;font-size:var(--t-sm);color:var(--fg-2)}.note b{color:var(--fg);font-weight:600}.note--acc{border-left-color:var(--accent)}.note--bad{border-left-color:var(--bad)}.src{font-size:var(--t-xs);color:var(--fg-3);font-family:var(--mono)}.src b{color:var(--fg-2);font-weight:600}.topbar{position:sticky;top:0;z-index:var(--z-nav);display:flex;align-items:center;gap:var(--sp-5);flex-wrap:wrap;padding:var(--sp-3) var(--sp-5);background:var(--bg);border-bottom:1px solid var(--line)}.brand{display:flex;align-items:baseline;gap:var(--sp-3);min-width:0}.brand .nm{font:600 var(--t-md)/1 var(--sans);letter-spacing:.02em;color:var(--fg)}.brand .tag{font-size:var(--t-xs);color:var(--fg-3);white-space:nowrap}.sitenav{display:flex;gap:var(--sp-1);margin-left:auto}.sitenav a{padding:var(--sp-2) var(--sp-3);border-radius:var(--r-sm);font:500 var(--t-sm)/1 var(--sans);color:var(--fg-3);text-decoration:none;border-bottom:2px solid transparent;transition:color var(--dur-1) var(--ease),border-color var(--dur-1) var(--ease)}.sitenav a:hover{color:var(--fg)}.sitenav a[aria-current="page"]{color:var(--fg);border-bottom-color:var(--accent)}.replay{display:inline-flex;align-items:center;gap:var(--sp-2);padding:var(--sp-1) var(--sp-3);border-radius:var(--r-sm);background:color-mix(in srgb,var(--accent) 12%,transparent);border:1px solid color-mix(in srgb,var(--accent) 40%,transparent);font:600 var(--t-xs)/1.5 var(--sans);letter-spacing:.07em;text-transform:uppercase;color:var(--accent);white-space:nowrap}.banner{padding:var(--sp-3) var(--sp-5);background:var(--s1);border-bottom:1px solid var(--line);font-size:var(--t-sm);color:var(--fg-2)}.banner b{color:var(--fg);font-weight:600}.wrap{max-width:1400px;margin:0 auto;padding:var(--sp-6) var(--sp-5)}.stack{display:flex;flex-direction:column;gap:var(--sp-5)}.row{display:flex;align-items:center;gap:var(--sp-3);flex-wrap:wrap}@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms !important;animation-iteration-count:1 !important;transition-duration:.01ms !important;scroll-behavior:auto !important}}#gl{width:100%;height:100%;display:block;cursor:grab;touch-action:none}#gl.drag{cursor:grabbing}body.measuring #gl{cursor:crosshair}.stage{position:relative;overflow:hidden;background:var(--bg);border-radius:var(--r-md)}#ovl{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:var(--z-hud)}#ovl .m-line{stroke:var(--accent);stroke-width:1.5;stroke-dasharray:5 3;fill:none}#ovl .m-ring{stroke:var(--accent);stroke-width:1.5;fill:none}#ovl .m-dot{fill:var(--accent)}#ovl .m-box{fill:var(--bg);stroke:var(--accent);stroke-width:1}#ovl .m-txt{fill:var(--accent);font-family:var(--mono);font-size:var(--t-sm);text-anchor:middle}.at-tl{position:absolute;left:var(--sp-4);top:var(--sp-4)}.at-tr{position:absolute;right:var(--sp-4);top:var(--sp-4)}.at-bl{position:absolute;left:var(--sp-4);bottom:var(--sp-4)}.at-br{position:absolute;right:var(--sp-4);bottom:var(--sp-4)}.hud{z-index:var(--z-hud);padding:var(--sp-2) var(--sp-3);border-radius:var(--r-sm);background:color-mix(in srgb,var(--bg) 82%,transparent);border:1px solid var(--line);backdrop-filter:blur(6px);font:var(--t-xs)/1.5 var(--mono);font-variant-numeric:tabular-nums;color:var(--fg-3);pointer-events:none}.mtip{position:absolute;left:50%;top:var(--sp-4);transform:translateX(-50%);z-index:var(--z-tip);display:none;padding:var(--sp-2) var(--sp-4);border-radius:var(--r-sm);background:color-mix(in srgb,var(--accent) 14%,var(--bg));border:1px solid color-mix(in srgb,var(--accent) 45%,transparent);font:600 var(--t-xs)/1.5 var(--sans);letter-spacing:.04em;color:var(--accent)}body.measuring .mtip{display:block}.dock{z-index:var(--z-dock);display:flex;flex-wrap:wrap;align-items:center;gap:var(--sp-1);padding:var(--sp-2);border-radius:var(--r-sm);max-width:calc(100% - var(--sp-7));background:color-mix(in srgb,var(--bg) 82%,transparent);border:1px solid var(--line);backdrop-filter:blur(6px);box-shadow:var(--sh-1)}.dock .sep{width:1px;align-self:stretch;background:var(--line);margin:0 var(--sp-1)}.loading{position:absolute;inset:0;z-index:var(--z-hud);display:grid;place-content:center;gap:var(--sp-3);text-align:center;background:var(--bg);font-size:var(--t-sm);color:var(--fg-3);transition:opacity var(--dur-2) var(--ease)}.loading.hide{opacity:0;pointer-events:none}.loading .err{color:var(--bad)}
+.wrap{max-width:1100px; margin:0 auto; padding:var(--sp-5) var(--sp-6)}
+.lede{max-width:74ch; color:var(--fg-3); font:400 var(--t-sm)/1.65 var(--sans)}
+.drop{margin-top:var(--sp-5); border:1px dashed var(--line); padding:var(--sp-6);
+      text-align:center; border-radius:2px}
+.drop.over{border-color:var(--accent)}
+.drop input{display:none}
+.pick{display:inline-block; cursor:pointer; border:1px solid var(--line);
+      padding:var(--sp-2) var(--sp-4); font:400 var(--t-sm)/1 var(--mono)}
+.pick:hover{border-color:var(--accent); color:var(--fg)}
+.limits{margin-top:var(--sp-3); font:400 var(--t-xs)/1.7 var(--mono); color:var(--fg-3)}
+.stages{margin-top:var(--sp-5); border-top:1px solid var(--line)}
+.st{display:flex; gap:var(--sp-4); align-items:baseline;
+    padding:var(--sp-3) 0; border-bottom:1px solid var(--line);
+    font:400 var(--t-sm)/1.5 var(--mono)}
+.st .dot{width:9px; height:9px; flex:none; border-radius:50%; background:var(--line)}
+.st[data-s=running] .dot{background:var(--accent); animation:pulse 1.2s infinite}
+.st[data-s=done] .dot{background:var(--ok)}
+.st[data-s=failed] .dot{background:var(--bad)}
+.st[data-s=skipped] .dot{background:var(--line); opacity:.4}
+.st .lab{flex:1; min-width:0}
+.st .note{display:block; color:var(--fg-3); font-size:var(--t-xs); margin-top:2px}
+.st .t{color:var(--fg-3); font-size:var(--t-xs); white-space:nowrap}
+.st[data-s=waiting]{opacity:.45}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+.bar{height:2px; background:var(--line); margin-top:var(--sp-2)}
+.bar i{display:block; height:100%; background:var(--accent); width:0; transition:width .6s linear}
+.out{margin-top:var(--sp-5); display:flex; gap:var(--sp-4); flex-wrap:wrap}
+.card{flex:1 1 320px; border:1px solid var(--line); padding:var(--sp-4)}
+.card h3{margin:0 0 var(--sp-2); font:500 var(--t-sm)/1.2 var(--mono); color:var(--fg)}
+.card .k{color:var(--fg-3); font:400 var(--t-xs)/1.8 var(--mono)}
+.dl a{display:inline-block; margin:0 var(--sp-2) var(--sp-2) 0; border:1px solid var(--line);
+      padding:2px var(--sp-2); font:400 var(--t-xs)/1.6 var(--mono); color:var(--fg-2);
+      text-decoration:none}
+.dl a:hover{border-color:var(--accent)}
+.err{border:1px solid var(--bad); padding:var(--sp-4); margin-top:var(--sp-4);
+     font:400 var(--t-sm)/1.6 var(--mono); color:var(--fg-2)}
+canvas#gl{width:100%; height:44vh; display:block; background:var(--bg)}
+.hint{color:var(--fg-3); font:400 var(--t-xs)/1.7 var(--mono); margin-top:var(--sp-2)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1 class="nm">Reconstruct a clip</h1>
+  <p class="lede">
+    Upload one continuous drone pass. The same pipeline the rest of this site was built
+    with runs it: admissibility, keyframe selection, camera poses, then photometric
+    densification. Every stage below reports what it actually did, and the timings are
+    measured rather than estimated. A usable model appears about an hour before the
+    final one, because densification is roughly three quarters of the wall clock.
+  </p>
+
+  <div class="drop" id="drop">
+    <label class="pick" for="f">Choose a video</label>
+    <input id="f" type="file" accept="video/*">
+    <div class="limits" id="limits">One continuous pass, up to 10 minutes and 600 MB. Sixty keyframes are selected however long the clip is. A run takes roughly 70 minutes end to end; a usable preview arrives at about 20. Results expire, and uploads never appear in the gallery.</div>
+  </div>
+
+  <div id="panel" hidden>
+    <div class="bar"><i id="bar"></i></div>
+    <div class="stages" id="stages"></div>
+    <div id="error"></div>
+    <div class="out" id="out"></div>
+  </div>
+</div>
+
+<script>
+(function(){
+  var API = "/api";
+  var S = document.getElementById("stages"), OUT = document.getElementById("out"),
+      PANEL = document.getElementById("panel"), BAR = document.getElementById("bar"),
+      ERR = document.getElementById("error");
+  var runId = null, timer = null;
+
+  function h(s){ return String(s == null ? "" : s)
+    .replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
+
+  function fmt(s){
+    if(s == null) return "";
+    s = Math.round(s);
+    if(s < 60) return s + "s";
+    return Math.floor(s/60) + "m " + String(s%60).padStart(2,"0") + "s";
+  }
+
+  // A stage shows elapsed against an EXPECTED time only where the orchestrator
+  // published one, and it publishes one only where a measured rate exists. Stages
+  // without a rate show elapsed alone rather than a fabricated percentage.
+  function render(d){
+    PANEL.hidden = false;
+    S.innerHTML = d.stages.map(function(s){
+      var t = s.state === "done" ? fmt(s.seconds)
+            : s.state === "running" ? fmt((d.elapsed || 0) - (s.startedAt || 0))
+              + (s.expectedSeconds ? " / ~" + fmt(s.expectedSeconds) : "")
+            : "";
+      return '<div class="st" data-s="' + h(s.state) + '">' +
+               '<span class="dot"></span>' +
+               '<span class="lab">' + h(s.label) +
+                 (s.note ? '<span class="note">' + h(s.note) + "</span>" : "") +
+               "</span>" +
+               '<span class="t">' + h(t) + "</span>" +
+             "</div>";
+    }).join("");
+
+    var done = d.stages.filter(function(s){ return s.state === "done"; }).length;
+    BAR.style.width = Math.round(100 * done / d.stages.length) + "%";
+
+    ERR.innerHTML = "";
+    if(d.error){
+      var refused = d.state === "refused";
+      ERR.innerHTML = '<div class="err"><b>' +
+        (refused ? "Not admissible" : "Stopped") + "</b><br>" + h(d.error.message) +
+        (refused ? "<br><br>This is a result, not a crash: the screener says why a clip "
+                 + "is hard before any inference is spent on it." : "") + "</div>";
+    }
+
+    OUT.innerHTML = "";
+    ["preview","final"].forEach(function(k){
+      var m = d[k];
+      if(!m) return;
+      var files = Object.keys(m.files || {});
+      OUT.innerHTML +=
+        '<div class="card"><h3>' + (k === "preview" ? "Preview model" : "Final model") +
+        "</h3>" +
+        '<div class="k">' + Number(m.points||0).toLocaleString() + " points" +
+        (m.triangles ? " &middot; " + Number(m.triangles).toLocaleString() + " triangles" : "") +
+        "</div>" +
+        (k === "preview"
+          ? '<div class="k">Feed-forward. Arrives first; the final model replaces it.</div>'
+          : '<div class="k">Per-pixel photometric MVS at full keyframe resolution.</div>') +
+        (files.length
+          ? '<div class="dl">' + files.map(function(f){
+              return '<a href="' + API + "/file?id=" + encodeURIComponent(runId) +
+                     "&p=" + encodeURIComponent(m.label + "/" + f) + '">' +
+                     h(f) + " <span class=k>" + m.files[f] + " MB</span></a>";
+            }).join("") + "</div>"
+          : '<div class="k">No exports for the preview; the final model carries them.</div>') +
+        "</div>";
+    });
+  }
+
+  function poll(){
+    fetch(API + "/status?id=" + encodeURIComponent(runId), {cache:"no-store"})
+      .then(function(r){ return r.json(); })
+      .then(function(d){
+        render(d);
+        if(["done","failed","refused","partial"].indexOf(d.state) >= 0){
+          clearInterval(timer);
+        }
+      })
+      .catch(function(){ /* a dropped poll is not a failed run; the next one retries */ });
+  }
+
+  function start(file){
+    ERR.innerHTML = ""; OUT.innerHTML = "";
+    PANEL.hidden = false;
+    S.innerHTML = '<div class="st" data-s="running"><span class="dot"></span>' +
+                  '<span class="lab">Uploading</span></div>';
+    fetch(API + "/runs", {method:"POST", headers:{"content-type":"application/json"},
+          body: JSON.stringify({name: file.name, size: file.size, type: file.type})})
+      .then(function(r){ if(!r.ok) throw new Error("could not start a run"); return r.json(); })
+      .then(function(j){
+        runId = j.runId;
+        location.hash = "#" + runId;
+        return fetch(j.uploadUrl, {method:"PUT",
+                     headers:{"content-type": file.type || "application/octet-stream"},
+                     body:file});
+      })
+      .then(function(r){ if(!r.ok) throw new Error("upload failed");
+        return fetch(API + "/start", {method:"POST",
+               headers:{"content-type":"application/json"},
+               body: JSON.stringify({runId: runId})}); })
+      .then(function(r){ if(!r.ok) return r.text().then(function(t){ throw new Error(t); });
+        timer = setInterval(poll, 5000); poll(); })
+      .catch(function(e){
+        ERR.innerHTML = '<div class="err">' + h(e.message || e) + "</div>";
+        S.innerHTML = "";
+      });
+  }
+
+  var drop = document.getElementById("drop"), input = document.getElementById("f");
+  input.addEventListener("change", function(){ if(input.files[0]) start(input.files[0]); });
+  ["dragenter","dragover"].forEach(function(e){
+    drop.addEventListener(e, function(ev){ ev.preventDefault(); drop.classList.add("over"); });
+  });
+  ["dragleave","drop"].forEach(function(e){
+    drop.addEventListener(e, function(ev){ ev.preventDefault(); drop.classList.remove("over"); });
+  });
+  drop.addEventListener("drop", function(ev){
+    var f = ev.dataTransfer && ev.dataTransfer.files[0];
+    if(f) start(f);
+  });
+
+  // Reopening a link to a run in progress picks it back up rather than starting over.
+  if(location.hash.length > 1){
+    runId = location.hash.slice(1);
+    timer = setInterval(poll, 5000); poll();
+  }
+})();
+</script>
+</body>
+</html>
