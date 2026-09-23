@@ -127,6 +127,25 @@ def main():
     from colmap_export import derive_intrinsics, full_frame_camera, write_model
 
     msk = np.load(f"{W}/ma/mask.npy") if os.path.exists(f"{W}/ma/mask.npy") else None
+    # The mask alone is not a gate. On Toolse it kept 99.9% of pixels, so low-confidence
+    # depth dominated the linear fit and the residual came out at 10.693 px against a
+    # guard of 2.0 - while the SAME arrays fitted to 0.214 px once confidence was gated,
+    # alongside Kolu's 0.2214, with fx/fy back at 1.0035 (research/run-evidence/
+    # toolse-intrinsics-gates.txt). The feed-forward path has always gated this way;
+    # only the MVS path did not, and it read like a bad clip rather than a missing gate.
+    # Same rule as fuse_mesh.filter_fuse: drop the lowest conf_pct by percentile, and
+    # only when the channel actually carries values.
+    cfp = f"{W}/ma/conf.npy"
+    if os.path.exists(cfp):
+        conf = np.load(cfp).reshape(-1)
+        if float(conf.min()) != float(conf.max()):
+            thr = float(np.percentile(conf, 30.0))
+            gate = conf >= thr
+            msk = gate if msk is None else (msk.reshape(-1) & gate)
+            print(f"  intrinsics gate: conf >= {thr:.3f} (30th pct), keeps "
+                  f"{gate.mean():.1%} of pixels", flush=True)
+        else:
+            print("  intrinsics gate: conf channel is constant - not gated", flush=True)
     K, resid = derive_intrinsics(pts, cams, H, W_, mask=msk)
     cam = full_frame_camera(K, H, W_, h0, w0)
     print(f"\n  intrinsics fitted from the point maps:"
