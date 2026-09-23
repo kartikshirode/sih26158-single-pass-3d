@@ -139,6 +139,59 @@ other. Anything that reads a container's behaviour off the repo is guessing.
 rather than build an example whose rights are not recorded, because the failure it guards
 against is silent republication rather than a visible error. Kolu renders its CC0 line today.
 
+## 7. The run: poses fine, baseline fine, MVS refused
+
+Sequence, all on 60 capped views:
+
+| Stage | Result |
+|---|---|
+| `kolu-ma` (MapAnything v2) | **succeeded.** 640.6 s inference, **10.68 s/view** on 8 vCPU |
+| `finish_kolu.py` feed-forward baseline | **succeeded.** 395,189 points fused, 656,551 vertices, 1,314,597 triangles, viewer packed to `out/toolse3d` |
+| `sih26158-mvs` densify | **refused at the intrinsics guard** |
+
+**The 10.68 s/view is a new number and it contradicts the extrapolation in `research/exp10`.**
+That note measured 6.4 to 8.1 s/view and extrapolated 600 keyframes at 7.5 s/view to about 75
+minutes. The rate is not flat in view count, because MapAnything attends across the whole set:
+at 8 views it is 6.4 to 8.1 s, at 60 views it is 10.68 s. The 75-minute figure is optimistic
+and should be re-derived before anyone plans against it.
+
+### Why MVS refused
+
+```
+intrinsics fitted from the point maps:
+  grid 518x252  fx 362.64  fy 395.03  (median of 60 views, fx/fy 0.9180)
+  reprojection residual 10.6931 px (median over 60 views)
+intrinsics fit is bad (10.69 px) - refusing to build on it
+```
+
+The guard is `resid > 2.0` at `mvs_job/run_mvs.py:141`. For comparison, from the runs that
+passed: Kolu **0.2214 px**, ytd **0.2258 px**. Toolse is roughly 48x worse, so this is
+structural rather than marginal.
+
+Two candidate explanations were checked and dropped:
+
+- **Not the aspect ratio.** `derive_intrinsics` fits each axis independently
+  (`_fit_axis(a, u)` and `_fit_axis(b, w)`), so an anisotropic resize is absorbed into
+  differing fx and fy and cannot by itself raise the residual. The fx/fy of 0.9180 is a symptom,
+  not the cause. Kolu's fx and fy agree to 0.02%.
+- **Not the horizon.** The `--horizon crop` worked: the keyframes contain no horizon and no sky.
+
+**What it actually is: about a third of every frame is open sea.** Toolse castle sits on a
+headland with water filling the right of the frame throughout the pass. Water is textureless,
+specular, and physically moving between frames, so its depth is unreliable, and enough of the
+confidence-masked pixels are sea to break the assumption that pixel position is linear in X/Z.
+The same noise is visible in the baseline render as a fan of stray points off the headland.
+
+This is the guard behaving correctly. It is cheaper to refuse in a second than to spend 39
+minutes densifying onto a wrong camera, which is what its comment says.
+
+### What this means for the clip
+
+The feed-forward baseline is a genuine single-pass 3D model of the castle: the walls resolve
+and stand above ground in the height-coloured plan and the 40% section. It carries the usual
+feed-forward weakness plus sea noise. It is publishable with an honest label; the MVS rebuild
+is not available for this clip without masking water, which is not built.
+
 ## Where this leaves B-33
 
 B-33 is reachable, but it is three tasks rather than one: pick the clip (which is really an L-9
