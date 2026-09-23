@@ -45,6 +45,9 @@ MVS_JOB = os.environ.get("MVS_JOB", "sih26158-mvs")
 # planned for Toolse and would have needed 3.2 h of densify against a 3 h job timeout,
 # while 60 views matches Kolu's view density and lands near its recorded wall clock.
 MAX_VIEWS = int(os.environ.get("MAX_VIEWS", "60"))
+# Below this there is not enough baseline to reconstruct anything, so the run stops
+# with the screener's reasons instead of spending an hour proving it.
+MIN_VIEWS = int(os.environ.get("MIN_VIEWS", "8"))
 MAX_SECONDS = float(os.environ.get("MAX_SECONDS", "600"))      # PS: 10-minute video
 MAX_BYTES = int(os.environ.get("MAX_BYTES", str(600 * 1024 * 1024)))
 
@@ -151,14 +154,28 @@ def run_cloud_job(job, env, label, expect_s, sid):
     overrides = run_v2.RunJobRequest.Overrides(
         container_overrides=[run_v2.RunJobRequest.Overrides.ContainerOverride(
             env=[run_v2.EnvVar(name=k, value=v) for k, v in env.items()])])
-    op = c.run_job(request=run_v2.RunJobRequest(name=name, overrides=overrides))
-    print(f"  {label}: execution started", flush=True)
-    expect(sid, expect_s)
-    res = op.result(timeout=4 * 3600)          # the operation completes with the job
-    ok = getattr(res, "succeeded_count", 0) or 0
-    if ok < 1:
-        raise RuntimeError(f"{label}: job reported no successful task")
-    return res
+    # Cloud Run returns 503 "Internal error running task" occasionally, with the task's
+    # own exit code reported as 0. That is the platform, not the job: the first web run
+    # lost its pose stage to one. Retry once, and only for that shape of failure, so a
+    # genuine job failure still surfaces immediately rather than costing a second hour.
+    last = None
+    for attempt in (1, 2):
+        op = c.run_job(request=run_v2.RunJobRequest(name=name, overrides=overrides))
+        print(f"  {label}: execution started (attempt {attempt})", flush=True)
+        expect(sid, expect_s)
+        try:
+            res = op.result(timeout=4 * 3600)
+        except Exception as e:
+            last = e
+            if attempt == 1 and "Internal error running task" in str(e):
+                print(f"  {label}: transient platform error, retrying once", flush=True)
+                continue
+            raise
+        ok = getattr(res, "succeeded_count", 0) or 0
+        if ok < 1:
+            raise RuntimeError(f"{label}: job reported no successful task")
+        return res
+    raise RuntimeError(f"{label}: {last}")
 
 
 def main():
@@ -188,18 +205,19 @@ def main():
     # ---- screen + ingest, in-process via the real pipeline ---------------------
     # tesseract.py is the product; the web path runs the same code rather than a
     # parallel implementation that could drift from it.
+    # S0 and S1 are called directly, NOT through `tesseract.py run`. The runner owns a
+    # degradation ladder, and S3 has no geometry provider in this container by design
+    # (poses run in kolu-ma). So the ladder read STAGE-UNAVAILABLE as a reason to retry
+    # the whole run at L1, L2, L3, L4 and finally L5, re-screening and re-ingesting each
+    # time: five passes, 594 s, and a verdict of "not reconstructable" for a clip that
+    # reconstructs perfectly well. The ladder is right for a batch run and wrong here,
+    # because this orchestrator supplies the missing stage itself a few lines below.
     stage("screen", "running")
-    cmd = [sys.executable, os.path.join(ROOT, "tesseract.py"), "run", path,
-           "--name", RUN_ID, "--horizon", "crop",
-           "--keyframes", str(MAX_VIEWS), "--dense-views", str(MAX_VIEWS),
-           "--budget", "7200"]
+    from ingest.screen import screen as screen_clip
     try:
-        out = sh(cmd, "tesseract run (S0-S2)")
-    except RuntimeError as e:
-        fail(f"ingest failed: {e}", "ING-FAIL")
-
-    rd = os.path.join(ROOT, "out", "runs", RUN_ID)
-    scr = json.load(open(os.path.join(rd, "screen.json"), encoding="utf-8"))
+        scr = screen_clip(path)
+    except Exception as e:
+        fail(f"could not read the video: {e}", "ING-READ")
     _state["screen"] = scr
     stage("screen", "done",
           note=f"{scr['resolution']} - {scr['duration_s']:.0f} s - "
@@ -209,22 +227,34 @@ def main():
         fail(f"clip is {scr['duration_s']:.0f} s; the limit is {MAX_SECONDS:.0f} s "
              f"(the PS target is a 10-minute video)", "WEB-TOOLONG")
 
-    ing_p = os.path.join(rd, "ingest.json")
+    stage("ingest", "running")
+    kf_dir = f"{W}/kf"
+    try:
+        sh([sys.executable, os.path.join(ROOT, "src", "ingest", "video_ingest.py"),
+            path, "--out", kf_dir, "--n", str(MAX_VIEWS), "--horizon", "crop"],
+           "S1 ingest")
+    except RuntimeError as e:
+        fail(f"keyframe selection failed: {e}", "ING-FAIL")
+
+    ing_p = os.path.join(kf_dir, "ingest.json")
     if not os.path.exists(ing_p):
-        # The screener refused it and the ladder stopped. That IS the result: R-C9 asks
-        # the system to say why a clip is hard before spending inference on it.
+        fail("ingest wrote no keyframe set", "ING-FAIL")
+    ing = json.load(open(ing_p, encoding="utf-8"))
+    if len(ing.get("keyframes") or []) < MIN_VIEWS:
+        # Too little survives the gates to reconstruct anything. That is a RESULT, and
+        # the screener's own reasons are the explanation: R-C9 asks the system to say
+        # why a clip is hard before spending inference on it. No MapAnything, no MVS.
         _state["state"] = "refused"
-        _state["error"] = {"message": "; ".join(scr.get("reasons") or ["not admissible"]),
-                           "code": "ADM-REFUSED"}
+        _state["error"] = {
+            "message": "; ".join(scr.get("reasons") or []) or
+                       f"only {len(ing.get('keyframes') or [])} usable keyframes",
+            "code": "ADM-REFUSED"}
         for s in _state["stages"]:
-            if s["state"] == "waiting":
+            if s["state"] in ("waiting", "running"):
                 s["state"] = "skipped"
         put_status()
-        print("refused by the screener; no inference spent", flush=True)
+        print("refused: too few usable keyframes; no inference spent", flush=True)
         return
-
-    stage("ingest", "running")
-    ing = json.load(open(ing_p, encoding="utf-8"))
     st = ing["stats"]
     _state["ingest"] = {
         "framesDecoded": st["frames_decoded"],
@@ -235,12 +265,12 @@ def main():
         "rejectedSky": st.get("rejected_sky"),
         "hasTelemetry": st.get("has_gps_sidecar", False),
     }
-    n = st["keyframes_selected"]
-    kf_dir = os.path.join(rd, "keyframes")
-    keep = {f"kf_{i:03d}" for i in range(n)}
+    # No stale-file filter needed: video_ingest.py clears kf_*.jpg from --out before it
+    # writes, so this directory holds exactly this run's selection. Doing it by hand is
+    # how 296 stale frames from an earlier pass nearly went up with a later one.
     sent = 0
     for fn in sorted(os.listdir(kf_dir)):
-        if fn[:7] in keep and fn.endswith(".jpg"):
+        if fn.startswith("kf_") and fn.endswith(".jpg"):
             b.blob(f"web/{RUN_ID}/kf/{fn}").upload_from_filename(
                 os.path.join(kf_dir, fn))
             sent += 1
