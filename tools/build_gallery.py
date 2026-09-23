@@ -178,15 +178,21 @@ def main():
     ing_k = jload(os.path.join(ROOT, "out/kf_kolu/ingest.json"))
     mvs_k = jload(os.path.join(ROOT, "out/kolu_mvs/mvs_result.json"))
 
+    mt = jload(os.path.join(ROOT, "out/ppt/measure_toolse.json"))
+    ing_t = jload(os.path.join(ROOT, "out/kf_toolse/ingest.json"))
+    mvs_t = jload(os.path.join(ROOT, "out/toolse_mvs/mvs_result.json"))
+
     at = lambda d, r: dict((x[0], x[1]) for x in d["roughness_cm"]).get(r)
 
     # ---- geometry: one file per model, loaded on demand by the page
-    # Only Kolu. The Village runs came from a third-party clip whose rights are not
-    # cleared, and a reconstruction is derived work, so neither the footage nor its
-    # geometry may be published (`docs/16` L-8, finding F-4).
+    # Kolu and Toolse. The Village runs came from a third-party clip whose rights are
+    # not cleared, and a reconstruction is derived work, so neither the footage nor its
+    # geometry may be published (`docs/16` L-8, finding F-4). Toolse is CC BY-SA 4.0 and
+    # cleared, with its credit and the model's own licence on the page; see FOOTAGE.
     # kolu_tex is packed for the console (the gallery page keeps its two-way A/B);
     # its atlas travels beside the .js under the name the pack recorded.
-    RUNS = {"kolu_base": "kolu3d", "kolu_mvs": "kolumvs3d", "kolu_tex": "kolutex3d"}
+    RUNS = {"kolu_base": "kolu3d", "kolu_mvs": "kolumvs3d", "kolu_tex": "kolutex3d",
+            "toolse_base": "toolse3d", "toolse_mvs": "toolsemvs3d"}
     halves, written = {}, 0
     for key, run in RUNS.items():
         D, half = packed(run)
@@ -211,9 +217,25 @@ def main():
         star = "" if cal["status"] != "unvalidated" else "*"
         return cal["factor"], star
 
+    def common_radius(d):
+        """Smallest neighbourhood both clouds actually measured.
+
+        compare_mvs drops a radius that had too few neighbours to fit a plane, so the
+        two clouds do not always offer the same set. Kolu's baseline reaches 6 cm (on
+        56 queries); Toolse's is sparser over a wider footprint and stops at 12 cm.
+        Hardcoding 6 printed a residual for one clip and crashed on the other, so the
+        row names whichever radius the pair share."""
+        b = {x[0] for x in d["baseline"]["roughness_cm"]}
+        m = {x[0] for x in d["mvs"]["roughness_cm"]}
+        both = sorted(b & m)
+        if not both:
+            sys.exit("baseline and MVS share no roughness radius; cannot compare them")
+        return both[0]
+
     def rows_pair(d, cal, cov_note=True):
         b, m = d["baseline"], d["mvs"]
         k, star = units(cal)
+        rr = common_radius(d)
         r = [
             ["points in the cloud", f'{b["points"]:,}', f'{m["points"]:,}', "", "win"],
             ["footprint",
@@ -227,8 +249,8 @@ def main():
             [f"points more than {2.5*k:.1f} m{star} up",
              pct(b["fraction_above_m"]["2.5"]), pct(m["fraction_above_m"]["2.5"]),
              "lose", "win"],
-            [f"surface residual, {6*k:.0f} cm{star} neighbourhood",
-             f'{at(b, 6.0)*k:.2f} cm{star}', f'{at(m, 6.0)*k:.2f} cm{star}',
+            [f"surface residual, {rr*k:.0f} cm{star} neighbourhood",
+             f'{at(b, rr)*k:.2f} cm{star}', f'{at(m, rr)*k:.2f} cm{star}',
              "lose", "win"],
         ]
         if cov_note:
@@ -250,6 +272,18 @@ def main():
                  "be 5.3-5.8x too small (docs/08).")
 
     gain_k = at(mk["baseline"], 6.0) / at(mk["mvs"], 6.0)
+
+    tw_, th_, tdur = probe(os.path.join(OUT, "assets", "toolse.mp4"))
+    st, tk = ing_t["stats"], ing_t["keyframes"]
+    # No calibration file names this run, so scale_cal returns the unvalidated default
+    # and every length on the tab carries the asterisk. That contrast with Kolu's
+    # calibrated metres is the reason a second clip is here at all (docs/18 B-33).
+    cal_t = scale_cal.load("toolsemvs3d")
+    if scale_cal.load("toolse3d") != cal_t:
+        sys.exit("toolse3d and toolsemvs3d disagree on scale; one table cannot cover both")
+    kt_ = cal_t["factor"]
+    rt_ = common_radius(mt)
+    gain_t = at(mt["baseline"], rt_) / at(mt["mvs"], rt_)
 
     EX = [
         {
@@ -286,6 +320,43 @@ def main():
                 f'<code>src/analysis/compare_mvs.py</code>, so both columns are on the same '
                 f'axis. Wall clock for the rebuild: {mvs_k["total_seconds"]/60:.0f} min on '
                 f'8 vCPU, no GPU.'),
+        },
+        {
+            "key": "toolse", "tab": "Toolse castle", "aspect": tw_ / th_,
+            "video": "assets/toolse.mp4", "poster": poster("assets/toolse.mp4"),
+            "credit": credit("toolse"),
+            "clipName": st["video"],
+            "clipMeta": f'{st["resolution"]} &middot; {st["fps"]} fps &middot; '
+                        f'{st["keyframes_selected"]} keyframes',
+            "span": f'frames {tk[0]} to {tk[-1]}  ({tdur:.1f} s)',
+            "viewScale": round(max(halves["toolse_base"], halves["toolse_mvs"]), 4),
+            "models": [
+                {"key": "toolse_base", "file": "mesh/toolse_base.js",
+                 "label": "baseline", "sub": "feed-forward"},
+                {"key": "toolse_mvs", "file": "mesh/toolse_mvs.js",
+                 "label": "MVS rebuild", "sub": "per-pixel"},
+            ],
+            "tableHead": [f'Toolse castle, {st["keyframes_selected"]} keyframes',
+                          "MapAnything, feed-forward", "OpenMVS rebuild"],
+            "scale": scale_cal.for_page(cal_t),
+            "rows": rows_pair(mt, cal_t),
+            "note": (
+                f'A medieval ruin on a headland, and the counterpart to Kolu in two ways. '
+                f'Its lengths carry an asterisk: there is no object of known size in the '
+                f'frame and no GNSS in the clip, so this model is in its own units while '
+                f"Kolu's are calibrated metres. Read the two tabs together and the "
+                f'asterisk is the point. '
+                f'It is also the case where the rebuild is the smaller model: it holds '
+                f'<b>{100*mt["coverage"]["mvs_over_baseline"]:.0f}%</b> of the baseline\'s '
+                f'ground cells, against 136% on Kolu. Open sea fills the right of every '
+                f'frame, and the feed-forward pass paints points onto it, while photometric '
+                f'MVS keeps only what several views agree on and drops the water. Less '
+                f'coverage, and the {mt["mvs"]["points"]:,} points it does keep sit '
+                f'<b>{gain_t:.1f}x</b> tighter to a fitted plane at a {rt_*kt_:.0f} cm '
+                f'neighbourhood. The walls reach {mt["mvs"]["relief_m"]["max"]:.1f} units '
+                f'above local ground. Textured from the keyframes, not per-vertex colour. '
+                f'Wall clock for the rebuild: {mvs_t["total_seconds"]/60:.0f} min on 8 '
+                f'vCPU, no GPU.'),
         },
     ]
 
