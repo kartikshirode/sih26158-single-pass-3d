@@ -498,7 +498,14 @@ def ingest_video(path: str, *, target_keyframes: int = 600,
     # what remains - which is what resolves structure standing off the ground.
     end_n = int(end_s * fps) if end_s else None
 
-    scores, skies, slates, horiz, flows, kept_idx, thumbs, hists =         [], [], [], [], [], [], [], []
+    # `smalls`, not full frames. Retaining every decoded frame at full resolution cost
+    # W*H*3 each: 17.8 GB on a 114 s 1080p clip, which SIGKILLed the web orchestrator at
+    # 16 GiB, and would be about 112 GB on the 10-minute video the PS asks for (R-O2).
+    # Every use below either downscales immediately or wants only the ~60 SELECTED
+    # frames, so the analysis copy is kept here and the selected frames are decoded
+    # again in a second pass: O(clip) memory at 1/16 the constant, O(keyframes) at full
+    # resolution.
+    scores, skies, slates, horiz, flows, kept_idx, smalls, hists =         [], [], [], [], [], [], [], []
     prev_small = None
     n = 0
 
@@ -523,7 +530,7 @@ def ingest_video(path: str, *, target_keyframes: int = 600,
                 flows.append(0.0)
             prev_small = gray
             kept_idx.append(n)
-            thumbs.append(img)
+            smalls.append(small)
         n += 1
         if progress and n % 150 == 0:
             print(f"    decoded {n} frames", end="\r", flush=True)
@@ -554,7 +561,7 @@ def ingest_video(path: str, *, target_keyframes: int = 600,
     _all = np.flatnonzero(in_shot)
     idx_shot = _all[np.linspace(0, len(_all) - 1, min(90, len(_all))).astype(int)]
     ar = H / W
-    sub = [cv2.resize(thumbs[i], (480, int(480 * ar))) for i in idx_shot]
+    sub = [cv2.resize(smalls[i], (480, int(480 * ar))) for i in idx_shot]
     crop = overlay_crop_box(static_overlay_mask(sub))
 
     ok = in_shot.copy()
@@ -567,7 +574,7 @@ def ingest_video(path: str, *, target_keyframes: int = 600,
         # Re-score sky and blur on the CROPPED frame - the uncropped numbers describe
         # an image we are no longer using, and the sky gate would reject everything.
         for j in np.flatnonzero(in_shot):
-            c = apply_crop(cv2.resize(thumbs[j], (int(W * analyse_scale),
+            c = apply_crop(cv2.resize(smalls[j], (int(W * analyse_scale),
                                                   int(H * analyse_scale))), crop)
             skies[j] = sky_fraction(c)
             scores[j] = sharpness(cv2.cvtColor(c, cv2.COLOR_BGR2GRAY))
@@ -619,10 +626,43 @@ def ingest_video(path: str, *, target_keyframes: int = 600,
         "flow_budget_px": round(float(flow_budget), 2),
         "has_gps_sidecar": bool(tel_all), "srt_records": len(tel_all),
     }
+    # Second pass for the frames that survive. Only these are needed at full
+    # resolution, and there are ~60 of them, so this is ~370 MB instead of the whole
+    # clip. One extra sequential decode (about 20 s on a 114 s 1080p clip) in exchange
+    # for memory that no longer grows with clip length at full resolution.
+    want = np.asarray(kept_idx)[selected]
+    full = _decode_frames(path, want)
     return IngestResult(
-        keyframe_indices=kept_idx[selected],
-        frames=[apply_crop(thumbs[i], crop) for i in selected],
+        keyframe_indices=want,
+        frames=[apply_crop(full[i], crop) for i in want],
         telemetry=telemetry, stats=stats)
+
+
+def _decode_frames(path, indices):
+    """Decode exactly `indices` (original frame numbers) at full resolution.
+
+    Sequential rather than seeking: these clips are long-GOP VP9/H.264, where seeking
+    to an arbitrary frame means decoding from the previous keyframe anyway, and a
+    single ordered pass is both simpler and no slower for a set this dense.
+    """
+    import av
+
+    want = set(int(i) for i in indices)
+    out, n = {}, 0
+    container = av.open(path)
+    try:
+        for frame in container.decode(video=0):
+            if n in want:
+                out[n] = frame.to_ndarray(format="bgr24")
+                if len(out) == len(want):
+                    break
+            n += 1
+    finally:
+        container.close()
+    missing = want - set(out)
+    if missing:
+        raise RuntimeError(f"second pass could not decode frames {sorted(missing)[:5]}")
+    return out
 
 
 if __name__ == "__main__":
