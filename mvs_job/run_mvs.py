@@ -73,7 +73,15 @@ def fetch():
             n += 1
     for want in ("cameras.npy", "points.npy", "mask.npy", "mapanything_result.json"):
         b.blob(f"{MA_PREFIX}/{want}").download_to_filename(f"{W}/ma/{want}")
-    print(f"  fetched {n} keyframes + MapAnything poses", flush=True)
+    # conf.npy gates the intrinsics fit below. Optional because older MapAnything
+    # outputs predate the channel; missing is reported there rather than skipped
+    # quietly, which is how a run was once lost to a gate that never fired.
+    cb = b.blob(f"{MA_PREFIX}/conf.npy")
+    if cb.exists():
+        cb.download_to_filename(f"{W}/ma/conf.npy")
+    print(f"  fetched {n} keyframes + MapAnything poses"
+          f"{' + conf' if os.path.exists(f'{W}/ma/conf.npy') else ' (no conf.npy)'}",
+          flush=True)
     return n
 
 
@@ -145,7 +153,11 @@ def main():
             print(f"  intrinsics gate: conf >= {thr:.3f} (30th pct), keeps "
                   f"{gate.mean():.1%} of pixels", flush=True)
         else:
-            print("  intrinsics gate: conf channel is constant - not gated", flush=True)
+            print("  intrinsics gate: conf channel is constant - NOT GATED", flush=True)
+    else:
+        print("  intrinsics gate: no conf.npy in this MapAnything output - NOT GATED. "
+              "A mask that keeps almost every pixel will let low-confidence depth set "
+              "the fit; expect the guard below to fire.", flush=True)
     K, resid = derive_intrinsics(pts, cams, H, W_, mask=msk)
     cam = full_frame_camera(K, H, W_, h0, w0)
     print(f"\n  intrinsics fitted from the point maps:"

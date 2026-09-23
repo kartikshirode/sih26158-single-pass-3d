@@ -115,6 +115,12 @@ def stage_prep():
     names, (H, W_) = res["images"], res["view_shapes"][0]
     cams = np.load(f"{W}/ma/cameras.npy").astype(np.float64)
     pts = np.load(f"{W}/ma/points.npy")
+    # KNOWN DEFECT, same as the one fixed in run_mvs.py on 2026-09-23: the mask alone
+    # is not a gate. Where it keeps nearly every pixel (99.9% on Toolse), low-confidence
+    # depth sets the fit and derive_intrinsics returns ~10.7 px against a 2.0 guard,
+    # while the same arrays give 0.214 px once conf is gated. conf.npy is not even in
+    # the pull() set above. Left unchanged here only because this path is untested from
+    # this machine; copy the fetch and gate out of run_mvs.py before relying on it.
     msk = np.load(f"{W}/ma/mask.npy") if os.path.exists(f"{W}/ma/mask.npy") else None
 
     import cv2

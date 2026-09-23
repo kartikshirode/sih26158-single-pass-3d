@@ -184,9 +184,20 @@ low-confidence depth dominates the linear fit. Add the confidence gate the feed-
 already uses and the residual falls to 0.214 px, which sits alongside Kolu's 0.2214, and fx/fy
 becomes 1.0035, the square pixels a real camera has.
 
-`run_mvs.py:129` reads `msk = np.load(".../mask.npy")` and passes only that. `conf.npy` is
-fetched and never reaches the fit. The feed-forward path in `finish_kolu` gates on
-`conf >= 1.010` and drops 30%, which is why the baseline succeeded on the same arrays.
+`run_mvs.py` reads `msk = np.load(".../mask.npy")` and passes only that. The feed-forward path
+in `finish_kolu` gates on `conf >= 1.010` and drops 30%, which is why the baseline succeeded on
+the same arrays.
+
+**The defect has two halves, and finding only the first cost a run.** Adding the gate was not
+enough: `fetch()` downloads exactly four files, `cameras.npy`, `points.npy`, `mask.npy` and
+`mapanything_result.json`. `conf.npy` was never pulled at all. So a gate written behind
+`if os.path.exists(conf)` skipped in total silence, and the rebuilt image produced a residual
+identical to four decimal places, 10.6931, with no new line in the log to say why. An earlier
+version of this note said conf was "fetched and never read"; it was never fetched.
+
+The gate now reports when it does not fire, rather than passing quietly, because a silent skip
+is indistinguishable from a bad clip. `run_mvs_sharded.py` carries the same defect and is
+marked in place; it was left unchanged because that path cannot be tested from this machine.
 
 Three explanations were tested and dropped, and the first two were mine:
 
