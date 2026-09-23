@@ -6,7 +6,10 @@
 // account, and two concurrent MVS runs would want 16 vCPU of asia-south1 quota.
 
 const { Storage } = require("@google-cloud/storage");
-const { JobsClient } = require("@google-cloud/run").v2;
+// Two clients, deliberately. JobsClient starts a job; listing executions lives on
+// ExecutionsClient, and calling it on JobsClient fails at runtime rather than at
+// require time, so it only showed up against the deployed function.
+const { JobsClient, ExecutionsClient } = require("@google-cloud/run").v2;
 
 const BUCKET = process.env.GCS_BUCKET || "sih26158-mumbai";
 const PROJECT = process.env.GCP_PROJECT || "agentbillboard";
@@ -29,7 +32,7 @@ function creds() {
   return { projectId: c.project_id, credentials: c };
 }
 
-let _storage, _jobs;
+let _storage, _jobs, _execs;
 function storage() {
   if (!_storage) _storage = new Storage(creds());
   return _storage;
@@ -37,6 +40,10 @@ function storage() {
 function jobs() {
   if (!_jobs) _jobs = new JobsClient(creds());
   return _jobs;
+}
+function execs() {
+  if (!_execs) _execs = new ExecutionsClient(creds());
+  return _execs;
 }
 function bucket() {
   return storage().bucket(BUCKET);
@@ -55,14 +62,14 @@ function isRunId(s) {
 // Counted from the platform rather than from a file we keep: two requests arriving
 // together would both read the same stale count and both start a run.
 async function runningCount() {
-  const [list] = await jobs().listExecutions({
+  const [list] = await execs().listExecutions({
     parent: `projects/${PROJECT}/locations/${REGION}/jobs/${JOB}`,
   });
   return list.filter((e) => !e.completionTime).length;
 }
 
 async function startedToday() {
-  const [list] = await jobs().listExecutions({
+  const [list] = await execs().listExecutions({
     parent: `projects/${PROJECT}/locations/${REGION}/jobs/${JOB}`,
   });
   const since = Date.now() - 24 * 3600 * 1000;
@@ -81,5 +88,5 @@ function json(res, code, body) {
 module.exports = {
   BUCKET, PROJECT, REGION, JOB,
   MAX_BYTES, MAX_CONCURRENT, MAX_PER_DAY, PAUSED,
-  storage, jobs, bucket, newRunId, isRunId, runningCount, startedToday, json,
+  storage, jobs, execs, bucket, newRunId, isRunId, runningCount, startedToday, json,
 };
