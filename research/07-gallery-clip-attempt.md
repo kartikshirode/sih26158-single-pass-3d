@@ -249,9 +249,43 @@ The MVS rebuild is one line away rather than blocked. Passing `msk & (conf >= 1.
 another densify run, so it is new spend and has not been done. Worth fixing regardless of this
 clip: any future clip whose mask keeps almost everything hits the same wall.
 
+## 8. Two things that bit on the way to publishing
+
+**An incomplete run breaks the console build.** `build_console.py` requires every verdict to
+start with `met`, `not met` or `not measurable`. A run that stops at `STAGE-UNAVAILABLE` still
+reaches S6-export, writes zero formats and emits `R-O5 formats: partial (0)`, which the guard
+rejects with "page not trustworthy". So the pipeline can emit a verdict its own console refuses.
+The toolse run was completed properly with `--adopt out/toolsemvs3d`, exactly as the
+STAGE-UNAVAILABLE message says, after which it reads `R-O1 met`, `R-O5 met`, `R-O6 met` and
+`scale unvalidated`. The bahai run was parked rather than kept, since `bahai-rejected` already
+represents that clip on the console and its numbers live in this file.
+
+The latent version is worth knowing: any future run that legitimately stops early will break
+`build_all` the same way, and the message will point at the console rather than at the run.
+
+**`vercel deploy` fails with a bare "Not authorized" when `.env.local` holds a stale
+`VERCEL_OIDC_TOKEN`,** even though `vercel whoami` returns the right user and
+`vercel project ls` lists the project. Moving `.env.local` aside for the deploy and copying it
+back afterwards works. Treat that error as a stale token, not as a login or team-scope problem.
+
 ## Where this leaves B-33
 
-B-33 is reachable, but it is three tasks rather than one: pick the clip (which is really an L-9
-licence decision), pay for two Cloud Run jobs, and build the attribution path. The runs are
-resumable, so `out/runs/bahai` and `out/runs/toolse` keep their screening and keyframes and
-only need `--adopt` once the containers have produced geometry.
+**Closed on the gallery, open on the console.** Toolse is live at
+`tesseract-demo.vercel.app/gallery/` with both models, its credit and the share-alike notice,
+verified in the browser rather than by status code: both tabs render, `toolse_mvs` loads on
+demand, WebGL is live, and `/`, `/console/` and `/qa/` still return 200 with no login wall.
+
+It restores what B-05 cost. Kolu reads `calibrated x5.54`, Toolse reads
+`unvalidated (model units)` with an asterisk on every length, which is the contrast the Village
+clip used to carry.
+
+Toolse is deliberately **not** on the console. `build_console.py` has no credit field, and
+adding a CC BY-SA clip to a surface that cannot attribute it is the F-4 mistake again. The
+console shows the toolse *run* (timings, codes, verdicts) with `models: []` and no imagery, so
+nothing derived from the clip is republished there. Giving the console the same `FOOTAGE` record
+and refuse-if-unrecorded guard is the remaining half of B-33.
+
+The unexpected result is in the coverage row. On Kolu the rebuild wins everything; on Toolse it
+holds 49% of the baseline's ground cells, because the feed-forward pass paints points onto open
+water and MVS drops them. Fewer cells and a better surface is a more interesting thing to be
+able to show than another clip where the rebuild simply wins.
