@@ -15,13 +15,18 @@ import sys
 
 import numpy as np
 
+import gcs_io
+
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 NAME = os.environ.get("RUN", "ytd")
 GCS = os.environ.get("GCS_PREFIX", "mvs/ytd_out")
 BASE = os.environ.get("BASELINE", "ytd3d")          # the feed-forward result
 RAW = os.path.join(ROOT, "out", f"{NAME}_mvs")
 OUT = os.path.join(ROOT, "out", f"{NAME}mvs3d")
-PY311 = r"C:\Users\Mandar\AppData\Local\Programs\Python\Python311\python.exe"
+# Whatever interpreter is running this: Python 3.11 on this laptop (open3d ships no
+# 3.13 wheels), 3.12 inside the pipeline container. A hardcoded Windows path made this
+# script laptop-only, which is what blocked running it for a web upload.
+PY311 = sys.executable
 
 
 def sh(*a, check=True):
@@ -44,8 +49,7 @@ def main():
     # missing model.ply.
     need = ("scene_dense.ply", "scene_dense_mesh.ply", "mvs_result.json")
     if not all(os.path.exists(os.path.join(RAW, f)) for f in need):
-        subprocess.run(f"gsutil -m cp gs://sih26158-mumbai/{GCS}/* " + RAW,
-                       shell=True, check=True)
+        gcs_io.pull(GCS, RAW)
 
     rp = os.path.join(RAW, "mvs_result.json")
     if os.path.exists(rp):

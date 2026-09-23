@@ -10,13 +10,19 @@ import os
 import subprocess
 import sys
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import gcs_io                                                     # noqa: E402
+
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 NAME = os.environ.get("RUN", "kolu")
 GCS = os.environ.get("GCS_PREFIX", "mapanything/kolu_out")
 KF = os.environ.get("KF_DIR", "kf_kolu")
 RAW = os.path.join(ROOT, "out", f"{NAME}_raw")
 OUT = os.path.join(ROOT, "out", f"{NAME}3d")
-PY311 = r"C:\Users\Mandar\AppData\Local\Programs\Python\Python311\python.exe"
+# Whatever interpreter is running this: Python 3.11 on this laptop (open3d ships no
+# 3.13 wheels), 3.12 inside the pipeline container. A hardcoded Windows path made this
+# script laptop-only, which is what blocked running it for a web upload.
+PY311 = sys.executable
 
 
 def sh(*a):
@@ -33,9 +39,7 @@ def sh(*a):
 def main():
     os.makedirs(RAW, exist_ok=True)
     if not os.path.exists(os.path.join(RAW, "points.npy")):
-        # gsutil on Windows is a .cmd shim, so it needs a shell to resolve.
-        subprocess.run(f"gsutil -m cp gs://sih26158-mumbai/{GCS}/* " + RAW,
-                       shell=True, check=True)
+        gcs_io.pull(GCS, RAW)
 
     res = json.load(open(os.path.join(RAW, "mapanything_result.json")))
     print("\nmodel run:")
