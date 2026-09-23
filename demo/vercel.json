@@ -10,5 +10,13 @@
         }
       ]
     }
-  ]
+  ],
+  "regions": [
+    "bom1"
+  ],
+  "functions": {
+    "api/*.js": {
+      "maxDuration": 30
+    }
+  }
 }

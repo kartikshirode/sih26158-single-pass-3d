@@ -1,0 +1,12 @@
+{
+  "name": "sih26158-demo",
+  "private": true,
+  "description": "Static pages plus the upload API. npm, NOT pnpm: this machine's global pnpm config redirects virtual-store-dir at an unrelated project and silently breaks builds everywhere else.",
+  "engines": {
+    "node": "22.x"
+  },
+  "dependencies": {
+    "@google-cloud/storage": "7.14.0",
+    "@google-cloud/run": "1.5.0"
+  }
+}

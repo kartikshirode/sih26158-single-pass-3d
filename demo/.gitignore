@@ -1,2 +1,6 @@
 .vercel
 .env*
+
+# npm (NOT pnpm: the global pnpm virtual-store redirect breaks builds here)
+node_modules/
+package-lock.json
