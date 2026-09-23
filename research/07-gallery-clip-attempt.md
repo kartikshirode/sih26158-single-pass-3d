@@ -213,6 +213,31 @@ Three explanations were tested and dropped, and the first two were mine:
 The guard itself behaved correctly: refusing in a second beats densifying 39 minutes onto a
 wrong camera. It caught a real defect upstream of itself.
 
+### Confirmed: the fix clears the guard
+
+`mvs:v9`, execution `sih26158-mvs-j7wpb`:
+
+```
+  intrinsics gate: conf >= 1.009 (30th pct), keeps 70.0% of pixels
+    reprojection residual 0.2139 px (median over 60 views)
+```
+
+0.2139 px against the local prediction of 0.214 and Kolu's 0.2214. The densify then ran to
+completion in **3,259.5 s** and wrote a textured mesh: 635,996 vertices, 1,271,707 faces,
+`TextureMesh rc=0` in 522.2 s, with a 10.7 MB atlas. Eight objects, 412.2 MB, under
+`gs://sih26158-mumbai/mvs/toolse_out/`.
+
+Three images were spent to get here, and only the third was the fix:
+
+| Image | Change | Residual |
+|---|---|---|
+| v7 | (unchanged) | 10.6931 px, refused |
+| v8 | gate added | 10.6931 px, refused. Gate never ran: `conf.npy` not fetched |
+| v9 | gate + fetch + loud skip | **0.2139 px**, densify completed |
+
+The identical residual at v8, to four decimal places, is what gave the silent skip away. A
+change that acts on data does not reproduce a number exactly.
+
 ### What this means for the clip
 
 The feed-forward baseline is a genuine single-pass 3D model of the castle: the walls resolve
