@@ -294,9 +294,10 @@ def main():
     desc = ("Source drone video beside the interactive 3D model, for every clip the "
             "pipeline was run on. Feed-forward baseline against the MVS rebuild, in one "
             "shared frame per clip.")
-    note = ("Two further clips sit in <code>data/cand/</code> (bahai, toolse) that were "
-            "shortlisted but never ingested, and a fourth (nicosia, 20 keyframes) was "
-            "ingested but never reconstructed. Everything that reached a 3D model is on "
+    note = ("One further clip sits in <code>data/cand/</code> (bahai): it passes screening "
+            "only with 66% of the frame cropped away, which leaves 37 keyframes over 3.8 s, "
+            "so it was ingested and not carried further. A fourth (nicosia, 20 keyframes) "
+            "was ingested but never reconstructed. Everything that reached a 3D model is on "
             "this page.")
 
     with io.open(os.path.join(HERE, "gallery_template.html"), encoding="utf-8") as f:
