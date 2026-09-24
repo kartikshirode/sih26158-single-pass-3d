@@ -17,7 +17,7 @@ import tempfile
 import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from local_gpu import read_images_txt, read_ply_points  # noqa: E402
+from local_gpu import frame_order, read_images_txt, read_ply_points  # noqa: E402
 
 FAILED: list[str] = []
 
@@ -74,6 +74,13 @@ got = read_images_txt(os.path.join(tmp, "images.txt"))
 M = got.get("kf_000.jpg")
 check("the camera centre comes back", M is not None and np.allclose(M[:3, 3], c, atol=1e-6))
 check("and the rotation", M is not None and np.allclose(M[:3, :3], R_c2w, atol=1e-6))
+
+print("\nT3: keyframes in time order")
+names = ["kf_1000_f30000.jpg", "kf_100_f03000.jpg", "kf_999_f29970.jpg", "kf_001_f00030.jpg"]
+check("past 999 keyframes the order is numeric, not by string",
+      sorted(names, key=frame_order) ==
+      ["kf_001_f00030.jpg", "kf_100_f03000.jpg", "kf_999_f29970.jpg", "kf_1000_f30000.jpg"],
+      str(sorted(names, key=frame_order)))
 
 print()
 if FAILED:

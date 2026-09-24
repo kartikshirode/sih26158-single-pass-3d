@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -40,6 +41,7 @@ CHECKPOINT = "facebook/map-anything-apache"   # Apache-2.0; the default is CC-BY
 DEFAULTS = {
     "pose_window": 0,           # views per MapAnything call; 0 sizes it to the GPU
     "pose_overlap": 8,          # shared views between windows, for the Sim(3) stitch
+    "pose_size": 0,             # 0: the model's own 518 mapping; else the longest side
     "intrinsics_views": 60,     # the camera is shared, so a subset fits it as well
     # Measured on 568 views (research/09 section 4): 8192 features, 100 BA iterations
     # and five triangulation refinements took 657 s for matching, triangulation and
@@ -68,12 +70,28 @@ def find_tools() -> dict:
     if not colmap or not os.path.exists(colmap):
         raise FileNotFoundError("COLMAP not found: set SIH_COLMAP to the colmap "
                                 "executable (a CUDA build) or put colmap on PATH")
-    if not mvs or not os.path.exists(os.path.join(mvs, "DensifyPointCloud" + exe)):
-        raise FileNotFoundError("OpenMVS not found: set SIH_OPENMVS to the folder with "
-                                "DensifyPointCloud (a CUDA build)")
-    return {"colmap": colmap,
-            "openmvs": {n: os.path.join(mvs, n + exe) for n in
-                        ("InterfaceCOLMAP", "DensifyPointCloud", "ReconstructMesh")}}
+    tools = {n: os.path.join(mvs or "", n + exe) for n in
+             ("InterfaceCOLMAP", "DensifyPointCloud", "ReconstructMesh")}
+    missing = [n for n, t in tools.items() if not os.path.exists(t)]
+    if missing:
+        raise FileNotFoundError(f"OpenMVS {', '.join(missing)} not found: set SIH_OPENMVS "
+                                "to the folder of a CUDA build")
+    import importlib.util
+    for mod in ("torch", "mapanything"):
+        if importlib.util.find_spec(mod) is None:
+            raise FileNotFoundError(f"python module {mod} is not installed "
+                                    "(research/09-gpu-pipeline.md section 1)")
+    return {"colmap": colmap, "openmvs": tools}
+
+
+class SparseError(RuntimeError):
+    """Poses, intrinsics, matching or the S3b gate failed: no dense setting can help."""
+
+
+def frame_order(name: str):
+    """Keyframes in time order: kf_1000_... must come after kf_999_..., not kf_100_."""
+    m = re.match(r"kf_(\d+)", name)
+    return (0, int(m.group(1)), name) if m else (1, 0, name)
 
 
 class Runner:
@@ -109,7 +127,8 @@ class Runner:
 
 
 # ---------------------------------------------------------------------- poses
-def mapanything_poses(paths: list[str], *, window: int, overlap: int, log=print) -> dict:
+def mapanything_poses(paths: list[str], *, window: int, overlap: int, size: int = 0,
+                      log=print) -> dict:
     """
     Poses and point maps for every view, in the frame of the first window.
 
@@ -131,7 +150,8 @@ def mapanything_poses(paths: list[str], *, window: int, overlap: int, log=print)
     model = MapAnything.from_pretrained(CHECKPOINT).to("cuda").eval()
     t_load = time.perf_counter() - t0
     t0 = time.perf_counter()
-    views = load_images(paths)
+    views = (load_images(paths, resize_mode="longest_side", size=size) if size
+             else load_images(paths))
     t_images = time.perf_counter() - t0
     t_infer = t_stitch = 0.0
     n = len(views)
@@ -371,8 +391,8 @@ def run(images_dir: str, work: str, *, crop_trbl=None, dense_names: list | None 
     colmap, mvs = tools["colmap"], tools["openmvs"]
     r = Runner(work, log)
     t_all = time.perf_counter()
-    names = sorted(f for f in os.listdir(images_dir)
-                   if f.lower().endswith((".jpg", ".jpeg", ".png")))
+    names = sorted((f for f in os.listdir(images_dir)
+                    if f.lower().endswith((".jpg", ".jpeg", ".png"))), key=frame_order)
     if len(names) < 3:
         raise RuntimeError(f"{images_dir}: {len(names)} keyframes; need at least 3")
     # COLMAP reads every file in its image folder, so a folder holding anything but
@@ -385,56 +405,66 @@ def run(images_dir: str, work: str, *, crop_trbl=None, dense_names: list | None 
         shutil.copytree(images_dir, img, ignore=shutil.ignore_patterns("*.json"))
     h0, w0 = cv2.imread(os.path.join(img, names[0])).shape[:2]
 
-    ma = r.timed("poses (MapAnything)", mapanything_poses,
-                 [os.path.join(img, n) for n in names],
-                 window=o["pose_window"], overlap=o["pose_overlap"], log=log)
-    cam, resid = r.timed("intrinsics fit", fit_camera, ma, h0, w0, crop_trbl,
-                         views=o["intrinsics_views"], log=log)
-    cams_ma = ma.pop("cams")
-    stitch, ma_load, ma_peak = ma["windows"], ma["split_s"], ma["peak_gib"]
-    del ma
+    # Everything up to the S3b gate depends on the poses and the matches, not on the
+    # ladder level, so a failure here is a SparseError: tesseract does not rerun it
+    # at L1 and L2 to meet the same failure (audit 1). colmap_export refuses with
+    # SystemExit, which would otherwise end the whole process with no manifest.
+    try:
+        ma = r.timed("poses (MapAnything)", mapanything_poses,
+                     [os.path.join(img, n) for n in names],
+                     window=o["pose_window"], overlap=o["pose_overlap"], size=o["pose_size"],
+                     log=log)
+        cam, resid = r.timed("intrinsics fit", fit_camera, ma, h0, w0, crop_trbl,
+                             views=o["intrinsics_views"], log=log)
+        cams_ma = ma.pop("cams")
+        stitch, ma_load, ma_peak = ma["windows"], ma["split_s"], ma["peak_gib"]
+        del ma
 
-    db = os.path.join(r.work, "db.db")
-    if os.path.exists(db):
-        os.remove(db)
-    r.sh([colmap, "feature_extractor", "--database_path", db, "--image_path", img,
-          "--ImageReader.single_camera", "1",
-          "--ImageReader.camera_model", "SIMPLE_RADIAL",
-          "--FeatureExtraction.use_gpu", "1",
-          "--SiftExtraction.max_num_features", o["sift_features"]], "feature_extractor")
-    # Sequential, not exhaustive. Exhaustive over 45 views was 391 s on 8 vCPU and
-    # grows with the square of the count: about 19 h at 600 views. A video's
-    # neighbours are its neighbours in time.
-    r.sh([colmap, "sequential_matcher", "--database_path", db,
-          "--SequentialMatching.overlap", o["match_overlap"],
-          "--FeatureMatching.use_gpu", "1"], "sequential_matcher")
+        db = os.path.join(r.work, "db.db")
+        if os.path.exists(db):
+            os.remove(db)
+        r.sh([colmap, "feature_extractor", "--database_path", db, "--image_path", img,
+              "--ImageReader.single_camera", "1",
+              "--ImageReader.camera_model", "SIMPLE_RADIAL",
+              "--FeatureExtraction.use_gpu", "1",
+              "--SiftExtraction.max_num_features", o["sift_features"]], "feature_extractor")
+        # Sequential, not exhaustive. Exhaustive over 45 views was 391 s on 8 vCPU and
+        # grows with the square of the count: about 19 h at 600 views. A video's
+        # neighbours are its neighbours in time.
+        r.sh([colmap, "sequential_matcher", "--database_path", db,
+              "--SequentialMatching.overlap", o["match_overlap"],
+              "--FeatureMatching.use_gpu", "1"], "sequential_matcher")
 
-    sp_in, sp_tri, sp_ba, sp_f = (os.path.join(r.work, d) for d in
-                                  ("sparse_in", "sparse_tri", "sparse_ba", "sparse_f"))
-    for d in (sp_in, sp_tri, sp_ba, sp_f):
-        shutil.rmtree(d, ignore_errors=True)
-        os.makedirs(d)
-    write_model(sp_in, cams_ma, names, cam, db, log=log)
-    r.sh([colmap, "point_triangulator", "--database_path", db, "--image_path", img,
-          "--input_path", sp_in, "--output_path", sp_tri,
-          "--Mapper.ba_global_max_refinements", o["tri_refinements"],
-          "--Mapper.ba_global_max_num_iterations", o["tri_ba_iterations"]],
-         "point_triangulator")
-    before = analyze(r, colmap, sp_tri, "analyze_triangulated")
-    r.sh([colmap, "bundle_adjuster", "--input_path", sp_tri, "--output_path", sp_ba,
-          "--BundleAdjustment.refine_focal_length", "1",
-          "--BundleAdjustment.refine_principal_point", "1",
-          "--BundleAdjustment.refine_extra_params", "1",
-          "--BundleAdjustmentCeres.max_num_iterations", o["ba_iterations"]],
-         "bundle_adjuster")
-    # Drop the observations BA could not explain. The demo's first run converged to a
-    # 0.28 px cost, yet model_analyzer reported a mean error of 1.9e146 px: a handful
-    # of points triangulated at near-zero depth dominate a plain mean. The mapper does
-    # this filtering itself; triangulating against known poses skips it. The COLMAP
-    # 4.2 Windows build has no CUDA Ceres, so BA stays on the CPU.
-    r.sh([colmap, "point_filtering", "--input_path", sp_ba, "--output_path", sp_f,
-          "--max_reproj_error", "4", "--min_tri_angle", "1.5"], "point_filtering")
-    after = analyze(r, colmap, sp_f, "analyze_adjusted")
+        sp_in, sp_tri, sp_ba, sp_f = (os.path.join(r.work, d) for d in
+                                      ("sparse_in", "sparse_tri", "sparse_ba", "sparse_f"))
+        for d in (sp_in, sp_tri, sp_ba, sp_f):
+            shutil.rmtree(d, ignore_errors=True)
+            os.makedirs(d)
+        write_model(sp_in, cams_ma, names, cam, db, log=log)
+        r.sh([colmap, "point_triangulator", "--database_path", db, "--image_path", img,
+              "--input_path", sp_in, "--output_path", sp_tri,
+              "--Mapper.ba_global_max_refinements", o["tri_refinements"],
+              "--Mapper.ba_global_max_num_iterations", o["tri_ba_iterations"]],
+             "point_triangulator")
+        before = analyze(r, colmap, sp_tri, "analyze_triangulated")
+        r.sh([colmap, "bundle_adjuster", "--input_path", sp_tri, "--output_path", sp_ba,
+              "--BundleAdjustment.refine_focal_length", "1",
+              "--BundleAdjustment.refine_principal_point", "1",
+              "--BundleAdjustment.refine_extra_params", "1",
+              "--BundleAdjustmentCeres.max_num_iterations", o["ba_iterations"]],
+             "bundle_adjuster")
+        # Drop the observations BA could not explain. The demo's first run converged to a
+        # 0.28 px cost, yet model_analyzer reported a mean error of 1.9e146 px: a handful
+        # of points triangulated at near-zero depth dominate a plain mean. The mapper does
+        # this filtering itself; triangulating against known poses skips it. The COLMAP
+        # 4.2 Windows build has no CUDA Ceres, so BA stays on the CPU.
+        r.sh([colmap, "point_filtering", "--input_path", sp_ba, "--output_path", sp_f,
+              "--max_reproj_error", "4", "--min_tri_angle", "1.5"], "point_filtering")
+        after = analyze(r, colmap, sp_f, "analyze_adjusted")
+    except (SystemExit, ImportError) as e:
+        raise SparseError(str(e)) from None
+    except RuntimeError as e:
+        raise SparseError(str(e)) from e
     problems = ba_gate(after, len(names))
     result = {"n_views": len(names), "keyframe_size": [w0, h0], "options": o,
               "camera": {k: (round(v, 3) if isinstance(v, float) else v)
@@ -455,7 +485,7 @@ def run(images_dir: str, work: str, *, crop_trbl=None, dense_names: list | None 
 
     if problems:
         finish()
-        raise RuntimeError("S3b gate failed: " + "; ".join(problems))
+        raise SparseError("S3b gate failed: " + "; ".join(problems))
 
     sp_txt = os.path.join(r.work, "sparse_txt")
     shutil.rmtree(sp_txt, ignore_errors=True)
@@ -487,8 +517,14 @@ def run(images_dir: str, work: str, *, crop_trbl=None, dense_names: list | None 
         np.save(os.path.join(r.work, "colors_fused.npy"), C)
     result["dense_points"] = int(len(P))
     if o["mesh"]:
-        r.sh([mvs["ReconstructMesh"], "scene_dense.mvs", "-w", r.work],
-             "ReconstructMesh")
+        # The mesh is a product, not an input: tesseract loads the dense cloud. A
+        # meshing failure is recorded rather than failing the stage (audit 1).
+        try:
+            r.sh([mvs["ReconstructMesh"], "scene_dense.mvs", "-w", r.work],
+                 "ReconstructMesh")
+        except RuntimeError as e:
+            result["mesh_error"] = str(e)[-500:]
+            log("  ReconstructMesh failed; continuing without a mesh")
     if not o["keep_intermediate"]:
         for f in os.listdir(r.work):
             p = os.path.join(r.work, f)
@@ -519,7 +555,8 @@ if __name__ == "__main__":
     ij = os.path.join(a.keyframes, "ingest.json")
     if os.path.exists(ij):
         crop = json.load(open(ij, encoding="utf-8"))["stats"].get("overlay_crop_trbl")
-    kfs = sorted(f for f in os.listdir(a.keyframes) if f.lower().endswith(".jpg"))
+    kfs = sorted((f for f in os.listdir(a.keyframes) if f.lower().endswith(".jpg")),
+                 key=frame_order)
     res = run(a.keyframes, a.work, crop_trbl=crop, dense_names=kfs[::a.dense_every],
               options=opts)
     print(json.dumps({k: res[k] for k in ("n_views", "dense_points", "total_seconds",

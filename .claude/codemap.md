@@ -202,12 +202,12 @@ Gotcha: orthometric_height turns PROJ networking on and raises if the EGM2008 gr
 
 ### src/pipeline/local_gpu.py
 S3 and S4 on one machine with an NVIDIA GPU (research/09-gpu-pipeline.md): MapAnything bf16 poses in GPU-sized overlapping windows stitched by robust Sim(3), intrinsics from a spread view subset, COLMAP GPU SIFT + sequential matching + triangulation against the known poses + short BA + point_filtering + the S3b gate, OpenMVS CUDA densify over the dense view set, ReconstructMesh. Writes points_fused/colors_fused/cameras.npy (what tesseract adopt reads) and local_gpu_result.json with per-stage times. CLI: `python src/pipeline/local_gpu.py <keyframes> --work <dir>`.
-Exports: DEFAULTS; find_tools() (SIH_COLMAP, SIH_OPENMVS, else PATH); Runner(work).timed/sh; mapanything_poses(paths, *, window, overlap); pose_window_for(H, W, total_bytes); fit_camera(ma, h0, w0, crop, *, views); analyze(r, colmap, model, label); read_images_txt(path) -> {name: cam2world}; read_ply_points(path) -> (xyz, rgb); run(images_dir, work, *, crop_trbl, dense_names, options, log) -> result dict
+Exports: DEFAULTS; SparseError (poses/intrinsics/matching/S3b gate failed: level-independent); frame_order(name) (kf_ index order past 999); find_tools() (SIH_COLMAP, SIH_OPENMVS, else PATH; all three OpenMVS tools, torch and mapanything); Runner(work).timed/sh; mapanything_poses(paths, *, window, overlap); pose_window_for(H, W, total_bytes); fit_camera(ma, h0, w0, crop, *, views); analyze(r, colmap, model, label); read_images_txt(path) -> {name: cam2world}; read_ply_points(path) -> (xyz, rgb); run(images_dir, work, *, crop_trbl, dense_names, options, log) -> result dict
 Used by: src/tesseract/stages.py (Geometry provider "local"), src/pipeline/test_local_gpu.py
 Gotcha: needs CUDA torch, mapanything, and CUDA builds of COLMAP 4.2 and OpenMVS 2.4 (COLMAP 4 option names). View dicts are copied per window, or finished windows' images stay on the GPU and the driver spills to shared memory. RuntimeError on a failed S3b gate or tool; FileNotFoundError when tools are missing. Deletes depth maps, the database and intermediate models unless keep_intermediate.
 
 ### src/pipeline/test_local_gpu.py
-Plain-script test of local_gpu's GPU-free parts: OpenMVS-style PLY with variable-length view lists read back exactly, and a COLMAP images.txt pose read back to cam2world. Run `python src/pipeline/test_local_gpu.py`.
+Plain-script test of local_gpu's GPU-free parts: OpenMVS-style PLY with variable-length view lists read back exactly, a COLMAP images.txt pose read back to cam2world, and keyframe time order past 999. Run `python src/pipeline/test_local_gpu.py`.
 
 ### src/pipeline/window_fuse.py
 S2-SCALE: plans overlapping view windows for long passes and brings them into one frame. stitch chains a Umeyama Sim(3) on shared-view correspondences window to window; stitch_gnss anchors each window's camera centres to GNSS independently.
