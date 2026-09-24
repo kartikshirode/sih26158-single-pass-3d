@@ -308,10 +308,13 @@ python:3.12-slim image for run_upload.py, built from the repo root: requirements
 ## mvs_job/
 
 ### mvs_job/run_mvs.py
-MVS Cloud Run job (sih26158-mvs): pulls keyframes (KF_PREFIX) and MapAnything outputs (MA_PREFIX), fits intrinsics from point maps (conf-gated at the 30th percentile), runs COLMAP SIFT, exhaustive match, triangulation against known poses, bundle adjustment, undistortion, then OpenMVS DensifyPointCloud, ReconstructMesh, optional RefineMesh, TextureMesh (OBJ). Results to OUT_PREFIX.
-Exports: main(); fetch(); push(paths); reproj_error(model_dir, label) -> dict
-Used by: mvs_job/Dockerfile (ENTRYPOINT); run_job/run_upload.py; outputs (scene_dense.ply, scene_dense_mesh*.ply/obj, mvs_result.json) consumed by tools/finish_mvs.py
-Gotcha: env BUCKET, KF_PREFIX, MA_PREFIX, OUT_PREFIX, RESOLUTION_LEVEL, REFINE_MESH, MESH_BLOB (non-empty = texture-only mode), TEXTURE_ARGS (default "--local-seam-leveling 0"; seam levelling blacked out charts). Exits if the intrinsics residual is over 2.0 px. Imports colmap_export from /app. Files of 900 MB or more are not uploaded.
+MVS Cloud Run job (sih26158-mvs): pulls keyframes (KF_PREFIX) and MapAnything outputs (MA_PREFIX), fits intrinsics from point maps (conf-gated at the 30th percentile), runs COLMAP SIFT, exhaustive match, triangulation against known poses, bundle adjustment, the S3b gate, undistortion, then OpenMVS DensifyPointCloud, ReconstructMesh, optional RefineMesh, TextureMesh (OBJ). Results to OUT_PREFIX.
+Exports: main(); fetch(); push(paths); reproj_error(model_dir, label) -> dict; ba_gate(after, n_views, *, max_px, min_registered) -> list[str] problems (empty = pass)
+Used by: mvs_job/Dockerfile (ENTRYPOINT); run_job/run_upload.py; mvs_job/test_ba_gate.py; outputs (scene_dense.ply, scene_dense_mesh*.ply/obj, mvs_result.json) consumed by tools/finish_mvs.py
+Gotcha: env BUCKET, KF_PREFIX, MA_PREFIX, OUT_PREFIX, RESOLUTION_LEVEL, REFINE_MESH, MESH_BLOB (non-empty = texture-only mode), TEXTURE_ARGS (default "--local-seam-leveling 0"; seam levelling blacked out charts). Exits if the intrinsics residual is over 2.0 px, and before densifying if BA registered fewer than BA_MIN_REGISTERED (default 1.0) of the views or ended above BA_MAX_PX (default 1.0 px); that failure still uploads mvs_result.json with ba_gate.problems. Imports colmap_export from /app. Files of 900 MB or more are not uploaded.
+
+### mvs_job/test_ba_gate.py
+Plain-script test of run_mvs.ba_gate: the three recorded Kolu MVS results in research/run-evidence/ must pass; a lost view, 4 px after BA, an empty analyzer dict must fail; the threshold override works. Run `python mvs_job/test_ba_gate.py` (numpy only, no COLMAP).
 
 ### mvs_job/run_mvs_sharded.py
 Horizontally sharded MVS variant selected by env STAGE: prep (global SfM + BA, prep.json, sparse_ba/), densify (N tasks, one view window each, shards/dense_NNN.ply), fuse (concat, voxel dedupe, Poisson mesh).
