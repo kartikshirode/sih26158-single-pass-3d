@@ -152,7 +152,7 @@ Used by: standalone script
 Gotcha: needs simscene and eval3d.gnss via a sys.path insert of src/. abs_alt is rel_alt plus a constant, mimicking real barometric DJI files.
 
 ### src/ingest/test_srt.py
-EXP-23 telemetry test script (65 checks, plain prints). T1 pins the first record of each real DJI fixture, T2 runs 21 fuzz deformations (CRLF, BOM, UTF-16, binary, NaN, "longtitude", x10 focal, legacy GPS tuples) in a tempdir, T3 checks telemetry_for_frames is keyed, not positional.
+EXP-23 telemetry test script (68 checks, plain prints). T1 pins the first record of each real DJI fixture, T2 runs 21 fuzz deformations (CRLF, BOM, UTF-16, binary, NaN, "longtitude", x10 focal, legacy GPS tuples) in a tempdir, T3 checks telemetry_for_frames is keyed, not positional, and encodes a variable-frame-rate clip with PyAV to check PTS keying (skipped without av).
 Used by: .github/workflows/ci.yml (run as `python src/ingest/test_srt.py`)
 Gotcha: exits 1 on any FAIL. Expected values are hard-coded per fixture filename, so renaming or re-cutting a fixture breaks it.
 
@@ -728,7 +728,7 @@ DST 2021 geospatial rules (process in India), geoid and UTM traps, DJI sidecar c
 UseGeo chosen over H3D as the LiDAR-referenced benchmark (EXP-22): 829 images, GSD 1.7-1.9 cm, CC BY-NC-SA 4.0 evaluation only; protocol and rented-GPU pricing.
 
 ### research/04-dji-srt-formats.md
-EXP-23: the five DJI SRT format families across 20 fixtures (including the misspelt `longtitude`), abs_alt is barometric; parser fixed and fuzzed (65 checks).
+EXP-23: the five DJI SRT format families across 20 fixtures (including the misspelt `longtitude`), abs_alt is barometric; parser fixed and fuzzed (65 checks, 68 with the variable-frame-rate cases); time-keyed lookup uses frame PTS since 2026-09-25.
 
 ### research/05-deck-audit.md
 Audit of the 2026-09-22 Google Slides deck: run-derived numbers correct, five things to change (an unsourced synthetic figure, barred-licence model references, "0 GCPs" implying GPS scale, live 3D claimed, unbuilt stages in present tense) plus a visual pass.
