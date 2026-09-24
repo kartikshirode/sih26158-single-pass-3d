@@ -176,10 +176,13 @@ Every figure the project states in public, its source, its gate, and its status 
 | 19 | Intrinsics fit residual 0.22 px | `mvs_result.json` | G1 | **Valid** |
 | 20 | ≤ 1 m spatial accuracy | — | — | **Unvalidated**: no GNSS clip (EXP-21) |
 | 21 | Village relief/footprint 0.037, 1.34% above ground | `yt3d/viewer_stats.json` | G1 | **Valid** as ratios; any metre label unvalidated |
+| 24 | "R-O5 formats: met" on every console run (`/console/`, 5 runs) | S8 in `src/tesseract/stages.py` | — | **Invalid.** S8 required only PLY, LAS and GeoTIFF, which is all S6 writes; OBJ, glTF and FBX were never checked (audit F-02). Code fixed 2026-09-24: now `not met (3 of 6 written; ...)`. The console still shows the old string until it is rebuilt from `out/runs/` on the machine that holds them. The seven-file claim in item 9 is a different path (`export_formats.py`) and stands |
+| 25 | "R-O2 processing time: met" on the synthetic console runs (3 runs) | S8 in `src/tesseract/stages.py` | — | **Invalid.** A 60-240 frame synthetic scene inside 900 s says nothing about a 10-minute video, and cached stages counted as 0 s (audit F-09). Code fixed 2026-09-24: `met` now needs a timed, uncached video of at least 10 minutes; everything else is `not measurable`. Same rebuild caveat as item 24 |
 
 **Status 2026-09-17: every item above is corrected, relabelled or removed** across the
 viewers, the exported files, the Q&A, the deck and the portal text, except 6 and 20, which
-stay unvalidated until their data exists.
+stay unvalidated until their data exists. Items 24 and 25 were added on 2026-09-24 and are
+fixed in code but not yet on the deployed console.
 
 **Remediation (as originally planned).** Items 4–7, 14–18 and 17a are fixed by `docs/08` S7 in a single change: correct or
 relabel the source files, then let `build_qa.py`'s re-grep fail on every stale figure and fix

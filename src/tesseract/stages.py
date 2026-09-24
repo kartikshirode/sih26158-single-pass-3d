@@ -665,17 +665,15 @@ class Verdicts(BaseStage):
     """
 
     id: str = "S8-verdict"
+    version: str = "2"          # R-O2 and R-O5 no longer pass on inputs they cannot judge
     produces: tuple = ()
+    cacheable: bool = False     # it judges the run's facts, which its cache key cannot see
 
     def execute(self, ctx: Context) -> StageResult:
         f = ctx.facts
-        exports = set(f.get("exports", []))
-        need = {"ply", "las", "geotiff"}
         v = {
             "R-O1 reconstruction type": "met" if f.get("points") else "not met",
-            "R-O2 processing time": ("met" if ctx.spent_s <= ctx.budget_s else "not met")
-                                    if f.get("geometry_provider") == "sense"
-                                    else "not measurable (stage adopted, not timed here)",
+            "R-O2 processing time": _verdict_time(ctx),
             "R-O3 spatial accuracy": (
                 "met" if f.get("accuracy_absolute_rmse_m", 1e9) <= 1.0 else
                 "not met" if "accuracy_absolute_rmse_m" in f else
@@ -683,12 +681,58 @@ class Verdicts(BaseStage):
             "R-O4 coverage": ("met" if f.get("recall_at_1m_observable", 0) >= 0.9
                               else "not met" if "recall_at_1m_observable" in f
                               else "not measurable"),
-            "R-O5 formats": "met" if need <= exports else f"partial ({len(exports)})",
+            "R-O5 formats": _verdict_formats(f.get("exports", [])),
             "R-O6 viewer": "met (tools/build_viewer.py, demo/)",
         }
         scale = f.get("scale") or {}
         v["scale"] = scale.get("label", "unvalidated (model units)")
         return StageResult(self.id, 0.0, facts={"verdicts": v})
+
+
+# PS p.38 Output Formats row. glTF and GLB are one row ("glb/gltf"), so either counts.
+R_O5_FORMATS = ("obj", "ply", "las", "geotiff", "gltf", "fbx")
+
+# R-O2 is "< 15 minutes for a 10-minute video". A shorter clip, or a synthetic scene,
+# says nothing about that input, whatever its own wall clock was.
+R_O2_VIDEO_S = 600.0
+
+
+def _verdict_formats(exports) -> str:
+    """
+    Met only when every format the PS lists was written. This used to require just the
+    three S6 writes (PLY, LAS, GeoTIFF), so a run with no OBJ, glTF or FBX at all said
+    `met` on the console for every run it showed (audit F-02).
+    """
+    have = set(exports) | ({"gltf"} if "glb" in exports else set())
+    missing = [x for x in R_O5_FORMATS if x not in have]
+    if not missing:
+        return "met"
+    return (f"not met ({len(R_O5_FORMATS) - len(missing)} of {len(R_O5_FORMATS)} "
+            f"written; missing {', '.join(missing)})")
+
+
+def _verdict_time(ctx: Context) -> str:
+    """
+    Met only for a timed, uncached run of a video at least ten minutes long. A 240-frame
+    synthetic scene finishing inside 900 s was being reported as meeting the target, and
+    so was a resumed run whose cached stages count as zero seconds (audit F-09).
+    """
+    f = ctx.facts
+    if not hasattr(ctx.source, "path"):
+        return "not measurable (synthetic source: no video was processed)"
+    if f.get("geometry_provider") == "adopt":
+        return "not measurable (stage adopted, not timed here)"
+    dur = (f.get("screen") or {}).get("duration_s")
+    if dur is None:
+        return "not measurable (clip duration unknown)"
+    if dur < R_O2_VIDEO_S:
+        return (f"not measurable (clip is {dur:.0f} s; the target is for a "
+                f"{R_O2_VIDEO_S / 60:.0f}-minute video)")
+    if ctx.cached:
+        n = len(ctx.cached)
+        return (f"not measurable ({n} stage{'s' if n != 1 else ''} reused from cache, "
+                f"so the wall clock is not the pipeline's)")
+    return "met" if ctx.spent_s <= ctx.budget_s else "not met"
 
 
 DEFAULT_STAGES = [Screen(), Ingest(), PlanKeyframes(), Geometry(), Scale(),

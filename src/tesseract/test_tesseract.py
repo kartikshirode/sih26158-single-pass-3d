@@ -373,6 +373,11 @@ def t_end_to_end():
           and out["consumer"][0].verdicts["R-O3 spatial accuracy"] == "not met")
     check("scale comes from the fit when there is GNSS",
           out["rtk"][0].scale["status"] == "gnss+rtk")
+    v = out["rtk"][0].verdicts
+    check("a synthetic run does not claim the processing-time target",
+          v["R-O2 processing time"].startswith("not measurable"), v["R-O2 processing time"])
+    check("S6's three files do not claim the six-format target",
+          v["R-O5 formats"].startswith("not met"), v["R-O5 formats"])
 
 
 # ---------------------------------------------------------------- T5 a real run
@@ -431,6 +436,8 @@ if __name__ == "__main__":
     t_contracts()
     t_scale()
     t_pipeline()
+    t_verdicts()
+    t_level_units()
     t_end_to_end()
     t_real_run()
     print("\n" + "=" * 62)
