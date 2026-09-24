@@ -221,6 +221,25 @@ def t_pipeline():
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
 
+    # A ladder step re-plans from the top. Stages whose output does not depend on the
+    # level (screen, ingest) must not redo their work, and reusing them is not a resume.
+    tmp = tempfile.mkdtemp(prefix="tess-")
+    try:
+        first = Toy("first", produces=("x",))
+        plan = Toy("plan", needs=("x",), produces=("p",))
+        plan.level_sensitive = True
+        soft = Toy("soft", needs=("p",), fail=StageError(Code.MVS_RC, "rc=1"),
+                   levels=("L0",))
+        ctx = ctx_for(tmp)
+        man = Pipeline([first, plan, soft]).run(ctx)
+        check("a ladder step reuses a stage that does not depend on the level",
+              first.calls == 1 and man.level == "L1", f"calls {first.calls}, {man.level}")
+        check("and re-runs one that does", plan.calls == 2, f"calls {plan.calls}")
+        check("reuse within one run is not counted as a resumed stage", ctx.cached == [],
+              str(ctx.cached))
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
     tmp = tempfile.mkdtemp(prefix="tess-")
     try:
         fatal = Toy("fatal", fail=StageError(Code.REF_7DOF, "refused", fatal=True))

@@ -168,6 +168,7 @@ class PlanKeyframes(BaseStage):
     needs: tuple = ("keyframes",)
     produces: tuple = ("plan",)
     levels: tuple = ("L0", "L1", "L2", "L3", "L4")
+    level_sensitive: bool = True    # L2 halves the dense set
 
     def execute(self, ctx: Context) -> StageResult:
         n_pose = int(ctx.facts.get("keyframes") or 0)

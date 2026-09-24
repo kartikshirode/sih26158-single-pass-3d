@@ -91,6 +91,11 @@ class BaseStage:
     # cannot be keyed on its inputs, so it must run every time or it replays an old
     # answer about new facts. S8 is the case: its key would be only its config.
     cacheable: bool = True
+    # Only a stage whose output depends on the ladder level keys on it. Keying every
+    # stage on it made each ladder step re-run S0 and S1 from scratch: on a 20 s clip
+    # that stepped L0 to L5, four of five ingest passes (about 90 of 124 s) repeated
+    # identical work, and on a 10-minute clip each repeat is minutes of R-O2's budget.
+    level_sensitive: bool = False
 
     def estimate(self, ctx: Context) -> float:
         return 1.0
@@ -122,7 +127,8 @@ class State:
     """
     The resume record: which stages ran, with what key, and what they produced.
 
-    The key is the stage id, version, level and config, the hashes of its declared
+    The key is the stage id, version, config (and the level, for a stage whose
+    output depends on it), the hashes of its declared
     inputs, the source's own fingerprint, whatever else the stage says it reads
     (`key_extra`), and the key of the stage before it. Change a threshold and only the
     stages downstream of it re-run; change nothing and the whole pipeline is a no-op
@@ -160,7 +166,8 @@ class State:
         extra = stage.key_extra(ctx) if hasattr(stage, "key_extra") else None
         return K.config_sha256({"stage": stage.id,
                                 "version": getattr(stage, "version", "1"),
-                                "level": ctx.level,
+                                "level": (ctx.level if getattr(stage, "level_sensitive",
+                                                               False) else None),
                                 "config": ctx.config, "inputs": inputs,
                                 "source": source, "extra": extra,
                                 "upstream": upstream})
@@ -218,6 +225,7 @@ class Pipeline:
 
         i = 0
         upstream = ""
+        made_here: set[str] = set()     # keys of results this invocation computed
         while i < len(self.stages):
             st = self.stages[i]
             if i == 0:
@@ -233,6 +241,15 @@ class Pipeline:
             upstream = key
             reuse = resume and getattr(st, "cacheable", True)
             hit = state.cached(st, key, ctx.workdir) if reuse else None
+            if hit is not None and key in made_here:
+                # Computed earlier in this same invocation, before the ladder stepped
+                # down. Its time is already in spent_s, so it is not a resume and must
+                # not make R-O2 unmeasurable the way a resumed stage does.
+                ctx.log(f"  {st.id:<12} reused")
+                hit.note = "reused from this run's earlier attempt"
+                self._absorb(ctx, man, hit)
+                i += 1
+                continue
             if hit is not None:
                 ctx.log(f"  {st.id:<12} cached")
                 ctx.cached.append(st.id)
@@ -263,6 +280,7 @@ class Pipeline:
             ctx.log(f"  {st.id:<12} {res.seconds:6.2f}s"
                     + (f"  [{' '.join(res.codes)}]" if res.codes else ""))
             state.record(st, key, res)
+            made_here.add(key)
             self._absorb(ctx, man, res)
             i += 1
 
