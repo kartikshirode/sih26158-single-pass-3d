@@ -456,6 +456,48 @@ def t_end_to_end():
           v["R-O2 processing time"].startswith("not measurable"), v["R-O2 processing time"])
     check("S6's three files do not claim the six-format target",
           v["R-O5 formats"].startswith("not met"), v["R-O5 formats"])
+    g = get(out["rtk"][0], "gravity") or {}
+    up = g.get("up") or [0, 0, 1]
+    check("the synthetic gauge is no longer secretly level (audit F-07)",
+          abs(up[2]) < 0.999, f"recovered up {np.round(up, 3).tolist()}")
+
+
+def t_georef_fit():
+    section("T3d: a straight track gives yaw and slope; gravity gives only the roll")
+    from eval3d.gnss import track_sim3, yaw_only_sim3
+    from eval3d.metrics import apply_transform
+
+    rng = np.random.default_rng(3)
+    s_ = np.linspace(-450, 450, 60)
+    truth_cams = np.column_stack([s_, np.zeros(60), 110 + 0.02 * s_])   # a gentle climb
+    truth_scene = np.column_stack([rng.uniform(-450, 450, 3000),
+                                   rng.uniform(-300, 300, 3000), rng.uniform(0, 30, 3000)])
+    # The reconstruction: scaled, yawed, and levelled with a 0.7 deg error along the
+    # track, the size of the ground-plane error measured on the synthetic pass.
+    a, yaw, sc = np.radians(0.7), np.radians(40), 0.2
+    tilt = np.array([[np.cos(a), 0, np.sin(a)], [0, 1, 0], [-np.sin(a), 0, np.cos(a)]])
+    Rz = np.array([[np.cos(yaw), -np.sin(yaw), 0], [np.sin(yaw), np.cos(yaw), 0], [0, 0, 1]])
+    fwd = lambda X: apply_transform(X, Rz @ tilt, np.array([5.0, -3, 2]), sc)
+    src_c, src_s = fwd(truth_cams), fwd(truth_scene)
+    err = lambda R, t, s: float(np.sqrt(np.mean(np.sum(
+        (apply_transform(src_s, R, t, s) - truth_scene) ** 2, axis=1))))
+    e_yaw, e_trk = err(*yaw_only_sim3(src_c, truth_cams)), err(*track_sim3(src_c, truth_cams))
+    check("a levelling error along the track survives a yaw-only fit",
+          e_yaw > 1.0, f"{e_yaw:.2f} m")
+    check("the track's own slope removes it (ADR-026)", e_trk < 0.05, f"{e_trk:.4f} m")
+
+    tmp = tempfile.mkdtemp(prefix="tess-")
+    try:
+        from tesseract.stages import _write_ply_f64
+        P = np.array([[500000.123, 3000000.456, 210.789], [500001.5, 3000002.5, 211.0]])
+        p = os.path.join(tmp, "c.ply")
+        _write_ply_f64(p, P)
+        raw = open(p, "rb").read()
+        body = np.frombuffer(raw[raw.index(b"end_header\n") + 11:], "<f8").reshape(-1, 3)
+        check("a projected PLY keeps its coordinates to the millimetre (audit F-03)",
+              np.abs(body - P).max() < 1e-6, f"max diff {np.abs(body - P).max():.2e}")
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
 
 
 # ---------------------------------------------------------------- T5 a real run
@@ -516,6 +558,7 @@ if __name__ == "__main__":
     t_pipeline()
     t_verdicts()
     t_level_units()
+    t_georef_fit()
     t_end_to_end()
     t_real_run()
     print("\n" + "=" * 62)
