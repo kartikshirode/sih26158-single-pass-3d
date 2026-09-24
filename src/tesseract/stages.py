@@ -99,6 +99,7 @@ class Screen(BaseStage):
 @dataclass
 class Ingest(BaseStage):
     id: str = "S1-ingest"
+    version: str = "2"          # clears old keyframes; letterbox crop; faster scoring
     needs: tuple = ()
     produces: tuple = ("keyframes",)
     levels: tuple = ("L0", "L1", "L2", "L3", "L4")
@@ -131,6 +132,12 @@ class Ingest(BaseStage):
                          srt_path=ctx.source.telemetry, progress=False)
         outdir = ctx.path("keyframes/.")
         os.makedirs(os.path.dirname(outdir), exist_ok=True)
+        # Clear the last run's keyframes first, as the ingest CLI does. The local GPU
+        # provider lists this folder, and a re-run of the same clip with other ingest
+        # settings mixed two keyframe sets into one reconstruction (audit 1).
+        for old in os.listdir(os.path.dirname(outdir)):
+            if old.startswith("kf_") and old.endswith(".jpg"):
+                os.remove(os.path.join(os.path.dirname(outdir), old))
         import cv2
         for i, (fi, img) in enumerate(zip(r.keyframe_indices, r.frames)):
             cv2.imwrite(ctx.path("keyframes", f"kf_{i:03d}_f{fi:05d}.jpg"), img,
@@ -282,15 +289,21 @@ class Geometry(BaseStage):
         L1 ("half-res") densifies one resolution level lower than L0.
         """
         sys.path.insert(0, os.path.join(K.ROOT, "src", "pipeline"))
-        from local_gpu import run as run_local
+        from local_gpu import SparseError, frame_order, run as run_local
 
         if ctx.level not in ("L0", "L1", "L2"):
             raise StageError(Code.STAGE_UNAVAILABLE,
                              f"the local GPU provider has no {ctx.level} mode")
+        # Poses, matching and the S3b gate do not change with the level, so a sparse
+        # failure is not worth rerunning at L1 and L2 (audit 1): replay it.
+        failed = getattr(self, "_sparse_failed", None)
+        if failed and failed[0] == (ctx.run_id, ctx.workdir):
+            raise StageError(failed[1], f"{failed[2]} (not rerun at {ctx.level})")
         kf = ctx.path("keyframes")
         with io.open(ctx.path("ingest.json"), encoding="utf-8") as f:
             crop = json.load(f)["stats"].get("overlay_crop_trbl")
-        names = sorted(n for n in os.listdir(kf) if n.lower().endswith(".jpg"))
+        names = sorted((n for n in os.listdir(kf) if n.lower().endswith(".jpg")),
+                       key=frame_order)
         idx = np.load(os.path.join(ctx.workdir, ctx.need("plan").path))
         dense = [names[i] for i in idx if 0 <= i < len(names)]
         opts = dict(ctx.config.get("local_gpu") or {})
@@ -301,11 +314,13 @@ class Geometry(BaseStage):
                             options=opts, log=ctx.log)
         except FileNotFoundError as e:
             raise StageError(Code.STAGE_UNAVAILABLE, str(e))
-        except RuntimeError as e:
-            code = Code.GEO_REPROJ if "S3b gate" in str(e) else Code.MVS_RC
-            if "no CUDA device" in str(e):
-                code = Code.STAGE_UNAVAILABLE
-            raise StageError(code, str(e))
+        except SparseError as e:
+            code = (Code.STAGE_UNAVAILABLE if "no CUDA device" in str(e) else
+                    Code.GEO_REPROJ)
+            self._sparse_failed = ((ctx.run_id, ctx.workdir), code, str(e)[-800:])
+            raise StageError(code, str(e)[-800:])
+        except (RuntimeError, SystemExit) as e:
+            raise StageError(Code.MVS_RC, str(e)[-800:])
         g = ctx.path("geometry")
         colors = os.path.join(g, "colors_fused.npy")
         return self._load(ctx, os.path.join(g, "points_fused.npy"),

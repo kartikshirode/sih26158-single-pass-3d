@@ -594,6 +594,75 @@ def t_real_run():
           refused["level"])
 
 
+def t_local_provider():
+    section("T3e: the local GPU provider's failures step the ladder, once")
+    import types
+    from tesseract.stages import Geometry
+
+    calls = []
+
+    class SparseError(RuntimeError):
+        pass
+
+    def make(exc):
+        def run(images, work, **kw):
+            calls.append(sorted(kw["dense_names"]))
+            raise exc
+        mod = types.ModuleType("local_gpu")
+        mod.SparseError, mod.run = SparseError, run
+        mod.frame_order = lambda n: (int(n[3:].split("_")[0]), n)
+        return mod
+
+    tmp = tempfile.mkdtemp(prefix="tess-")
+    saved = sys.modules.get("local_gpu")
+    try:
+        kf = os.path.join(tmp, "keyframes")
+        os.makedirs(kf)
+        for i in (0, 1, 2, 1000):
+            open(os.path.join(kf, f"kf_{i:03d}_f{i:05d}.jpg"), "wb").close()
+        with io.open(os.path.join(tmp, "ingest.json"), "w", encoding="utf-8") as f:
+            json.dump({"stats": {"overlay_crop_trbl": [0, 0, 0, 0]}}, f)
+        np.save(os.path.join(tmp, "dense_index.npy"), np.array([0, 3]))
+
+        def ctx(level):
+            c = ctx_for(tmp, source=_Clip(), config={"geometry": "local"}, level=level)
+            c.artefacts["plan"] = Artefact("dense_index.npy", "array")
+            return c
+
+        g = Geometry()
+        sys.modules["local_gpu"] = make(SparseError("S3b gate failed: 4.0 px"))
+        e1 = _raises_as(lambda: g.execute(ctx("L0")))
+        check("a failed S3b gate is GEO_REPROJ, not fatal",
+              e1 is not None and e1.code == Code.GEO_REPROJ and not e1.fatal, repr(e1))
+        check("the dense set follows the keyframes' time order, past 999",
+              calls and calls[0] == ["kf_000_f00000.jpg", "kf_1000_f01000.jpg"], str(calls))
+        e2 = _raises_as(lambda: g.execute(ctx("L1")))
+        check("at L1 the same sparse failure is replayed, not recomputed",
+              len(calls) == 1 and e2 is not None and e2.code == Code.GEO_REPROJ, str(calls))
+        g2 = Geometry()
+        sys.modules["local_gpu"] = make(SystemExit("principal point is 12% off"))
+        e3 = _raises_as(lambda: g2.execute(ctx("L0")))
+        check("a SystemExit from colmap_export becomes a StageError, not an exit",
+              e3 is not None and e3.code == Code.MVS_RC, repr(e3))
+        e4 = _raises_as(lambda: Geometry().execute(ctx("L3")))
+        check("levels the provider has no mode for are STAGE_UNAVAILABLE",
+              e4 is not None and e4.code == Code.STAGE_UNAVAILABLE)
+    finally:
+        if saved is not None:
+            sys.modules["local_gpu"] = saved
+        else:
+            sys.modules.pop("local_gpu", None)
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
+def _raises_as(fn):
+    try:
+        fn()
+    except StageError as e:
+        return e
+    return None
+
+
 if __name__ == "__main__":
     print("=" * 62)
     print("tesseract - contracts, scale, orchestration, end to end")
@@ -604,6 +673,7 @@ if __name__ == "__main__":
     t_verdicts()
     t_level_units()
     t_georef_fit()
+    t_local_provider()
     t_end_to_end()
     t_real_run()
     print("\n" + "=" * 62)
