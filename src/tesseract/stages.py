@@ -603,6 +603,7 @@ class Export(BaseStage):
     """
 
     id: str = "S6-export"
+    version: str = "2"          # PLY in doubles, in the same frame and origin as the LAS
     needs: tuple = ("points", "points_llf")
     produces: tuple = ("exports",)
     levels: tuple = ("L0", "L1", "L2", "L3", "L4")
@@ -610,7 +611,6 @@ class Export(BaseStage):
     def execute(self, ctx: Context) -> StageResult:
         import laspy
         import rasterio
-        import trimesh
         from rasterio.transform import from_origin
 
         geo = "points_geo" in ctx.artefacts
@@ -629,11 +629,14 @@ class Export(BaseStage):
 
         out = ctx.path("export/.")
         os.makedirs(os.path.dirname(out), exist_ok=True)
-        origin = P.min(0)
         paths: dict[str, str] = {}
 
+        # The same coordinates as the LAS and the GeoTIFF, in doubles. trimesh writes
+        # float32, which spaces UTM northings over India 0.25 m apart, so this used to
+        # subtract a min-corner origin first and then label the shifted file F7 with no
+        # record of the shift: a PLY and a LAS of one run did not overlay (audit F-03).
         p = ctx.path("export", "cloud.ply")
-        trimesh.PointCloud(P - origin).export(p)
+        _write_ply_f64(p, P)
         paths["ply"] = p
 
         p = ctx.path("export", "cloud.las")
@@ -688,6 +691,18 @@ class Export(BaseStage):
 
 
 # ------------------------------------------------------------------ S7 · score
+def _write_ply_f64(path: str, P: np.ndarray) -> None:
+    """Binary little-endian PLY with double x, y, z: exact for projected coordinates."""
+    P = np.ascontiguousarray(P, dtype="<f8")
+    head = ("ply\nformat binary_little_endian 1.0\n"
+            "comment frame, units and CRS are in run_manifest.json\n"
+            f"element vertex {len(P)}\n"
+            "property double x\nproperty double y\nproperty double z\nend_header\n")
+    with open(path, "wb") as f:
+        f.write(head.encode("ascii"))
+        f.write(P.tobytes())
+
+
 @dataclass
 class Score(BaseStage):
     """
