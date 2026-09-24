@@ -70,7 +70,7 @@ Ignores caches, venvs, out/, viewer/model.glb and viewer/run_manifest.json, data
 ## .github/workflows/
 
 ### .github/workflows/ci.yml
-CI gate on push and PR (ubuntu, Python 3.12, PROJ_NETWORK=ON): compileall; test_metrics, test_srt, test_window_fuse, test_tesseract; a synthetic `tesseract.py run` then `verify`; tools/test_console.py (Playwright chromium); tools/check_onboarding.py; a licence check that every requirements.txt pin is named in docs/11-state-of-the-art.md.
+CI gate on push and PR (ubuntu, Python 3.12, PROJ_NETWORK=ON): compileall; test_metrics, test_srt, test_window_fuse, mvs_job/test_ba_gate.py, test_tesseract; a synthetic `tesseract.py run` then `verify`; tools/test_console.py (Playwright chromium); tools/check_onboarding.py; a licence check that every requirements.txt pin is named in docs/11-state-of-the-art.md.
 Gotcha: needs network for the geoid grid and a Playwright install. The demo build and audit gates are local only.
 
 ## src/tesseract/
