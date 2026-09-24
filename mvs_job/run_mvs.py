@@ -37,6 +37,14 @@ MESH_BLOB = os.environ.get("MESH_BLOB", "")
 # global stage is innocent), so it is off unless the caller says otherwise
 # (docs/12 EXP-20, research/run-evidence/kolu_texA_mvs_result.json).
 TEXTURE_ARGS = os.environ.get("TEXTURE_ARGS", "--local-seam-leveling 0").split()
+# The S3b gate (docs/09): every view registered, mean reprojection after BA at most
+# 1.0 px (Kolu 0.366, Short 0.414). Overridable per run, never silently skipped.
+BA_MAX_PX = float(os.environ.get("BA_MAX_PX", "1.0"))
+BA_MIN_REGISTERED = float(os.environ.get("BA_MIN_REGISTERED", "1.0"))   # fraction of views
+# S1's crop of the source frame, "top,bottom,left,right" fractions. It moves the
+# camera's principal point off the keyframe centre, so the intrinsics guard needs it
+# to accept a fit that recovers the true centre (audit F-10). Unset means uncropped.
+KF_CROP_TRBL = os.environ.get("KF_CROP_TRBL", "")
 W = "/tmp/mvs"
 TIMES: list = []
 
@@ -114,6 +122,37 @@ def reproj_error(model_dir: str, label: str):
     return got
 
 
+def ba_gate(after: dict, n_views: int, *, max_px: float = BA_MAX_PX,
+            min_registered: float = BA_MIN_REGISTERED) -> list[str]:
+    """
+    The S3b contract as a check. Empty list means pass.
+
+    The numbers were parsed and recorded but never compared, so a bundle adjustment
+    that registered 35 of 60 views or ended at 4 px went straight into densification,
+    35 minutes of it, and came out as a finished model (audit F-11). Missing numbers
+    fail too: an analyzer that printed nothing is not evidence the poses are fine.
+    """
+    import re
+
+    def num(key):
+        m = re.match(r"\s*([0-9]*\.?[0-9]+)", str(after.get(key, "")))
+        return float(m.group(1)) if m else None
+
+    problems = []
+    reg, err = num("Registered images"), num("Mean reprojection error")
+    if reg is None:
+        problems.append("model_analyzer reported no registered-image count")
+    elif reg < min_registered * n_views:
+        problems.append(f"{reg:.0f} of {n_views} views registered "
+                        f"(need {min_registered:.0%})")
+    if err is None:
+        problems.append("model_analyzer reported no reprojection error")
+    elif err > max_px:
+        problems.append(f"mean reprojection error {err:.3f} px after BA "
+                        f"(gate {max_px:.2f} px)")
+    return problems
+
+
 def main():
     print("=" * 74)
     print("MVS stage: MapAnything poses -> COLMAP BA -> OpenMVS dense + mesh (CPU)")
@@ -132,7 +171,8 @@ def main():
     h0, w0 = im0.shape[:2]
 
     sys.path.insert(0, "/app")
-    from colmap_export import derive_intrinsics, full_frame_camera, write_model
+    from colmap_export import derive_intrinsics, full_frame_camera, parse_crop, write_model
+    crop = parse_crop(KF_CROP_TRBL)
 
     msk = np.load(f"{W}/ma/mask.npy") if os.path.exists(f"{W}/ma/mask.npy") else None
     # The mask alone is not a gate. On Toolse it kept 99.9% of pixels, so low-confidence
@@ -159,7 +199,7 @@ def main():
               "A mask that keeps almost every pixel will let low-confidence depth set "
               "the fit; expect the guard below to fire.", flush=True)
     K, resid = derive_intrinsics(pts, cams, H, W_, mask=msk)
-    cam = full_frame_camera(K, H, W_, h0, w0)
+    cam = full_frame_camera(K, H, W_, h0, w0, crop_trbl=crop)
     print(f"\n  intrinsics fitted from the point maps:"
           f"\n    grid {W_}x{H}  fx {np.median(K[:,0]):.2f}  fy {np.median(K[:,1]):.2f}"
           f"  (median of {len(K)} views, fx/fy "
@@ -210,6 +250,23 @@ def main():
         "--BundleAdjustment.use_gpu", "0"], "bundle_adjuster")
     after = reproj_error(f"{W}/sparse_ba", "after bundle adjustment")
 
+    problems = ba_gate(after, len(names))
+    if problems:
+        # Record why before stopping, so the failure has evidence in the bucket and the
+        # web orchestrator's "no successful task" has a reason to point at.
+        summary = {"n_images": n_img, "intrinsics_fit_residual_px": round(resid, 4),
+                   "sparse_after_triangulation": before,
+                   "sparse_after_bundle_adjustment": after,
+                   "ba_gate": {"passed": False, "problems": problems,
+                               "max_px": BA_MAX_PX, "min_registered": BA_MIN_REGISTERED},
+                   "stages": TIMES,
+                   "total_seconds": round(time.perf_counter() - t_all, 1)}
+        json.dump(summary, open(f"{W}/mvs_result.json", "w"), indent=2)
+        push({"mvs_result.json": f"{W}/mvs_result.json"})
+        sys.exit("S3b gate failed: " + "; ".join(problems))
+    print(f"  S3b gate passed: {after.get('Registered images')} registered, "
+          f"{after.get('Mean reprojection error')} after BA", flush=True)
+
     sh(["colmap", "image_undistorter", "--image_path", f"{W}/images",
         "--input_path", f"{W}/sparse_ba", "--output_path", f"{W}/dense",
         "--output_type", "COLMAP"], "image_undistorter")
@@ -231,6 +288,7 @@ def main():
         summary = {"n_images": n_img, "full_frame": [w0, h0], "model_grid": [W_, H],
                    "intrinsics_fit_residual_px": round(resid, 4),
                    "sparse_after_bundle_adjustment": after, "texture_only": MESH_BLOB,
+                   "ba_gate": {"passed": True, "max_px": BA_MAX_PX},
                    "stages": TIMES, "total_seconds": round(time.perf_counter() - t_all, 1)}
         json.dump(summary, open(f"{W}/mvs_result.json", "w"), indent=2)
         out = {"mvs_result.json": f"{W}/mvs_result.json"}
@@ -284,6 +342,8 @@ def main():
                    for k, v in cam.items() if k != "crop_span_full"},
         "sparse_after_triangulation": before,
         "sparse_after_bundle_adjustment": after,
+        "ba_gate": {"passed": True, "max_px": BA_MAX_PX,
+                    "min_registered": BA_MIN_REGISTERED},
         "resolution_level": RES_LEVEL,
         "stages": TIMES,
         "total_seconds": round(time.perf_counter() - t_all, 1),

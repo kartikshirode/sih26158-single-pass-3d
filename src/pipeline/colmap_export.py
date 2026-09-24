@@ -93,7 +93,8 @@ def derive_intrinsics(points: np.ndarray, cams: np.ndarray, H: int, W: int,
     return np.array(out), float(np.median(resid))
 
 
-def full_frame_camera(K: np.ndarray, H: int, W: int, h0: int, w0: int, log=print):
+def full_frame_camera(K: np.ndarray, H: int, W: int, h0: int, w0: int, log=print,
+                      crop_trbl=None):
     """
     Move the fitted K from the model's cropped grid onto the FULL keyframe.
 
@@ -107,6 +108,12 @@ def full_frame_camera(K: np.ndarray, H: int, W: int, h0: int, w0: int, log=print
     vs 518/1920 = 0.2698). Assuming one of them is what this used to do, and it
     happened to be right twice; the general form costs nothing and does not depend on
     that luck holding.
+
+    `crop_trbl` is the (top, bottom, left, right) fraction S1 cut off the source
+    frame before writing the keyframe, from ingest.json `overlay_crop_trbl`. With a
+    crop the camera's physical principal point is no longer at the keyframe centre:
+    a 20% top crop of 1920x1080 puts it at (960, 324) in the 1920x864 keyframe,
+    12.5% of the height below the middle.
     """
     s = max(H / h0, W / w0)
     x0 = (w0 * s - W) / 2.0                        # crop offsets, in scaled pixels
@@ -123,16 +130,48 @@ def full_frame_camera(K: np.ndarray, H: int, W: int, h0: int, w0: int, log=print
     # The principal point of a real camera sits near the frame centre. If the crop
     # geometry above is wrong, it lands far off - which is worth catching here, in a
     # second, rather than as a wrecked surface 15 minutes into densification.
-    off = max(abs(cx - w0 / 2) / w0, abs(cy - h0 / 2) / h0)
-    log(f"  principal point {cx:.1f},{cy:.1f} vs frame centre {w0/2:.1f},{h0/2:.1f} "
-        f"-> {off:.1%} of frame size off centre")
+    # Two centres are legitimate once S1 has cropped. The source camera's own centre,
+    # shifted by the crop, is the physical truth, and a fit that recovers it must pass
+    # (audit F-10: a valid 20% top crop used to be refused at 12.5% off). The
+    # keyframe's centre is what a feed-forward model reports for an image it was
+    # handed already cropped (Toolse, horizon-cropped, fitted near it and passed),
+    # and bundle adjustment refines the principal point from there.
+    refs = {"keyframe centre": (w0 / 2, h0 / 2)}
+    t, b, l, r = crop_trbl if crop_trbl else (0.0, 0.0, 0.0, 0.0)
+    if any((t, b, l, r)):
+        Ws, Hs = w0 / (1.0 - l - r), h0 / (1.0 - t - b)     # source frame, in pixels
+        refs["source centre, shifted by the crop"] = (Ws / 2 - l * Ws, Hs / 2 - t * Hs)
+    offs = {k: max(abs(cx - x) / w0, abs(cy - y) / h0) for k, (x, y) in refs.items()}
+    ref = min(offs, key=offs.get)
+    off = offs[ref]
+    x, y = refs[ref]
+    log(f"  principal point {cx:.1f},{cy:.1f} vs {ref} {x:.1f},{y:.1f} "
+        f"-> {off:.1%} of frame size off")
     if off > 0.08:
         raise SystemExit(
-            f"principal point is {off:.1%} off centre - the assumed resize/crop is "
+            f"principal point is {off:.1%} off the {ref} - the assumed resize/crop is "
             f"probably wrong for this aspect ratio; refusing to build on it")
-    return {"f": f, "cx": cx, "cy": cy, "w": w0, "h": h0,
+    return {"f": f, "cx": cx, "cy": cy, "w": w0, "h": h0, "pp_reference": ref,
             "scale": s, "crop_x0_full": x0 / s, "crop_y0_full": y0 / s,
             "crop_span_full": [x0 / s, (x0 + W) / s]}
+
+
+def parse_crop(value: str | None):
+    """
+    S1's crop as passed to the MVS jobs: "top,bottom,left,right" fractions, the
+    ingest.json `overlay_crop_trbl`. None when unset or all zero; SystemExit when it is
+    not four fractions that leave some image, since a wrong crop moves the principal
+    point the guard in `full_frame_camera` checks against.
+    """
+    if not value or not value.strip():
+        return None
+    try:
+        t, b, l, r = (float(x) for x in value.split(","))
+    except ValueError:
+        raise SystemExit(f"KF_CROP_TRBL must be four comma-separated fractions, got {value!r}")
+    if min(t, b, l, r) < 0 or t + b >= 1 or l + r >= 1:
+        raise SystemExit(f"KF_CROP_TRBL {value!r} leaves no image")
+    return (t, b, l, r) if any((t, b, l, r)) else None
 
 
 def qvec_from_R(R: np.ndarray) -> np.ndarray:

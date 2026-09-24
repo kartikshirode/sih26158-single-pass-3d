@@ -41,6 +41,12 @@ jobs:
       - name: window fusion
         run: python src/pipeline/test_window_fuse.py
 
+      - name: MVS bundle-adjustment gate (S3b), against the recorded Kolu runs
+        run: python mvs_job/test_ba_gate.py
+
+      - name: MVS principal-point guard on a cropped keyframe
+        run: python src/pipeline/test_colmap_export.py
+
       - name: pipeline - contracts, scale, orchestration, end to end
         run: python src/tesseract/test_tesseract.py
 

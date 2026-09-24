@@ -39,6 +39,7 @@ MA_PREFIX = os.environ.get("MA_PREFIX", "mapanything/kolu_out")
 OUT_PREFIX = os.environ.get("OUT_PREFIX", "mvs/kolu_sharded")
 STAGE = os.environ.get("STAGE", "prep")
 RES_LEVEL = os.environ.get("RESOLUTION_LEVEL", "0")
+KF_CROP_TRBL = os.environ.get("KF_CROP_TRBL", "")    # S1's crop; see run_mvs.py
 N_SHARDS = int(os.environ.get("N_SHARDS", "5"))
 OVERLAP = int(os.environ.get("SHARD_OVERLAP", "4"))
 TASK = int(os.environ.get("CLOUD_RUN_TASK_INDEX", "0"))
@@ -126,10 +127,10 @@ def stage_prep():
     import cv2
     h0, w0 = cv2.imread(f"{W}/images/{names[0]}").shape[:2]
     sys.path.insert(0, "/app")
-    from colmap_export import derive_intrinsics, full_frame_camera, write_model
+    from colmap_export import derive_intrinsics, full_frame_camera, parse_crop, write_model
 
     K, resid = derive_intrinsics(pts, cams, H, W_, mask=msk)
-    cam = full_frame_camera(K, H, W_, h0, w0)
+    cam = full_frame_camera(K, H, W_, h0, w0, crop_trbl=parse_crop(KF_CROP_TRBL))
     print(f"  intrinsics f={cam['f']:.1f} cx={cam['cx']:.1f} cy={cam['cy']:.1f} "
           f"resid={resid:.4f}px", flush=True)
     if resid > 2.0:
