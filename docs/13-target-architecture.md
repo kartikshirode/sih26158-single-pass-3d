@@ -236,7 +236,7 @@ says whether it holds.
 | Keyframe planner: pose set vs dense set | **Built, simple** — even subsampling; EXP-03 has not run, so the dense-set size is still an allocation |
 | S0 screen, S1 ingest | **Built** — wrap the existing, measured screener and ingest |
 | S3 geometry | **Three providers**: `sense` (synthetic), `adopt` (a real run's artefacts), `request` (names the container command and steps the ladder down). The containers themselves are unchanged and still run on Cloud Run |
-| S5 georeference (level first, 6-DOF per ADR-026, ENU → UTM, EGM2008) | **Built** — refuses a 7-DOF fit outright |
+| S5 georeference (level first, 6-DOF per ADR-026, ENU → UTM, EGM2008) | **Built**; refuses a 7-DOF fit outright |
 | S5b level (F4 → F5), S6 export, S7 score, S8 verdicts | **Built** |
 | QA report | **Built** — `report.py`, written on every run |
 | CLI: screen / run / calibrate / report / verify | **Built** — `cli.py`, `python tesseract.py` |
