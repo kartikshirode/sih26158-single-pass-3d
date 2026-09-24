@@ -95,7 +95,7 @@ Gotcha: ROOT is three dirnames up from this file. Invariant: units must equal un
 
 ### src/tesseract/pipeline.py
 Orchestrator: runs stages in order with content-addressed resume (state.json), a time budget and the degradation ladder, then writes run_manifest.json. No geometry knowledge.
-Exports: Context(run_id, workdir, source, config, level, budget_s, spent_s, artefacts, facts, cached, ...).path()/remaining()/need(name); Stage Protocol; BaseStage (override execute(); fields id, version, needs, produces, levels, cacheable, estimate()); State(path).key/cached/record; Pipeline(stages).run(ctx, resume=True) -> RunManifest
+Exports: Context(run_id, workdir, source, config, level, budget_s, spent_s, artefacts, facts, cached, ...).path()/remaining()/need(name); Stage Protocol; BaseStage (override execute(); fields id, version, needs, produces, levels, cacheable; estimate(); key_extra(ctx) for files read outside the run); State(path).key(stage, ctx, *, source=None, upstream="")/cached/record; Pipeline(stages).run(ctx, resume=True) -> RunManifest
 Used by: src/tesseract/stages.py, cli.py, __init__.py, test_tesseract.py
 Gotcha: a budget overrun or non-fatal StageError steps down one level and restarts from stage 0; the cache key includes ctx.level, so every stage re-runs and manifest.stages gets duplicates. Pipeline() raises ValueError at construction if a stage needs something no earlier stage produces. Missing scale fact defaults to "unvalidated". A stage with cacheable=False always re-runs; ctx.cached lists the stage ids this invocation took from the cache (their seconds count as 0).
 
@@ -115,7 +115,7 @@ Gotcha: a calibration file applies only if the run name is in its "runs" list; a
 Pipeline inputs. VideoSource wraps a real clip plus optional telemetry sidecar; SyntheticSource builds a known-truth single-pass scene with simulated GNSS error (consumer/sbas/rtk plus 2% wild fixes) from src/simscene and src/eval3d.
 Exports: Source (describe(), inputs()); VideoSource(path, telemetry=None); SyntheticSource(seed=7, n_frames=240, pitch_deg=60, gnss="consumer", site=Delhi lat/lon/h).world() -> dict(scene, pos, R, gps, cam, gt, gt_fidx, occ, gnss_spec, rng, site)
 Used by: src/tesseract/cli.py, __init__.py, test_tesseract.py
-Gotcha: stages tell sources apart by hasattr(ctx.source, "path") vs hasattr(ctx.source, "world"). world() is cached per instance and samples 460k surface points on first call.
+Gotcha: stages tell sources apart by hasattr(ctx.source, "path") vs hasattr(ctx.source, "world"). world() is cached per instance and samples 460k surface points on first call. inputs() is the resume fingerprint: any new parameter that changes the scene must be added there (VideoSource hashes the file every run).
 
 ### src/tesseract/stages.py
 The ten DEFAULT_STAGES: S0-screen, S1-ingest, S2-plan, S3-geometry, S4-scale, S5-georef, S5b-level, S6-export, S7-score, S8-verdict. Wrap code in src/ingest, src/eval3d, src/simscene and src/pipeline (gravity, render_views).
