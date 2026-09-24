@@ -460,6 +460,7 @@ class Level(BaseStage):
     """
 
     id: str = "S5b-level"
+    version: str = "2"          # length facts named by their unit, not always `_m`
     needs: tuple = ("points",)
     produces: tuple = ("points_llf",)
     levels: tuple = ("L0", "L1", "L2", "L3", "L4")
@@ -493,15 +494,22 @@ class Level(BaseStage):
             facts["gravity"] = {"method": "pca+centres", "checked": False}
 
         k = float((ctx.facts.get("scale") or {}).get("factor", 1.0))
+        units = ctx.facts.get("units", Units.MODEL)
         origin = P.mean(0)
         L = ((P - origin) @ B.T)[:, [0, 2, 1]] * k          # [e1, e2, up], then scaled
         art = _save_npy(ctx, "points_llf", L.astype(np.float32), frame=Frame.F5_LLF,
-                        units=ctx.facts.get("units", Units.MODEL), kind="point-cloud")
+                        units=units, kind="point-cloud")
+        # Lengths carry their unit in the key (docs/15 conventions). gravity.estimate
+        # names them `_m` whatever the scale, and this stage used to publish them, and
+        # `extent_m`, on unvalidated runs too, so the QA report printed metre-named
+        # figures in model units (audit F-06).
+        sfx = "_m" if units == Units.METRES else "_model"
+        grav = facts.get("gravity", {})
         for key in ("camera_above_ground_m", "horiz_track_m", "altitude_spread_m"):
-            if key in facts.get("gravity", {}):
-                facts["gravity"][key] = round(facts["gravity"][key] * k, 2)
+            if key in grav:
+                grav[key[:-2] + sfx] = round(grav.pop(key) * k, 2)
         facts["frame"] = Frame.F5_LLF
-        facts["extent_m"] = [round(float(x), 2) for x in np.ptp(L, axis=0)]
+        facts["extent" + sfx] = [round(float(x), 2) for x in np.ptp(L, axis=0)]
         return StageResult(self.id, 0.0, outputs={"points_llf": art}, facts=facts,
                            note=f"levelled and scaled x{k:.2f}")
 
