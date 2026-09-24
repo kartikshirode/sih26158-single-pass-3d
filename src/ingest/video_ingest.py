@@ -429,7 +429,10 @@ def static_overlay_mask(frames_small: list, std_thr: float = 3.0,
     # A letterbox bar's edge is static and sharp too. Left in, it put "overlay" at the
     # very top and bottom of the demo clip, no edge crop under 12% could clear both,
     # and the real watermark above the bottom bar was kept in every keyframe.
-    t, b = letterbox_rows(frames_small[len(frames_small) // 2])
+    # The clip's median bars, as letterbox_box takes them: one dark sample (a fade)
+    # measured none and brought the bar edges back.
+    t, b = np.median(np.asarray([letterbox_rows(f) for f in frames_small]),
+                     axis=0).astype(int)
     if t:
         mask[:t + 2] = False
     if b:
@@ -700,7 +703,7 @@ def ingest_video(path: str, *, target_keyframes: int = 600,
     stats = {
         "video": os.path.basename(path), "resolution": f"{W}x{H}",
         "fps": round(fps, 2), "frames_decoded": int(n),
-        "variable_frame_rate": _is_vfr(times, fps),
+        "variable_frame_rate": _is_vfr(times, fps, analyse_every),
         "frames_analysed": int(len(scores)), "analyse_every": int(analyse_every),
         "shots_detected": len(shots),
         "shot_kept_frames": int(in_shot.sum()),
@@ -747,12 +750,19 @@ def timed_frames(container):
         yield n, frame, (t - t_first) if (t is not None and t_first is not None) else None
 
 
-def _is_vfr(times, fps: float) -> bool | None:
-    """True when frame spacing departs from the average rate; None without timestamps."""
+def _is_vfr(times, fps: float, every: int = 1) -> bool | None:
+    """
+    True when frame spacing departs from the average rate; None without timestamps.
+
+    `times` holds the scored frames only, `every` apart. Comparing their gaps with
+    1 / fps called every clip above ~23 fps variable once S1 began scoring every
+    second frame.
+    """
     t = np.asarray([x for x in times if x is not None], np.float64)
     if len(t) < 3 or not fps:
         return None
-    return bool(np.abs(np.diff(t) - 1.0 / fps).max() > 0.5 / fps)
+    step = every / fps
+    return bool(np.abs(np.diff(t) - step).max() > 0.5 / fps)
 
 
 def _decode_frames(path, indices, crop=(0.0, 0.0, 0.0, 0.0)):
@@ -774,8 +784,9 @@ def _decode_frames(path, indices, crop=(0.0, 0.0, 0.0, 0.0)):
     try:
         for frame in container.decode(video=0):
             if n in want:
-                out[n] = np.ascontiguousarray(apply_crop(frame.to_ndarray(format="bgr24"),
-                                                         crop))
+                # .copy(), not ascontiguousarray: a top-and-bottom crop is already
+                # contiguous, so that returned the view and kept the frame alive.
+                out[n] = apply_crop(frame.to_ndarray(format="bgr24"), crop).copy()
                 if len(out) == len(want):
                     break
             n += 1

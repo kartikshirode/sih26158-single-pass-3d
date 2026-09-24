@@ -18,9 +18,9 @@ import cv2
 import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from ingest.video_ingest import (horizon_present, horizon_row, letterbox_box,  # noqa: E402
-                                 letterbox_rows, overlay_crop_box, sky_and_horizon,
-                                 sky_fraction, static_overlay_mask)
+from ingest.video_ingest import (_is_vfr, horizon_present, horizon_row,  # noqa: E402
+                                 letterbox_box, letterbox_rows, overlay_crop_box,
+                                 sky_and_horizon, sky_fraction, static_overlay_mask)
 
 FAILED: list[str] = []
 
@@ -69,12 +69,25 @@ box = overlay_crop_box(static_overlay_mask(frames))
 check("the watermark above the bottom bar is cropped, not blocked by the bars",
       box[1] > 0.05 and box[0] == 0.0, str(box))
 
+faded = list(frames)
+faded[len(faded) // 2] = np.zeros_like(faded[0])        # a fade to black mid-clip
+box2 = overlay_crop_box(static_overlay_mask(faded))
+check("one black sample in the middle does not bring the bar edges back", box2 == box,
+      f"{box2} vs {box}")
+
 print("\nT2: frames without bars behave as before")
 g = frame(2, bars=0)
 check("no bars, none measured", letterbox_rows(g) == (0, 0))
 check("sky at the very top edge is still sky", sky_fraction(g) > 0.15)
 check("a frame of ground has no sky and no horizon",
       sky_and_horizon(np.full((270, 480, 3), (40, 90, 120), np.uint8)) == (0.0, False))
+
+print("\nT3: the variable-frame-rate flag with a scoring stride")
+t = [i * 2 / 30.0 for i in range(100)]                  # 30 fps, every 2nd frame scored
+check("constant 30 fps scored every 2nd frame is not variable", _is_vfr(t, 30.0, 2) is False)
+check("the old comparison would have called it variable", _is_vfr(t, 30.0, 1) is True)
+t2 = t[:50] + [t[49] + 0.2 + i * 2 / 30.0 for i in range(50)]
+check("a real gap is still flagged", _is_vfr(t2, 30.0, 2) is True)
 
 print()
 if FAILED:
