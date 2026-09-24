@@ -19,6 +19,7 @@ from ingest.video_ingest import (sky_fraction, horizon_present, sharpness,
 def screen(path: str, n_samples: int = 140) -> dict:
     c = av.open(path)
     st = c.streams.video[0]
+    st.thread_type = "AUTO"            # frame threading; decode was single-threaded
     fps = float(st.average_rate or 30.0)
     dur = float(st.duration * st.time_base) if st.duration else \
           float(c.duration / av.time_base if c.duration else 0)

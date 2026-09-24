@@ -526,7 +526,8 @@ def ingest_video(path: str, *, target_keyframes: int = 600,
                  blur_reject_pct: float = 25.0, max_sky: float = 0.15,
                  horizon_policy: str = "reject", single_shot: bool = True,
                  skip_start_s: float = 0.0, end_s: float | None = None,
-                 analyse_scale: float = 0.25,
+                 analyse_scale: float = 0.25, analyse_every: int | None = None,
+                 flow_method: str = "dis",
                  min_flow_px: float = 1.0, srt_path: str | None = None,
                  progress: bool = True) -> IngestResult:
     """
@@ -544,17 +545,28 @@ def ingest_video(path: str, *, target_keyframes: int = 600,
       4. drop the blurriest `blur_reject_pct` (percentile, not a constant)
       5. require accumulated optical flow between consecutive keyframes, so each
          pair carries real baseline instead of being near-duplicates
+
+    `analyse_every` scores one frame in N (all are still decoded, which the codec needs
+    anyway); flow is then measured between the scored frames, so the accumulated
+    baseline means the same thing. The default scores about 15 frames a second: on
+    the 10-minute test clip that halved S1 (240 s to 108 s) and moved the chosen
+    keyframes by at most two frames, where keyframes are ~30 frames apart. `flow_method` "dis" is OpenCV's DIS flow at its
+    ultrafast preset; "farneback" is the original.
     """
     import av
 
     container = av.open(path)
     stream = container.streams.video[0]
+    # Frame threading: the decoder was single-threaded by default.
+    stream.thread_type = "AUTO"
     fps = float(stream.average_rate or 30.0)
     W, H = stream.codec_context.width, stream.codec_context.height
     # Skip and end are compared with each frame's presentation time when the stream
     # has one; frame counts at the average rate are only the fallback. On a
     # variable-frame-rate clip the two disagree, and the time is what the caller means.
     skip_n = int(skip_start_s * fps)
+    if analyse_every is None:
+        analyse_every = max(1, int(round(fps / 15.0)))
     # Ending early is a real lever, not a convenience. Keyframe budget is fixed by
     # the time budget, so halving the covered ground doubles the view density over
     # what remains - which is what resolves structure standing off the ground.
@@ -571,23 +583,34 @@ def ingest_video(path: str, *, target_keyframes: int = 600,
     times: list[float | None] = []    # presentation time, seconds from the first frame
     prev_small = None
     n = 0
+    in_range = 0
+    # Farneback was 60% of S1's time on the demo clip (14.4 of 24 ms per frame at
+    # 480x270); DIS at its ultrafast preset measures the same mean motion in pixels.
+    dis = (cv2.DISOpticalFlow_create(cv2.DISOPTICAL_FLOW_PRESET_ULTRAFAST)
+           if flow_method == "dis" else None)
 
     for n, frame, t_rel in timed_frames(container):
         if end_s and (t_rel >= end_s if t_rel is not None else n >= end_n):
             n += 1
             break
-        img = frame.to_ndarray(format="bgr24")
         if (t_rel >= skip_start_s) if t_rel is not None else (n >= skip_n):
+            in_range += 1
+            if (in_range - 1) % max(analyse_every, 1):
+                n += 1
+                continue
+            img = frame.to_ndarray(format="bgr24")
             small = cv2.resize(img, (int(W * analyse_scale), int(H * analyse_scale)))
             gray = cv2.cvtColor(small, cv2.COLOR_BGR2GRAY)
             scores.append(sharpness(gray))
-            skies.append(sky_fraction(small))
+            sky, hz = sky_and_horizon(small)
+            skies.append(sky)
             slates.append(is_slate(small))
-            horiz.append(horizon_present(small))
+            horiz.append(hz)
             hists.append(frame_hist(small))
             if prev_small is not None:
-                fl = cv2.calcOpticalFlowFarneback(prev_small, gray, None,
-                                                  0.5, 2, 13, 2, 5, 1.1, 0)
+                fl = (dis.calc(prev_small, gray, None) if dis is not None else
+                      cv2.calcOpticalFlowFarneback(prev_small, gray, None,
+                                                   0.5, 2, 13, 2, 5, 1.1, 0))
                 flows.append(float(np.linalg.norm(fl, axis=2).mean()))
             else:
                 flows.append(0.0)
@@ -678,7 +701,7 @@ def ingest_video(path: str, *, target_keyframes: int = 600,
         "video": os.path.basename(path), "resolution": f"{W}x{H}",
         "fps": round(fps, 2), "frames_decoded": int(n),
         "variable_frame_rate": _is_vfr(times, fps),
-        "frames_analysed": int(len(scores)),
+        "frames_analysed": int(len(scores)), "analyse_every": int(analyse_every),
         "shots_detected": len(shots),
         "shot_kept_frames": int(in_shot.sum()),
         "overlay_crop_trbl": [round(float(x), 3) for x in crop],
@@ -701,11 +724,12 @@ def ingest_video(path: str, *, target_keyframes: int = 600,
     # clip. One extra sequential decode (about 20 s on a 114 s 1080p clip) in exchange
     # for memory that no longer grows with clip length at full resolution.
     want = np.asarray(kept_idx)[selected]
-    full = _decode_frames(path, want)
-    return IngestResult(
-        keyframe_indices=want,
-        frames=[apply_crop(full[i], crop) for i in want],
-        telemetry=telemetry, stats=stats)
+    # The analysis copies are done with; on the 10-minute test clip they and the full
+    # frames together peaked at 11.8 GB.
+    del smalls, sub
+    full = _decode_frames(path, want, crop)
+    return IngestResult(keyframe_indices=want, frames=[full[i] for i in want],
+                        telemetry=telemetry, stats=stats)
 
 
 def timed_frames(container):
@@ -731,8 +755,11 @@ def _is_vfr(times, fps: float) -> bool | None:
     return bool(np.abs(np.diff(t) - 1.0 / fps).max() > 0.5 / fps)
 
 
-def _decode_frames(path, indices):
-    """Decode exactly `indices` (original frame numbers) at full resolution.
+def _decode_frames(path, indices, crop=(0.0, 0.0, 0.0, 0.0)):
+    """Decode exactly `indices` (original frame numbers) at full resolution, cropped.
+
+    Each frame is cropped as it is decoded and kept as its own copy. A crop is a
+    view, and the views used to keep every uncropped 1080p frame alive until the end.
 
     Sequential rather than seeking: these clips are long-GOP VP9/H.264, where seeking
     to an arbitrary frame means decoding from the previous keyframe anyway, and a
@@ -743,10 +770,12 @@ def _decode_frames(path, indices):
     want = set(int(i) for i in indices)
     out, n = {}, 0
     container = av.open(path)
+    container.streams.video[0].thread_type = "AUTO"
     try:
         for frame in container.decode(video=0):
             if n in want:
-                out[n] = frame.to_ndarray(format="bgr24")
+                out[n] = np.ascontiguousarray(apply_crop(frame.to_ndarray(format="bgr24"),
+                                                         crop))
                 if len(out) == len(want):
                     break
             n += 1
