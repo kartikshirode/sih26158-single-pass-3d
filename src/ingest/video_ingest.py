@@ -185,7 +185,8 @@ def parse_dji_srt(path: str) -> list[dict]:
     return out
 
 
-def telemetry_for_frames(records: list[dict], frame_idx, fps: float) -> list[dict]:
+def telemetry_for_frames(records: list[dict], frame_idx, fps: float,
+                         times_s=None) -> list[dict]:
     """
     The telemetry record for each source frame index, keyed the way the file allows.
 
@@ -195,7 +196,12 @@ def telemetry_for_frames(records: list[dict], frame_idx, fps: float) -> list[dic
     lookup on a 30 fps clip would hand frame 300 the record from five minutes in.
 
       1. FrameCnt / SrtCnt, 1-based, when the records carry it;
-      2. else nearest by time, from the timing line at the clip's frame rate;
+      2. else nearest by time, from the timing line. A frame's time is its
+         presentation timestamp from `times_s` (seconds from the first frame) when
+         the caller has it, and index / fps only when it does not. Phones and some
+         drones record variable frame rate, where index / average rate drifts: a
+         frame shown at 2.0 s after a rate change would be looked up at 1.0 s and
+         handed a plausible but wrong fix;
       3. else nothing, rather than a guess.
     """
     if not records:
@@ -203,13 +209,14 @@ def telemetry_for_frames(records: list[dict], frame_idx, fps: float) -> list[dic
     by_cnt = {r["frame_cnt"]: r for r in records if "frame_cnt" in r}
     if len(by_cnt) == len(records):
         return [by_cnt.get(int(fi) + 1, {}) for fi in frame_idx]
-    if fps and fps > 0 and all("t_us" in r for r in records):
+    if (times_s is not None or (fps and fps > 0)) and all("t_us" in r for r in records):
         ts = np.asarray([r["t_us"] for r in records], np.float64)
         order = np.argsort(ts)
         ts = ts[order]
         out = []
-        for fi in frame_idx:
-            t = int(fi) / fps * 1e6
+        for i, fi in enumerate(frame_idx):
+            t_s = times_s[i] if times_s is not None else None
+            t = (t_s if t_s is not None else int(fi) / fps) * 1e6
             j = int(np.searchsorted(ts, t))
             cands = [k for k in (j - 1, j) if 0 <= k < len(ts)]
             k = min(cands, key=lambda k: abs(ts[k] - t))
@@ -492,6 +499,9 @@ def ingest_video(path: str, *, target_keyframes: int = 600,
     stream = container.streams.video[0]
     fps = float(stream.average_rate or 30.0)
     W, H = stream.codec_context.width, stream.codec_context.height
+    # Skip and end are compared with each frame's presentation time when the stream
+    # has one; frame counts at the average rate are only the fallback. On a
+    # variable-frame-rate clip the two disagree, and the time is what the caller means.
     skip_n = int(skip_start_s * fps)
     # Ending early is a real lever, not a convenience. Keyframe budget is fixed by
     # the time budget, so halving the covered ground doubles the view density over
@@ -506,15 +516,16 @@ def ingest_video(path: str, *, target_keyframes: int = 600,
     # again in a second pass: O(clip) memory at 1/16 the constant, O(keyframes) at full
     # resolution.
     scores, skies, slates, horiz, flows, kept_idx, smalls, hists =         [], [], [], [], [], [], [], []
+    times: list[float | None] = []    # presentation time, seconds from the first frame
     prev_small = None
     n = 0
 
-    for frame in container.decode(video=0):
-        if end_n is not None and n >= end_n:
+    for n, frame, t_rel in timed_frames(container):
+        if end_s and (t_rel >= end_s if t_rel is not None else n >= end_n):
             n += 1
             break
         img = frame.to_ndarray(format="bgr24")
-        if n >= skip_n:
+        if (t_rel >= skip_start_s) if t_rel is not None else (n >= skip_n):
             small = cv2.resize(img, (int(W * analyse_scale), int(H * analyse_scale)))
             gray = cv2.cvtColor(small, cv2.COLOR_BGR2GRAY)
             scores.append(sharpness(gray))
@@ -530,6 +541,7 @@ def ingest_video(path: str, *, target_keyframes: int = 600,
                 flows.append(0.0)
             prev_small = gray
             kept_idx.append(n)
+            times.append(t_rel)
             smalls.append(small)
         n += 1
         if progress and n % 150 == 0:
@@ -603,11 +615,15 @@ def ingest_video(path: str, *, target_keyframes: int = 600,
 
     srt = srt_path or (os.path.splitext(path)[0] + ".SRT")
     tel_all = parse_dji_srt(srt)
-    telemetry = telemetry_for_frames(tel_all, [int(kept_idx[s_]) for s_ in selected], fps)
+    # Each keyframe's own presentation time, not its index at the average rate
+    # (audit F-13). A frame with no timestamp falls back to index / fps.
+    telemetry = telemetry_for_frames(tel_all, [int(kept_idx[s_]) for s_ in selected], fps,
+                                     times_s=[times[s_] for s_ in selected])
 
     stats = {
         "video": os.path.basename(path), "resolution": f"{W}x{H}",
         "fps": round(fps, 2), "frames_decoded": int(n),
+        "variable_frame_rate": _is_vfr(times, fps),
         "frames_analysed": int(len(scores)),
         "shots_detected": len(shots),
         "shot_kept_frames": int(in_shot.sum()),
@@ -636,6 +652,29 @@ def ingest_video(path: str, *, target_keyframes: int = 600,
         keyframe_indices=want,
         frames=[apply_crop(full[i], crop) for i in want],
         telemetry=telemetry, stats=stats)
+
+
+def timed_frames(container):
+    """
+    Yield (decode index, frame, seconds since the first frame's presentation time).
+
+    The time is None for a frame without a timestamp. It is the presentation time,
+    not index / average rate: the two agree only at a constant frame rate.
+    """
+    t_first = None
+    for n, frame in enumerate(container.decode(video=0)):
+        t = frame.time
+        if t is not None and t_first is None:
+            t_first = t
+        yield n, frame, (t - t_first) if (t is not None and t_first is not None) else None
+
+
+def _is_vfr(times, fps: float) -> bool | None:
+    """True when frame spacing departs from the average rate; None without timestamps."""
+    t = np.asarray([x for x in times if x is not None], np.float64)
+    if len(t) < 3 or not fps:
+        return None
+    return bool(np.abs(np.diff(t) - 1.0 / fps).max() > 0.5 / fps)
 
 
 def _decode_frames(path, indices):
