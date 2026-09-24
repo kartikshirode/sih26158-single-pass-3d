@@ -368,9 +368,27 @@ def t_verdicts():
     check("a timed ten-minute clip is judged on its wall clock",
           cases["timed, inside"] == "met" and cases["timed, over"] == "not met",
           f"{cases['timed, inside']} / {cases['timed, over']}")
+    from tesseract.stages import _verdict_coverage
+    easy = {"recall_at_1m_observable": 0.95, "recall_at_1m_whole_scene": 0.40}
+    cov = {
+        "easy surface": _verdict_coverage(dict(easy, geometry_provider="adopt")),
+        "short": _verdict_coverage({"recall_at_1m_observable": 0.60,
+                                    "recall_at_1m_whole_scene": 0.30}),
+        "sensed": _verdict_coverage(dict(easy, geometry_provider="sense")),
+        "no truth": _verdict_coverage({}),
+    }
+    check("R-O4 met on the observable surface still prints the whole-scene 40% (audit F-08)",
+          cov["easy surface"].startswith("met") and "whole scene 40%" in cov["easy surface"],
+          cov["easy surface"])
+    check("R-O4 below 90% observable is not met", cov["short"].startswith("not met"),
+          cov["short"])
+    check("synthetic sensing cannot meet R-O4: its coverage is the mask it was built from",
+          cov["sensed"].startswith("not measurable"), cov["sensed"])
+    check("no ground truth, no R-O4", cov["no truth"].startswith("not measurable"))
+
     vocab = ("met", "not met", "not measurable")
     check("every verdict keeps the console's three-word vocabulary",
-          all(s.startswith(vocab) for s in list(cases.values()) + [three]))
+          all(s.startswith(vocab) for s in list(cases.values()) + list(cov.values()) + [three]))
 
 
 def t_level_units():
@@ -456,6 +474,9 @@ def t_end_to_end():
           v["R-O2 processing time"].startswith("not measurable"), v["R-O2 processing time"])
     check("S6's three files do not claim the six-format target",
           v["R-O5 formats"].startswith("not met"), v["R-O5 formats"])
+    check("a synthetic end-to-end run does not claim R-O4 (audit F-08)",
+          v["R-O4 coverage"].startswith("not measurable") and "whole scene" in v["R-O4 coverage"],
+          v["R-O4 coverage"])
     g = get(out["rtk"][0], "gravity") or {}
     up = g.get("up") or [0, 0, 1]
     check("the synthetic gauge is no longer secretly level (audit F-07)",
