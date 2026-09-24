@@ -187,6 +187,8 @@ class Geometry(BaseStage):
     id: str = "S3-geometry"
     version: str = "2"          # full cam2world poses when the adopted run has them
     needs: tuple = ("plan",)
+    # S3 on a synthetic source also reads the scene straight from ctx.source; the
+    # orchestrator keys every stage on the source's fingerprint, which covers that.
     produces: tuple = ("points", "cameras")
     levels: tuple = ("L0", "L1", "L2", "L3", "L4")
 
@@ -221,27 +223,41 @@ class Geometry(BaseStage):
             "meta.json the rasteriser writes. kolu-ma runs v2 and takes bare keyframes")
 
     # ---- provider: adopt a real run's artefacts
-    def _adopt(self, ctx: Context) -> StageResult:
+    @staticmethod
+    def _adopt_files(ctx: Context) -> tuple[str, str | None, str | None]:
+        """The points, colours and cameras files an adopted run supplies (or None)."""
         d = os.path.join(K.ROOT, ctx.config["adopt"])
-        pts_p = os.path.join(d, "points_fused.npy")
-        if not os.path.exists(pts_p):
-            raise StageError(Code.STAGE_UNAVAILABLE, f"{pts_p} does not exist", fatal=True)
-        P = np.load(pts_p).astype(np.float64)
-        C = np.load(os.path.join(d, "colors_fused.npy")) \
-            if os.path.exists(os.path.join(d, "colors_fused.npy")) else None
+        colors = os.path.join(d, "colors_fused.npy")
         # Prefer full cam2world poses: gravity.estimate can then check the terrain
         # normal against the gimbal roll-zero constraint. Centres alone leave the
         # levelling on a PCA axis whose sign is arbitrary (docs/04 defect list).
-        cams = None
-        for cand in (ctx.config.get("cameras"),
-                     os.path.join(d, "cameras.npy"),
-                     os.path.join(K.ROOT, "out",
-                                  os.path.basename(d).replace("mvs3d", "_raw"),
-                                  "cameras.npy"),
-                     os.path.join(d, "cam_centres.npy")):
-            if cand and os.path.exists(cand):
-                cams = np.load(cand)
-                break
+        cams = next((c for c in (ctx.config.get("cameras"),
+                                 os.path.join(d, "cameras.npy"),
+                                 os.path.join(K.ROOT, "out",
+                                              os.path.basename(d).replace("mvs3d", "_raw"),
+                                              "cameras.npy"),
+                                 os.path.join(d, "cam_centres.npy"))
+                     if c and os.path.exists(c)), None)
+        return (os.path.join(d, "points_fused.npy"),
+                colors if os.path.exists(colors) else None, cams)
+
+    def key_extra(self, ctx: Context):
+        # An adopted run lives outside this run's directory. Re-running MVS into the
+        # same out/<run> must invalidate S3, so key on the files' content, not their
+        # names (audit F-01).
+        if not ctx.config.get("adopt"):
+            return None
+        return [{"path": os.path.relpath(p, K.ROOT).replace(os.sep, "/"),
+                 "sha256": K.file_sha256(p)} if p and os.path.exists(p) else None
+                for p in self._adopt_files(ctx)]
+
+    def _adopt(self, ctx: Context) -> StageResult:
+        pts_p, colors_p, cams_p = self._adopt_files(ctx)
+        if not os.path.exists(pts_p):
+            raise StageError(Code.STAGE_UNAVAILABLE, f"{pts_p} does not exist", fatal=True)
+        P = np.load(pts_p).astype(np.float64)
+        C = np.load(colors_p) if colors_p else None
+        cams = np.load(cams_p) if cams_p else None
 
         pa = _save_npy(ctx, "points", P.astype(np.float32),
                        frame=Frame.F4_REFINED_WORLD, units=Units.MODEL, kind="point-cloud")
@@ -318,10 +334,23 @@ class Scale(BaseStage):
     produces: tuple = ()
     levels: tuple = ("L0", "L1", "L2", "L3", "L4")
 
-    def execute(self, ctx: Context) -> StageResult:
-        name = ctx.config.get("calibration_run") or \
+    @staticmethod
+    def _calibration_run(ctx: Context) -> str:
+        return ctx.config.get("calibration_run") or \
             os.path.basename(ctx.config.get("adopt", "") or "") or ctx.run_id
-        cal = scale_svc.load(name)
+
+    def key_extra(self, ctx: Context):
+        # The calibration file is read by name from research/calibration/, outside the
+        # run. Key on what it resolves to, so `tesseract calibrate` and an edited factor
+        # both take effect on the next resume instead of being served from the cache
+        # (audit F-01).
+        try:
+            return scale_svc.load(self._calibration_run(ctx))
+        except ValueError as e:                      # execute() raises it properly
+            return {"unusable": str(e)}
+
+    def execute(self, ctx: Context) -> StageResult:
+        cal = scale_svc.load(self._calibration_run(ctx))
         facts = {"scale": scale_svc.for_page(cal) | {"source": cal.get("source")},
                  "units": K.units_for(cal["status"])}
 

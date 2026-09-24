@@ -119,7 +119,7 @@ Gotcha: stages tell sources apart by hasattr(ctx.source, "path") vs hasattr(ctx.
 
 ### src/tesseract/stages.py
 The ten DEFAULT_STAGES: S0-screen, S1-ingest, S2-plan, S3-geometry, S4-scale, S5-georef, S5b-level, S6-export, S7-score, S8-verdict. Wrap code in src/ingest, src/eval3d, src/simscene and src/pipeline (gravity, render_views).
-Exports: Screen, Ingest, PlanKeyframes, Geometry (providers adopt / sense / request), Scale, Georeference, Level, Export, Score, Verdicts; DEFAULT_STAGES; R_O5_FORMATS, R_O2_VIDEO_S; _verdict_formats(exports) -> str; _verdict_time(ctx) -> str
+Exports: Screen, Ingest, PlanKeyframes, Geometry (providers adopt / sense / request; key_extra hashes the adopted files), Scale (key_extra is the resolved calibration), Georeference, Level, Export, Score, Verdicts; DEFAULT_STAGES; R_O5_FORMATS, R_O2_VIDEO_S; _verdict_formats(exports) -> str; _verdict_time(ctx) -> str
 Used by: src/tesseract/cli.py, __init__.py, test_tesseract.py
 Gotcha: on a real video S3 needs config "adopt" (out/<run> with points_fused.npy), otherwise non-fatal STAGE_UNAVAILABLE walks the ladder down to L5. S5 only runs on SyntheticSource (gap C-3), so real clips stay in F5. A 7-DOF fit is refused. _orthometric raises fatal REF_BALLPARK if the EGM2008 grid is missing. S6 writes only PLY, LAS and GeoTIFF, so S8 reports R-O5 not met (3 of 6); R-O2 is met only for a timed, uncached video of 600 s or more. Level names lengths `_m` only when units are metres, else `_model`. Verdict strings must start with met / not met / not measurable (tools/build_console.py checks). Importing inserts src/ on sys.path.
 
