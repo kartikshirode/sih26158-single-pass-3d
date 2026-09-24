@@ -778,3 +778,13 @@ Scale calibration contract (schema sih26158/scale-calibration/1) for runs kolumv
 
 ### research/run-evidence/
 Frozen evidence (about 9 MB): JSON results for MapAnything CPU and Kolu model runs (8.14 and 11.45 s/view), Kolu ingest and fuse diagnostics, three textured-MVS results (0.2214 px intrinsics residual, 45/45 registered), run_demo manifests (consumer 2.26 m, RTK 0.098 m absolute), screen-verdicts.json, toolse-intrinsics-gates.txt (10.69 px fit fixed to 0.214 px by a conf gate), and PNG/JPG figures.
+
+## audit/codex/
+
+### audit/codex/PROMPT.md
+Instructions for an external Codex core-logic audit: ground rules (write only under audit/codex/, no network, cloud, installs, git writes or builders), six phases (baseline, invariants, deep passes by area A-I, cross-cutting sweeps, verify and self-refute, report), severity scale S1-S4, and the required structure of audit/codex/FINDINGS.md.
+Gotcha: point Codex at it with `codex exec -s workspace-write "Read audit/codex/PROMPT.md and follow it exactly."` from the repo root; it expects CONTEXT.md beside it.
+
+### audit/codex/CONTEXT.md
+Reference facts for that audit: PS targets and status, architecture and the three runtimes, contracts and invariants (frames, scale, georef maths, harness, telemetry, orchestrator, web path, residency), known issues not to re-report, ten unverified leads, the local environment and baseline test results as of 2026-09-24, and a risk-ranked file list.
+Gotcha: the baseline and known-issue tables are dated snapshots; refresh them before reusing the prompt after the code moves.
