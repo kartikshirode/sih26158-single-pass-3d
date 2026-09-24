@@ -27,7 +27,9 @@ module.exports = async (req, res) => {
 
     // Capacity, checked before an upload rather than after: being told to come back
     // later after pushing 300 MB is a worse experience than being told now.
-    const [running, today] = await Promise.all([L.runningCount(), L.startedToday()]);
+    // Advisory only: /api/start reserves the slot for real. Both read the same slot
+    // objects, so the two checks cannot disagree about what "today" has used.
+    const [running, today] = await Promise.all([L.runningCount(), L.slotsUsedToday()]);
     if (running >= L.MAX_CONCURRENT) {
       return L.json(res, 429, {
         error: `A reconstruction is already running, and this runs one at a time. ` +
