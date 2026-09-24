@@ -42,7 +42,7 @@ For the product, not the demo. They are what the finale runbook defends.
 | `torch.cuda.is_available()` True but kernels fail (Baramati) | Wrong conda env for sm_120 cards | Use `torch-gpu`; smoke-test with a real matmul |
 | `srun` fails with "Job credential expired" (Baramati) | Clock skew on the login node | Use `sbatch` |
 | Registered < N views | Weak overlap or bad frames | Drop unregistered views; below 80% → ladder L3 (`GEO-UNREG`) |
-| Reprojection > 1 px after BA | Bad intrinsics or poses | Check the intrinsics fit residual and principal point (refuses > 8% off-centre); stop (`GEO-REPROJ`) |
+| Reprojection > 1 px after BA | Bad intrinsics or poses | Check the intrinsics fit residual and principal point (refuses > 8% off both the keyframe centre and, when S1 cropped, the crop-shifted source centre); stop (`GEO-REPROJ`) |
 | `TextureMesh` rc = 1 in 0.2 s | Known (EXP-20) | Non-fatal; per-vertex colour ships (ADR-016) |
 | Transform raises instead of returning heights | Geoid grid missing — **this is the defence working** | Load the grid; never set `allow_ballpark=True` (`REF-BALLPARK`) |
 | Measured distances look wrong | Scale status `unvalidated` (`docs/08`) | Calibrate from a known length (§4.5); never apply a global factor |

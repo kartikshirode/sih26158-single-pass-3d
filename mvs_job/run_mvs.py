@@ -41,6 +41,10 @@ TEXTURE_ARGS = os.environ.get("TEXTURE_ARGS", "--local-seam-leveling 0").split()
 # 1.0 px (Kolu 0.366, Short 0.414). Overridable per run, never silently skipped.
 BA_MAX_PX = float(os.environ.get("BA_MAX_PX", "1.0"))
 BA_MIN_REGISTERED = float(os.environ.get("BA_MIN_REGISTERED", "1.0"))   # fraction of views
+# S1's crop of the source frame, "top,bottom,left,right" fractions. It moves the
+# camera's principal point off the keyframe centre, so the intrinsics guard needs it
+# to accept a fit that recovers the true centre (audit F-10). Unset means uncropped.
+KF_CROP_TRBL = os.environ.get("KF_CROP_TRBL", "")
 W = "/tmp/mvs"
 TIMES: list = []
 
@@ -167,7 +171,8 @@ def main():
     h0, w0 = im0.shape[:2]
 
     sys.path.insert(0, "/app")
-    from colmap_export import derive_intrinsics, full_frame_camera, write_model
+    from colmap_export import derive_intrinsics, full_frame_camera, parse_crop, write_model
+    crop = parse_crop(KF_CROP_TRBL)
 
     msk = np.load(f"{W}/ma/mask.npy") if os.path.exists(f"{W}/ma/mask.npy") else None
     # The mask alone is not a gate. On Toolse it kept 99.9% of pixels, so low-confidence
@@ -194,7 +199,7 @@ def main():
               "A mask that keeps almost every pixel will let low-confidence depth set "
               "the fit; expect the guard below to fire.", flush=True)
     K, resid = derive_intrinsics(pts, cams, H, W_, mask=msk)
-    cam = full_frame_camera(K, H, W_, h0, w0)
+    cam = full_frame_camera(K, H, W_, h0, w0, crop_trbl=crop)
     print(f"\n  intrinsics fitted from the point maps:"
           f"\n    grid {W_}x{H}  fx {np.median(K[:,0]):.2f}  fy {np.median(K[:,1]):.2f}"
           f"  (median of {len(K)} views, fx/fy "

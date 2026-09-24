@@ -316,6 +316,10 @@ def main():
             "OUT_PREFIX": f"web/{RUN_ID}/mvs",
             "MESH_BLOB": "",
             "RESOLUTION_LEVEL": "0",
+            # The keyframes are cropped (--horizon crop); MVS checks the principal
+            # point against the crop-shifted centre as well as the keyframe's.
+            "KF_CROP_TRBL": ",".join(str(x) for x in
+                                     st.get("overlay_crop_trbl", [0, 0, 0, 0])),
         }, "densify", DENSIFY_S_AT_60 * max(1, sent) / 60.0, "densify")
     except Exception as e:
         _state["state"] = "partial"
