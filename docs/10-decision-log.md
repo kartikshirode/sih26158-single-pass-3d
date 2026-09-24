@@ -22,7 +22,7 @@ never by editing the old one's text.
 | 005 | OpenMVS on CPU for dense geometry, invoked as a separate process | Accepted |
 | 006 | Bundle-adjust before densifying | Accepted |
 | 007 | Vertical from the ground plane, checked by the roll-zero constraint | Accepted |
-| 008 | Georeference with a 5-DOF fit in local ENU, project last, EGM2008 | Accepted |
+| 008 | Georeference with a 5-DOF fit in local ENU, project last, EGM2008 | Amended by 026 |
 | 009 | No CRS without GNSS | Accepted |
 | 010 | India-resident compute only | Accepted |
 | 011 | CPU-first deployment; GPU is a speed upgrade, never a dependency | Accepted |
@@ -40,6 +40,7 @@ never by editing the old one's text.
 | 023 | GPU dense path is COLMAP PatchMatch (BSD), not OpenMVS CUDA | Proposed |
 | 024 | Adapt a permissive metric-depth prior for aerial altitude | Proposed |
 | 025 | The product surface is a run console, built from run manifests | Accepted |
+| 026 | Level before georeferencing; the track gives yaw and slope, gravity only the roll about it | Accepted |
 
 ---
 
@@ -135,8 +136,8 @@ RTK; yaw-only gives 0.041 m with RTK. UTM carries ~0.6 m/km of scale error acros
 EGM96 vs EGM2008 differ by 1.68 m at Amritsar. PROJ silently skips the geoid if the grid is
 missing.
 **Consequences.** A vertical reference is mandatory, not optional as the PS implies.
-**Status.** Accepted. Implemented in the synthetic path (`run_demo.py`); **not yet exercised
-on a real clip with GNSS**.
+**Status.** Amended by ADR-026. Implemented in the synthetic path (`run_demo.py`); **not yet
+exercised on a real clip with GNSS**.
 
 ## ADR-009 · No CRS without GNSS
 
@@ -313,3 +314,29 @@ beside MapAnything, never as the geometry.
 **Evidence needed.** EXP-15 (`docs/12` R1): factor error on Kolu against the EXP-14 bracket;
 verify the weights' licence at download.
 **Decide by.** Before any scale claim reaches a deliverable.
+
+## ADR-026 · Level before georeferencing; the track gives yaw and slope, gravity only the roll about it
+
+**Context.** ADR-008's yaw-only fit assumes its input is already level with Z up. S5 fitted
+the raw F3/F4 cameras before S5b levelled anything, and the synthetic source hid it: its
+"arbitrary frame" was a yaw and a translation at scale 1.0, already level and already metric.
+The core-logic audit (F-07) gave that frame a 5 degree roll and a 0.18 scale and got a
+perfect camera-track fit with the scene 21.4 m off.
+**Decision.** S5 levels first, with the same vertical S5b uses (ground plane checked by
+roll-zero, ADR-007). The fit then takes yaw and the track's slope from the GNSS, and only the
+roll about the track from gravity: `eval3d.gnss.track_sim3`, with `robust_yaw_sim3` choosing
+the GNSS inliers. Six degrees of freedom; 7-DOF stays refused. The synthetic source now hands
+S5 a gauge with roll and pitch up to 25 degrees, a scale of 0.1-2x, and full cam2world poses.
+**Evidence.** On that gauge the ground-plane vertical came out 0.70 deg off, all of it along
+the track, which is the direction a straight track does constrain. Scene RMSE over seeds 7-9,
+levelled then fitted yaw-only: RTK 2.4-3.1 m, SBAS 3.1-4.3 m, consumer 4.4-5.7 m. Levelled
+then fitted with the track's slope: RTK 0.06-0.09 m, SBAS 1.2-2.6 m, consumer 2.6-4.8 m.
+EXP-09's degeneracy is untouched: rotation about the track axis still comes only from gravity.
+**Consequences.** The synthetic RTK figure now tests levelling and scale recovery, which it
+did not before. `run_demo.py`, the legacy job behind the README's 0.098 m, still uses the
+old level-by-construction frame; that figure is claims ledger item 26. The slope comes from
+the GNSS altitude, so a consumer receiver's vertical noise now reaches the tilt; on the
+seeds above that still beat the ground-plane vertical.
+**Status.** Accepted. Synthetic path only, like ADR-008; gap C-3 still blocks a real clip.
+**Revisit when.** A real clip with per-frame GNSS (EXP-21) shows the GNSS slope noisier than
+the scene's vertical, or a curved track makes the principal direction a poor summary of it.

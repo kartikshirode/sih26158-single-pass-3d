@@ -186,6 +186,8 @@ not constrain. Error grows with distance from the flight line, 216 m to 725 m ac
 range. The consequence is that "IMU: optional" in the problem statement is misleading: for a
 single straight pass a vertical reference is required, or the problem is under-determined.
 ADR-008 fixes the fit at 5 degrees of freedom, yaw plus translation plus scale, in local ENU.
+ADR-026 amends it after the 2026-09-24 audit: the reconstruction is levelled first, and the
+track itself supplies its slope, so gravity is needed only for the roll about the track.
 
 ### 4.4 One metre absolute is unreachable from consumer GPS
 
@@ -275,7 +277,7 @@ S3  geometry      MapAnything Apache: cameras, intrinsics, metric prior
 S3b bundle adjust COLMAP triangulate + bundle_adjuster, CPU
 S4  dense         OpenMVS DensifyPointCloud, then Delaunay mesh
     scale         GNSS, else known object, else witness, else unvalidated
-S5  georeference  5-DOF fit in local ENU, EGM2008, project to UTM last
+S5  georeference  level, 6-DOF fit in local ENU, EGM2008, project to UTM last
 S5b level         F4 to F5: gravity rotation and calibration, applied once
 S6  export        seven files, one frame
 S7  score         the evaluation harness

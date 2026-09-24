@@ -88,7 +88,7 @@ T+0:60  Check the insurance result exists. From here there is always something t
 | Telemetry | Did a parser match? | Continue with S5 | Proceed without; record `ING-NOGNSS` |
 | S3b | Registered ≥ 80% and reprojection ≤ 1 px? | Continue to S4 | Ladder L3 |
 | S4 | Predicted densify time fits the remaining budget? | L0 | L1 → L2 |
-| S5 | 5-DOF fit residual consistent with the GNSS class? | Write F7 | Ship LLF; report the fit failure |
+| S5 | Georeferencing fit residual (6-DOF, ADR-026) consistent with the GNSS class? | Write F7 | Ship LLF; report the fit failure |
 | Scale | Status `gnss` or `calibrated`? | Print metres | Print model units, and calibrate (§4.5) |
 
 ### 4.4 The 36 hours

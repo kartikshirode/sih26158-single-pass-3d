@@ -34,7 +34,7 @@ F1 ─(K_model)────────────────▶ F2           
 F2 ─(cameras.npy, cam2world)─▶ F3                   (N,4,4) float, OpenCV convention
 F3 ─(BA, same gauge)──────────▶ F4                   COLMAP sparse model
 F4 ─(R_up · (p − centroid) · k)▶ F5                  export_manifest.json: gravity.up, scale.factor
-F5 ─(yaw-only Sim(3), fit to GNSS in F6)─▶ F6        georef.json   (EXP-09: 5-DOF, never 7)
+F5 ─(track-aligned Sim(3), fit to GNSS in F6)─▶ F6   georef.json   (ADR-026: 6-DOF, never 7)
 F6 ─(PROJ pipeline, allow_ballpark=False)─▶ F7      georef.json: epsg, geoid_model
 ```
 
@@ -161,8 +161,8 @@ The stage numbers follow `docs/02` §3, with S3b added for bundle adjustment.
 | | |
 |---|---|
 | In | F4 cameras; `telemetry[]` |
-| Out | `georef.json`: `{epsg, geoid_model: "EGM2008", sim3: {yaw, t, s}, dof: 5, residual_m: {h, v}, gnss_class, ballpark: false}` |
-| Rule | **5-DOF (yaw + t + s) only**; a 7-DOF fit on a single pass is refused (EXP-09) |
+| Out | `georef.json`: `{epsg, geoid_model: "EGM2008", sim3: {yaw, t, s}, dof: 6, residual_m: {h, v}, gnss_class, ballpark: false}` |
+| Rule | **Level first, then 6-DOF**: yaw and the track's slope from the GNSS, roll about the track from gravity, plus t and s (ADR-026, amending ADR-008's 5-DOF). A 7-DOF fit on a single pass is refused (EXP-09) |
 | Rule | the fit is done in F6 and projected to F7 last; the PROJ transformer is built with `allow_ballpark=False` and the geoid grid is checked at startup |
 | Without GNSS | S5 is skipped, `georeferenced: false`, and **no CRS is written anywhere** |
 
