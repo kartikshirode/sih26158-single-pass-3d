@@ -500,6 +500,11 @@ def t_end_to_end():
     up = g.get("up") or [0, 0, 1]
     check("the synthetic gauge is no longer secretly level (audit F-07)",
           abs(up[2]) < 0.999, f"recovered up {np.round(up, 3).tolist()}")
+    # The flight is at 110 m. S5 measures gravity on the raw gauge (scaled 0.1-2x), so
+    # a metre-named height has to come out near 110 whatever that gauge's scale was.
+    h = g.get("camera_above_ground_m")
+    check("S5's metre-named camera height is in metres, not the gauge's units",
+          h is not None and 80.0 < h < 140.0, f"camera_above_ground_m {h}")
 
 
 def t_georef_fit():

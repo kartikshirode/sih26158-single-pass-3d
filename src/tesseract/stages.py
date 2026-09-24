@@ -394,7 +394,7 @@ class Georeference(BaseStage):
     """
 
     id: str = "S5-georef"
-    version: str = "2"          # levels first, then fits yaw and slope to the track
+    version: str = "3"          # gravity lengths in metres, not the raw gauge's units
     needs: tuple = ("points", "cameras")
     produces: tuple = ("points_geo",)
     levels: tuple = ("L0", "L1", "L2", "L3", "L4")
@@ -461,7 +461,9 @@ class Georeference(BaseStage):
                                   "sim3_scale": round(float(sg), 6), "dof": 6,
                                   "rotation_from": {"gnss": ["yaw", "track slope"],
                                                     "gravity": ["roll about the track"]},
-                                  "gravity": grav,
+                                  # Measured on the raw gauge; the fit's scale makes
+                                  # them metres.
+                                  "gravity": _gravity_lengths(grav, sg, Units.METRES),
                                   "scale": scale_svc.for_page(cal)})
 
 
@@ -539,6 +541,22 @@ def _level_basis(P: np.ndarray, cam_array: np.ndarray | None):
     return upright_frame(P, centres), {"method": "pca+centres", "checked": False}, centres
 
 
+def _gravity_lengths(grav: dict, k: float, units: str) -> dict:
+    """
+    Scale gravity.estimate's lengths by `k` and name them by their unit, in place.
+
+    Lengths carry their unit in the key (docs/15 conventions). gravity.estimate
+    measures in whatever frame it is handed and names the result `_m` regardless. S5b
+    published those names on unvalidated runs (audit F-06), and S5 published them in
+    the reconstruction's own gauge on a run whose units were metres.
+    """
+    sfx = "_m" if units == Units.METRES else "_model"
+    for key in ("camera_above_ground_m", "horiz_track_m", "altitude_spread_m"):
+        if key in grav:
+            grav[key[:-2] + sfx] = round(grav.pop(key) * k, 2)
+    return grav
+
+
 def _level(X: np.ndarray, B: np.ndarray, origin: np.ndarray) -> np.ndarray:
     """Rotate into the level frame: [e1, e2, up], right-handed, Z up, about `origin`."""
     return ((np.asarray(X, np.float64) - origin) @ B.T)[:, [0, 2, 1]]
@@ -578,15 +596,9 @@ class Level(BaseStage):
         L = _level(P, B, P.mean(0)) * k                   # [e1, e2, up], then scaled
         art = _save_npy(ctx, "points_llf", L.astype(np.float32), frame=Frame.F5_LLF,
                         units=units, kind="point-cloud")
-        # Lengths carry their unit in the key (docs/15 conventions). gravity.estimate
-        # names them `_m` whatever the scale, and this stage used to publish them, and
-        # `extent_m`, on unvalidated runs too, so the QA report printed metre-named
-        # figures in model units (audit F-06).
+        # `extent_m` too was published on unvalidated runs (audit F-06).
         sfx = "_m" if units == Units.METRES else "_model"
-        grav = facts.get("gravity", {})
-        for key in ("camera_above_ground_m", "horiz_track_m", "altitude_spread_m"):
-            if key in grav:
-                grav[key[:-2] + sfx] = round(grav.pop(key) * k, 2)
+        _gravity_lengths(facts.get("gravity", {}), k, units)
         facts["frame"] = Frame.F5_LLF
         facts["extent" + sfx] = [round(float(x), 2) for x in np.ptp(L, axis=0)]
         return StageResult(self.id, 0.0, outputs={"points_llf": art}, facts=facts,
