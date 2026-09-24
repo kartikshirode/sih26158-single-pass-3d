@@ -247,6 +247,84 @@ def t_pipeline():
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
 
+    t_resume_keys()
+
+
+class _Reads(Toy):
+    """A toy stage that reads a file outside the run, and says so in its key."""
+
+    def __init__(self, sid, path, **kw):
+        super().__init__(sid, **kw)
+        self.src = path
+
+    def key_extra(self, ctx):
+        return io.open(self.src, encoding="utf-8").read()
+
+
+def t_resume_keys():
+    """Audit F-01: resume must notice every change that would change the answer."""
+    tmp = tempfile.mkdtemp(prefix="tess-")
+    try:
+        a, b = Toy("A", produces=("x",)), Toy("B")
+        Pipeline([a, b]).run(ctx_for(tmp, source=SyntheticSource(n_frames=8, seed=1)))
+        Pipeline([a, b]).run(ctx_for(tmp, source=SyntheticSource(n_frames=8, seed=2)))
+        check("a different source under the same run re-runs every stage",
+              (a.calls, b.calls) == (2, 2), f"calls {(a.calls, b.calls)}")
+        Pipeline([a, b]).run(ctx_for(tmp, source=SyntheticSource(n_frames=8, seed=2)))
+        check("the same source again is still a no-op", (a.calls, b.calls) == (2, 2))
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+    tmp = tempfile.mkdtemp(prefix="tess-")
+    try:
+        # B reads A's facts, not A's files: only the chain can tell it A changed.
+        src = os.path.join(tmp, "calibration.txt")
+        with io.open(src, "w", encoding="utf-8") as f:
+            f.write("x5.54")
+        a, b = _Reads("A", src), Toy("B")
+        Pipeline([a, b]).run(ctx_for(tmp))
+        with io.open(src, "w", encoding="utf-8") as f:
+            f.write("x5.60")
+        Pipeline([a, b]).run(ctx_for(tmp))
+        check("a changed outside file re-runs its stage", a.calls == 2)
+        check("and every stage after it, files or no files", b.calls == 2)
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+    # The two real stages that read outside the run directory.
+    from tesseract.pipeline import State
+    from tesseract.stages import Geometry, Scale
+
+    tmp = tempfile.mkdtemp(prefix="tess-")
+    old = scale_svc.CAL_DIR
+    try:
+        scale_svc.CAL_DIR = tmp
+        cal = {"runs": ["r"], "factor": 5.54, "bracket": [5.3, 5.8],
+               "status": "calibrated", "method": "known-object", "summary": "s"}
+        with io.open(os.path.join(tmp, "r.json"), "w", encoding="utf-8") as f:
+            json.dump(cal, f)
+        ctx = ctx_for(tmp, config={"calibration_run": "r"})
+        st = State(os.path.join(tmp, "state.json"))
+        k1 = st.key(Scale(), ctx)
+        with io.open(os.path.join(tmp, "r.json"), "w", encoding="utf-8") as f:
+            json.dump(dict(cal, factor=5.60), f)
+        check("recalibrating changes the scale stage's key", st.key(Scale(), ctx) != k1)
+    finally:
+        scale_svc.CAL_DIR = old
+        shutil.rmtree(tmp, ignore_errors=True)
+
+    tmp = tempfile.mkdtemp(prefix="tess-")
+    try:
+        np.save(os.path.join(tmp, "points_fused.npy"), np.zeros((4, 3), np.float32))
+        ctx = ctx_for(tmp, config={"adopt": tmp})
+        st = State(os.path.join(tmp, "state.json"))
+        k1 = st.key(Geometry(), ctx)
+        np.save(os.path.join(tmp, "points_fused.npy"), np.ones((4, 3), np.float32))
+        check("re-running the adopted reconstruction changes the geometry key",
+              st.key(Geometry(), ctx) != k1)
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
 
 # ---------------------------------------------------------------- T3b verdicts
 class _Clip:
