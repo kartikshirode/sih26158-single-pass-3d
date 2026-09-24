@@ -186,7 +186,7 @@ class PlanKeyframes(BaseStage):
 @dataclass
 class Geometry(BaseStage):
     id: str = "S3-geometry"
-    version: str = "3"          # synthetic gauge now tilted and scaled, with full poses
+    version: str = "4"          # adds the local GPU provider
     needs: tuple = ("plan",)
     # S3 on a synthetic source also reads the scene straight from ctx.source; the
     # orchestrator keys every stage on the source's fingerprint, which covers that.
@@ -196,6 +196,12 @@ class Geometry(BaseStage):
     # measured rates, docs/13 section 6: feed-forward on a T4, MVS on 8 vCPU
     S_PER_VIEW_POSE_GPU = 0.55
     S_PER_VIEW_DENSE_CPU = 39.0
+    # measured on the RTX 4060 laptop, research/09-gpu-pipeline.md: poses, matching,
+    # triangulation and bundle adjustment per pose view; densify per dense view at
+    # resolution level 1; model load, undistortion and meshing as a fixed cost
+    S_PER_VIEW_LOCAL_SPARSE = 1.2
+    S_PER_VIEW_LOCAL_DENSE = 0.35
+    S_LOCAL_FIXED = 90.0
 
     def estimate(self, ctx: Context) -> float:
         n_pose = int(ctx.facts.get("pose_views") or 0)
@@ -204,6 +210,9 @@ class Geometry(BaseStage):
             return 5.0                                   # reading files, not computing
         if not hasattr(ctx.source, "path"):
             return 0.02 * max(n_pose, 1)
+        if ctx.config.get("geometry") == "local":
+            return (self.S_LOCAL_FIXED + n_pose * self.S_PER_VIEW_LOCAL_SPARSE
+                    + n_dense * self.S_PER_VIEW_LOCAL_DENSE)
         cost = n_pose * self.S_PER_VIEW_POSE_GPU
         if ctx.level in ("L0", "L1", "L2"):
             cost += n_dense * self.S_PER_VIEW_DENSE_CPU * (0.25 if ctx.level == "L1" else 1.0)
@@ -214,6 +223,8 @@ class Geometry(BaseStage):
             return self._adopt(ctx)
         if not hasattr(ctx.source, "path"):
             return self._sense(ctx)
+        if ctx.config.get("geometry") == "local":
+            return self._local(ctx)
         raise StageError(
             Code.STAGE_UNAVAILABLE,
             "no geometry provider on this host. Run the containers "
@@ -256,6 +267,59 @@ class Geometry(BaseStage):
         pts_p, colors_p, cams_p = self._adopt_files(ctx)
         if not os.path.exists(pts_p):
             raise StageError(Code.STAGE_UNAVAILABLE, f"{pts_p} does not exist", fatal=True)
+        return self._load(ctx, pts_p, colors_p, cams_p,
+                          {"geometry_provider": "adopt",
+                           "adopted_from": ctx.config["adopt"]},
+                          f"adopted {ctx.config['adopt']}")
+
+    # ---- provider: poses, sparse and dense on this machine's GPU
+    def _local(self, ctx: Context) -> StageResult:
+        """
+        src/pipeline/local_gpu.py on S1's keyframes, densifying S2's dense set.
+
+        Missing tools or no GPU is STAGE_UNAVAILABLE, so the ladder steps down as it
+        does for any host that cannot run a stage. A failed S3b gate is GEO_REPROJ.
+        L1 ("half-res") densifies one resolution level lower than L0.
+        """
+        sys.path.insert(0, os.path.join(K.ROOT, "src", "pipeline"))
+        from local_gpu import run as run_local
+
+        if ctx.level not in ("L0", "L1", "L2"):
+            raise StageError(Code.STAGE_UNAVAILABLE,
+                             f"the local GPU provider has no {ctx.level} mode")
+        kf = ctx.path("keyframes")
+        with io.open(ctx.path("ingest.json"), encoding="utf-8") as f:
+            crop = json.load(f)["stats"].get("overlay_crop_trbl")
+        names = sorted(n for n in os.listdir(kf) if n.lower().endswith(".jpg"))
+        idx = np.load(os.path.join(ctx.workdir, ctx.need("plan").path))
+        dense = [names[i] for i in idx if 0 <= i < len(names)]
+        opts = dict(ctx.config.get("local_gpu") or {})
+        if ctx.level == "L1":
+            opts["dense_resolution_level"] = int(opts.get("dense_resolution_level", 1)) + 1
+        try:
+            res = run_local(kf, ctx.path("geometry"), crop_trbl=crop, dense_names=dense,
+                            options=opts, log=ctx.log)
+        except FileNotFoundError as e:
+            raise StageError(Code.STAGE_UNAVAILABLE, str(e))
+        except RuntimeError as e:
+            code = Code.GEO_REPROJ if "S3b gate" in str(e) else Code.MVS_RC
+            if "no CUDA device" in str(e):
+                code = Code.STAGE_UNAVAILABLE
+            raise StageError(code, str(e))
+        g = ctx.path("geometry")
+        colors = os.path.join(g, "colors_fused.npy")
+        return self._load(ctx, os.path.join(g, "points_fused.npy"),
+                          colors if os.path.exists(colors) else None,
+                          os.path.join(g, "cameras.npy"),
+                          {"geometry_provider": "local",
+                           "local_gpu": {k: res[k] for k in
+                                         ("n_views", "dense_points", "total_seconds",
+                                          "sparse_after_bundle_adjustment", "stages")
+                                         if k in res}},
+                          f"local GPU, {res.get('total_seconds')} s")
+
+    def _load(self, ctx: Context, pts_p, colors_p, cams_p, facts: dict,
+              note: str) -> StageResult:
         P = np.load(pts_p).astype(np.float64)
         C = np.load(colors_p) if colors_p else None
         cams = np.load(cams_p) if cams_p else None
@@ -270,10 +334,7 @@ class Geometry(BaseStage):
                                     else np.zeros((0, 3)),
                                     frame=Frame.F4_REFINED_WORLD, units=Units.MODEL)
         return StageResult(self.id, 0.0, outputs=outs,
-                           facts={"points": int(len(P)),
-                                  "geometry_provider": "adopt",
-                                  "adopted_from": ctx.config["adopt"]},
-                           note=f"adopted {ctx.config['adopt']}")
+                           facts={"points": int(len(P)), **facts}, note=note)
 
     # ---- provider: sense the synthetic scene
     def _sense(self, ctx: Context) -> StageResult:
