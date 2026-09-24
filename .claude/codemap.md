@@ -21,7 +21,7 @@ Where things live: docs/ is the engineering suite (00 narrative, 01 SRS, 09 cont
 
 Commands:
 - `pip install -r requirements.txt`
-- Tests (plain scripts, exit 1 on failure, not pytest): `python src/tesseract/test_tesseract.py`, `python src/eval3d/test_metrics.py`, `python src/ingest/test_srt.py`, `python src/pipeline/test_window_fuse.py`, `python tools/test_console.py` (Playwright).
+- Tests (plain scripts, exit 1 on failure, not pytest): `python src/tesseract/test_tesseract.py`, `python src/eval3d/test_metrics.py`, `python src/ingest/test_srt.py`, `python src/pipeline/test_window_fuse.py`, `python src/pipeline/test_colmap_export.py`, `python mvs_job/test_ba_gate.py`, `python tools/test_console.py` (Playwright).
 - `python tesseract.py run synthetic --gnss rtk` then `python tesseract.py verify out/runs/<name>`.
 - `python tools/build_all.py` rebuilds console, demo, gallery and qa and runs the design and wiring audits; `tools/build_run.py` is separate. Deploy with `vercel deploy --prod --yes` from demo/ (git integration is disconnected).
 - CI: .github/workflows/ci.yml runs the tests, a synthetic run + verify, the console test, the onboarding check and a licence check on requirements.txt pins.
@@ -70,7 +70,7 @@ Ignores caches, venvs, out/, viewer/model.glb and viewer/run_manifest.json, data
 ## .github/workflows/
 
 ### .github/workflows/ci.yml
-CI gate on push and PR (ubuntu, Python 3.12, PROJ_NETWORK=ON): compileall; test_metrics, test_srt, test_window_fuse, mvs_job/test_ba_gate.py, test_tesseract; a synthetic `tesseract.py run` then `verify`; tools/test_console.py (Playwright chromium); tools/check_onboarding.py; a licence check that every requirements.txt pin is named in docs/11-state-of-the-art.md.
+CI gate on push and PR (ubuntu, Python 3.12, PROJ_NETWORK=ON): compileall; test_metrics, test_srt, test_window_fuse, mvs_job/test_ba_gate.py, src/pipeline/test_colmap_export.py, test_tesseract; a synthetic `tesseract.py run` then `verify`; tools/test_console.py (Playwright chromium); tools/check_onboarding.py; a licence check that every requirements.txt pin is named in docs/11-state-of-the-art.md.
 Gotcha: needs network for the geoid grid and a Playwright install. The demo build and audit gates are local only.
 
 ## src/tesseract/
@@ -311,7 +311,10 @@ python:3.12-slim image for run_upload.py, built from the repo root: requirements
 MVS Cloud Run job (sih26158-mvs): pulls keyframes (KF_PREFIX) and MapAnything outputs (MA_PREFIX), fits intrinsics from point maps (conf-gated at the 30th percentile), runs COLMAP SIFT, exhaustive match, triangulation against known poses, bundle adjustment, the S3b gate, undistortion, then OpenMVS DensifyPointCloud, ReconstructMesh, optional RefineMesh, TextureMesh (OBJ). Results to OUT_PREFIX.
 Exports: main(); fetch(); push(paths); reproj_error(model_dir, label) -> dict; ba_gate(after, n_views, *, max_px, min_registered) -> list[str] problems (empty = pass)
 Used by: mvs_job/Dockerfile (ENTRYPOINT); run_job/run_upload.py; mvs_job/test_ba_gate.py; outputs (scene_dense.ply, scene_dense_mesh*.ply/obj, mvs_result.json) consumed by tools/finish_mvs.py
-Gotcha: env BUCKET, KF_PREFIX, MA_PREFIX, OUT_PREFIX, RESOLUTION_LEVEL, REFINE_MESH, MESH_BLOB (non-empty = texture-only mode), TEXTURE_ARGS (default "--local-seam-leveling 0"; seam levelling blacked out charts). Exits if the intrinsics residual is over 2.0 px, and before densifying if BA registered fewer than BA_MIN_REGISTERED (default 1.0) of the views or ended above BA_MAX_PX (default 1.0 px); that failure still uploads mvs_result.json with ba_gate.problems. Imports colmap_export from /app. Files of 900 MB or more are not uploaded.
+Gotcha: env BUCKET, KF_PREFIX, MA_PREFIX, OUT_PREFIX, RESOLUTION_LEVEL, REFINE_MESH, MESH_BLOB (non-empty = texture-only mode), TEXTURE_ARGS (default "--local-seam-leveling 0"; seam levelling blacked out charts), KF_CROP_TRBL (S1's crop, so the principal-point guard accepts the crop-shifted centre). Exits if the intrinsics residual is over 2.0 px, and before densifying if BA registered fewer than BA_MIN_REGISTERED (default 1.0) of the views or ended above BA_MAX_PX (default 1.0 px); that failure still uploads mvs_result.json with ba_gate.problems. Imports colmap_export from /app. Files of 900 MB or more are not uploaded.
+
+### src/pipeline/test_colmap_export.py
+Plain-script test of the principal-point guard (audit F-10): a known pinhole with a 20% top crop, pushed onto a 518x224 model grid; the true crop-shifted centre passes with the crop and is refused without it, the keyframe centre passes, far from both is refused; parse_crop accepts four fractions and refuses the rest. Run `python src/pipeline/test_colmap_export.py` (numpy only).
 
 ### mvs_job/test_ba_gate.py
 Plain-script test of run_mvs.ba_gate: the three recorded Kolu MVS results in research/run-evidence/ must pass; a lost view, 4 px after BA, an empty analyzer dict must fail; the threshold override works. Run `python mvs_job/test_ba_gate.py` (numpy only, no COLMAP).
