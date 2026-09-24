@@ -21,7 +21,7 @@ Where things live: docs/ is the engineering suite (00 narrative, 01 SRS, 09 cont
 
 Commands:
 - `pip install -r requirements.txt`
-- Tests (plain scripts, exit 1 on failure, not pytest): `python src/tesseract/test_tesseract.py`, `python src/eval3d/test_metrics.py`, `python src/ingest/test_srt.py`, `python src/pipeline/test_window_fuse.py`, `python src/pipeline/test_colmap_export.py`, `python mvs_job/test_ba_gate.py`, `python tools/test_console.py` (Playwright).
+- Tests (plain scripts, exit 1 on failure, not pytest): `python src/tesseract/test_tesseract.py`, `python src/eval3d/test_metrics.py`, `python src/ingest/test_srt.py`, `python src/ingest/test_frames.py`, `python src/pipeline/test_local_gpu.py`, `python src/pipeline/test_window_fuse.py`, `python src/pipeline/test_colmap_export.py`, `python mvs_job/test_ba_gate.py`, `python tools/test_console.py` (Playwright).
 - `python tesseract.py run synthetic --gnss rtk` then `python tesseract.py verify out/runs/<name>`.
 - `python tools/build_all.py` rebuilds console, demo, gallery and qa and runs the design and wiring audits; `tools/build_run.py` is separate. Deploy with `vercel deploy --prod --yes` from demo/ (git integration is disconnected).
 - CI: .github/workflows/ci.yml runs the tests, a synthetic run + verify, the console test, the onboarding check and a licence check on requirements.txt pins.
@@ -70,7 +70,7 @@ Ignores caches, venvs, out/, viewer/model.glb and viewer/run_manifest.json, data
 ## .github/workflows/
 
 ### .github/workflows/ci.yml
-CI gate on push and PR (ubuntu, Python 3.12, PROJ_NETWORK=ON): compileall; test_metrics, test_srt, test_window_fuse, mvs_job/test_ba_gate.py, src/pipeline/test_colmap_export.py, test_tesseract; a synthetic `tesseract.py run` then `verify`; tools/test_console.py (Playwright chromium); tools/check_onboarding.py; the upload API tests (`node --test "demo/test/*.test.js"`); a licence check that every requirements.txt pin is named in docs/11-state-of-the-art.md.
+CI gate on push and PR (ubuntu, Python 3.12, PROJ_NETWORK=ON): compileall; test_metrics, test_srt, test_frames, test_local_gpu, test_window_fuse, mvs_job/test_ba_gate.py, src/pipeline/test_colmap_export.py, test_tesseract; a synthetic `tesseract.py run` then `verify`; tools/test_console.py (Playwright chromium); tools/check_onboarding.py; the upload API tests (`node --test "demo/test/*.test.js"`); a licence check that every requirements.txt pin is named in docs/11-state-of-the-art.md.
 Gotcha: needs network for the geoid grid and a Playwright install. The demo build and audit gates are local only.
 
 ## src/tesseract/
@@ -167,7 +167,7 @@ Gotcha: exits 1 on any FAIL. Expected values are hard-coded per fixture filename
 ### src/pipeline/colmap_export.py
 S2 to S3 bridge. Turns MapAnything cameras.npy (cam2world 4x4) plus points.npy into a COLMAP text model for point_triangulator and OpenMVS, fitting intrinsics from the point map and mapping them from the model's centre-cropped grid back onto the full keyframe.
 Exports: derive_intrinsics(points, cams, H, W, mask=None) -> ((N,4) fx,fy,cx,cy, median_resid); full_frame_camera(K, H, W, h0, w0, log, crop_trbl=None) -> dict (pp_reference names the centre it passed against); parse_crop(value) -> (t,b,l,r) or None; qvec_from_R(R) -> (w,x,y,z); db_image_ids(db_path) -> {name: (image_id, camera_id)}; write_model(outdir, cams, names, cam, db_path, log)
-Used by: mvs_job/run_mvs.py, mvs_job/run_mvs_sharded.py (both via /app, copied by mvs_job/Dockerfile), src/pipeline/test_colmap_export.py
+Used by: mvs_job/run_mvs.py, mvs_job/run_mvs_sharded.py (both via /app, copied by mvs_job/Dockerfile), src/pipeline/local_gpu.py, src/pipeline/test_colmap_export.py
 Gotcha: image and camera ids must come from COLMAP's database.db. SystemExit if the principal point is more than 8% off both the keyframe centre and (given S1's crop) the crop-shifted source centre, if KF_CROP_TRBL is malformed, the database has more than one camera, or a name is missing. SIMPLE_RADIAL model; poses inverted to world-to-camera.
 
 ### src/pipeline/export_formats.py
@@ -200,10 +200,19 @@ Exports: run(outdir, *, gnss=CONSUMER_GNSS, n_frames=600, pitch_deg=60, site_lat
 Used by: cloud_job.py
 Gotcha: orthometric_height turns PROJ networking on and raises if the EGM2008 grid is missing or only a ballpark transform exists. Georeferencing is solved in local ENU, never UTM. DSM starts filled with -inf, not NaN. The depth model is simulated. Its manifest uses the old flat keys that viewer/index.html reads.
 
+### src/pipeline/local_gpu.py
+S3 and S4 on one machine with an NVIDIA GPU (research/09-gpu-pipeline.md): MapAnything bf16 poses in GPU-sized overlapping windows stitched by robust Sim(3), intrinsics from a spread view subset, COLMAP GPU SIFT + sequential matching + triangulation against the known poses + short BA + point_filtering + the S3b gate, OpenMVS CUDA densify over the dense view set, ReconstructMesh. Writes points_fused/colors_fused/cameras.npy (what tesseract adopt reads) and local_gpu_result.json with per-stage times. CLI: `python src/pipeline/local_gpu.py <keyframes> --work <dir>`.
+Exports: DEFAULTS; find_tools() (SIH_COLMAP, SIH_OPENMVS, else PATH); Runner(work).timed/sh; mapanything_poses(paths, *, window, overlap); pose_window_for(H, W, total_bytes); fit_camera(ma, h0, w0, crop, *, views); analyze(r, colmap, model, label); read_images_txt(path) -> {name: cam2world}; read_ply_points(path) -> (xyz, rgb); run(images_dir, work, *, crop_trbl, dense_names, options, log) -> result dict
+Used by: src/tesseract/stages.py (Geometry provider "local"), src/pipeline/test_local_gpu.py
+Gotcha: needs CUDA torch, mapanything, and CUDA builds of COLMAP 4.2 and OpenMVS 2.4 (COLMAP 4 option names). View dicts are copied per window, or finished windows' images stay on the GPU and the driver spills to shared memory. RuntimeError on a failed S3b gate or tool; FileNotFoundError when tools are missing. Deletes depth maps, the database and intermediate models unless keep_intermediate.
+
+### src/pipeline/test_local_gpu.py
+Plain-script test of local_gpu's GPU-free parts: OpenMVS-style PLY with variable-length view lists read back exactly, and a COLMAP images.txt pose read back to cam2world. Run `python src/pipeline/test_local_gpu.py`.
+
 ### src/pipeline/window_fuse.py
 S2-SCALE: plans overlapping view windows for long passes and brings them into one frame. stitch chains a Umeyama Sim(3) on shared-view correspondences window to window; stitch_gnss anchors each window's camera centres to GNSS independently.
 Exports: plan_windows(n_views, window=24, overlap=8) -> list[(lo, hi)]; sim3_from_pairs(src, dst) -> (s, R, t); robust_sim3_from_pairs(src, dst, *, iters=64, min_inl=0.35) -> (s, R, t, inlier_frac, thr); stitch(window_points, windows, *, conf) -> (fused, report); stitch_gnss(window_cams, window_points, windows, gnss_enu, *, yaw_only=True) -> (fused, report)
-Used by: src/pipeline/test_window_fuse.py, src/experiments/exp13_windowed_scale.py
+Used by: src/pipeline/local_gpu.py, src/pipeline/test_window_fuse.py, src/experiments/exp13_windowed_scale.py
 Gotcha: returns (s, R, t), unlike eval3d's (R, t, s). stitch_gnss with yaw_only needs ENU Z-up inputs. Overlap must be less than the window with at least 3 shared views. Chained error still grows (about 15x at the far end).
 
 ### src/pipeline/test_window_fuse.py
@@ -313,7 +322,7 @@ python:3.12-slim image for run_upload.py, built from the repo root: requirements
 ### mvs_job/run_mvs.py
 MVS Cloud Run job (sih26158-mvs): pulls keyframes (KF_PREFIX) and MapAnything outputs (MA_PREFIX), fits intrinsics from point maps (conf-gated at the 30th percentile), runs COLMAP SIFT, exhaustive match, triangulation against known poses, bundle adjustment, the S3b gate, undistortion, then OpenMVS DensifyPointCloud, ReconstructMesh, optional RefineMesh, TextureMesh (OBJ). Results to OUT_PREFIX.
 Exports: main(); fetch(); push(paths); reproj_error(model_dir, label) -> dict; ba_gate(after, n_views, *, max_px, min_registered) -> list[str] problems (empty = pass)
-Used by: mvs_job/Dockerfile (ENTRYPOINT); run_job/run_upload.py; mvs_job/test_ba_gate.py; outputs (scene_dense.ply, scene_dense_mesh*.ply/obj, mvs_result.json) consumed by tools/finish_mvs.py
+Used by: mvs_job/Dockerfile (ENTRYPOINT); run_job/run_upload.py; mvs_job/test_ba_gate.py; src/pipeline/local_gpu.py (ba_gate); outputs (scene_dense.ply, scene_dense_mesh*.ply/obj, mvs_result.json) consumed by tools/finish_mvs.py
 Gotcha: env BUCKET, KF_PREFIX, MA_PREFIX, OUT_PREFIX, RESOLUTION_LEVEL, REFINE_MESH, MESH_BLOB (non-empty = texture-only mode), TEXTURE_ARGS (default "--local-seam-leveling 0"; seam levelling blacked out charts), KF_CROP_TRBL (S1's crop, so the principal-point guard accepts the crop-shifted centre). Exits if the intrinsics residual is over 2.0 px, and before densifying if BA registered fewer than BA_MIN_REGISTERED (default 1.0) of the views or ended above BA_MAX_PX (default 1.0 px); that failure still uploads mvs_result.json with ba_gate.problems. Imports colmap_export from /app. Files of 900 MB or more are not uploaded.
 
 ### src/pipeline/test_colmap_export.py
@@ -325,7 +334,7 @@ Plain-script test of run_mvs.ba_gate: the three recorded Kolu MVS results in res
 ### mvs_job/run_mvs_sharded.py
 Horizontally sharded MVS variant selected by env STAGE: prep (global SfM + BA, prep.json, sparse_ba/), densify (N tasks, one view window each, shards/dense_NNN.ply), fuse (concat, voxel dedupe, Poisson mesh).
 Exports: stage_prep(), stage_densify(), stage_fuse(); windows(n_views, n_shards, overlap); filter_model(src, dst, keep_names)
-Used by: mvs_job/Dockerfile (COPY only; entrypoint must be overridden). No deploy config invokes it.
+Used by: mvs_job/Dockerfile (COPY only; entrypoint must be overridden); src/pipeline/local_gpu.py (filter_model). No deploy config invokes it.
 Gotcha: reads KF_CROP_TRBL like run_mvs.py. Known defect: prep does not pull conf.npy or apply the conf gate, so the intrinsics fit can fail the 2.0 px guard (fixed in run_mvs.py only). Env N_SHARDS=5, SHARD_OVERLAP=4, CLOUD_RUN_TASK_INDEX. Densify re-plans windows from its own env rather than prep.json.
 
 ### mvs_job/Dockerfile

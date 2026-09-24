@@ -38,6 +38,12 @@ jobs:
       - name: telemetry - every DJI SRT family, and the fuzz (EXP-23)
         run: python src/ingest/test_srt.py
 
+      - name: frame gates on letterboxed footage
+        run: python src/ingest/test_frames.py
+
+      - name: local GPU path, the parts that need no GPU
+        run: python src/pipeline/test_local_gpu.py
+
       - name: window fusion
         run: python src/pipeline/test_window_fuse.py
 
