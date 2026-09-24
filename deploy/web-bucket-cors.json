@@ -1,0 +1,8 @@
+[
+  {
+    "origin": ["https://tesseract-demo.vercel.app"],
+    "method": ["PUT"],
+    "responseHeader": ["Content-Type", "x-goog-content-length-range"],
+    "maxAgeSeconds": 3600
+  }
+]

@@ -36,12 +36,39 @@ module.exports = async (req, res) => {
       });
     }
 
-    await L.jobs().runJob({
-      name: `projects/${L.PROJECT}/locations/${L.REGION}/jobs/${L.JOB}`,
-      overrides: {
-        containerOverrides: [{ env: [{ name: "RUN_ID", value: runId }] }],
-      },
-    });
+    // A run id starts at most once. Without this, anyone holding an id could start it
+    // again each time the last execution ended, and nothing counted those restarts
+    // against the daily cap (audit F-04). The claim is atomic, so two concurrent
+    // starts for one id cannot both get through.
+    const claimName = `web/${runId}/started.json`;
+    if (!(await L.claim(claimName, { runId }))) {
+      return L.json(res, 409, { error: "this run has already been started" });
+    }
+
+    // The daily cap is enforced here, at the moment compute is committed, not only
+    // at /api/runs where a URL is handed out.
+    const slot = await L.reserveSlot(runId);
+    if (!slot) {
+      await L.release(claimName);
+      return L.json(res, 429, {
+        error: `The daily limit of ${L.MAX_PER_DAY} runs has been reached. ` +
+               `Your file is saved; try again tomorrow.`,
+      });
+    }
+
+    try {
+      await L.jobs().runJob({
+        name: `projects/${L.PROJECT}/locations/${L.REGION}/jobs/${L.JOB}`,
+        overrides: {
+          containerOverrides: [{ env: [{ name: "RUN_ID", value: runId }] }],
+        },
+      });
+    } catch (e) {
+      // Nothing was launched, so nothing was spent: give the id and the slot back.
+      await L.release(slot);
+      await L.release(claimName);
+      throw e;
+    }
 
     return L.json(res, 202, { runId, state: "starting" });
   } catch (e) {

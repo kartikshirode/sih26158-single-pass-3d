@@ -70,7 +70,7 @@ Ignores caches, venvs, out/, viewer/model.glb and viewer/run_manifest.json, data
 ## .github/workflows/
 
 ### .github/workflows/ci.yml
-CI gate on push and PR (ubuntu, Python 3.12, PROJ_NETWORK=ON): compileall; test_metrics, test_srt, test_window_fuse, mvs_job/test_ba_gate.py, src/pipeline/test_colmap_export.py, test_tesseract; a synthetic `tesseract.py run` then `verify`; tools/test_console.py (Playwright chromium); tools/check_onboarding.py; a licence check that every requirements.txt pin is named in docs/11-state-of-the-art.md.
+CI gate on push and PR (ubuntu, Python 3.12, PROJ_NETWORK=ON): compileall; test_metrics, test_srt, test_window_fuse, mvs_job/test_ba_gate.py, src/pipeline/test_colmap_export.py, test_tesseract; a synthetic `tesseract.py run` then `verify`; tools/test_console.py (Playwright chromium); tools/check_onboarding.py; the upload API tests (`node --test "demo/test/*.test.js"`); a licence check that every requirements.txt pin is named in docs/11-state-of-the-art.md.
 Gotcha: needs network for the geoid grid and a Playwright install. The demo build and audit gates are local only.
 
 ## src/tesseract/
@@ -298,7 +298,7 @@ Gotcha: needs out/kolumvs3d/points_fused.npy, colors_fused.npy and export/export
 
 ### run_job/run_upload.py
 Web orchestrator, one Cloud Run Job execution per uploaded clip: fetch web/<RUN_ID>/source*, S0 screen, S1 ingest (subprocess video_ingest.py --horizon crop), poses via job kolu-ma, preview via tools/finish_kolu.py, densify via job sih26158-mvs, final via tools/finish_mvs.py. Rewrites web/<RUN_ID>/status.json (schema sih26158/web-run/1) after every transition.
-Exports: main(); run_cloud_job(job, env, label, expect_s, sid); publish_model(bucket, out_run, label) -> {mesh, points, triangles, halfExtent, files}; put_status/stage/expect/fail helpers
+Exports: main(); run_cloud_job(job, env, label, expect_s, sid); publish_model(bucket, out_run, label) -> {mesh, points, triangles, halfExtent, files}; put_status/stage/expect/fail helpers; status.json carries "execution" from CLOUD_RUN_EXECUTION so /api/status can detect a killed worker
 Used by: run_job/Dockerfile (ENTRYPOINT); started as job sih26158-run by demo/api/start.js; status.json read by demo/api/status.js
 Gotcha: env RUN_ID is required; others BUCKET (sih26158-mumbai), GCP_PROJECT (agentbillboard), REGION (asia-south1), MA_JOB, MVS_JOB, MAX_VIEWS=60, MIN_VIEWS=8, MAX_SECONDS=600, MAX_BYTES=600MB, mirrored in demo/api/_lib.js and tools/build_run.py. S0/S1 are called directly, bypassing the ladder. Child jobs get per-execution env overrides, never `jobs update`; densify gets KF_CROP_TRBL from ingest.json overlay_crop_trbl. Retries once, only on Cloud Run "Internal error running task". Outputs go to web/<RUN_ID>3d (preview) and web/<RUN_ID>mvs3d (final). Expected durations use measured rates (10.68 s/view poses, 2003 s densify per 60 views).
 
@@ -362,13 +362,16 @@ Vertex AI probe on a spot A100 that prints torch.cuda availability (GPU quota te
 ### deploy/vertex_gputest.yaml
 Vertex AI probe on a spot T4 that prints torch/CUDA info and nvidia-smi (GPU quota test).
 
+### deploy/web-bucket-cors.json
+Proposed CORS rule for gs://sih26158-mumbai: PUT from https://tesseract-demo.vercel.app with Content-Type and x-goog-content-length-range allowed. Apply it (merged with any existing rules) with `gcloud storage buckets update gs://sih26158-mumbai --cors-file=deploy/web-bucket-cors.json` before deploying the upload page that sends the header.
+
 ## demo/
 
 ### demo/.gitignore
 Ignores .vercel, .env*, node_modules/, package-lock.json.
 
 ### demo/.vercelignore
-Keeps README.md, gallery/README.md, .env* and .vercel out of the Vercel deploy.
+Keeps README.md, gallery/README.md, .env*, .vercel and test/ out of the Vercel deploy.
 
 ### demo/package.json
 Vercel project sih26158-demo on Node 22.x; deps @google-cloud/storage 7.14.0 and @google-cloud/run 1.5.0 for api/*.js. Use npm, not pnpm (pnpm's global store redirect breaks builds on this machine).
@@ -384,28 +387,32 @@ Operator notes for the one-clip walkthrough: the three acts, lectern keys, the "
 Gotcha: partly stale: still says metres are 5.5x too small "until calibration lands" (x5.54 is now applied) and that build_all builds three pages (now four).
 
 ### demo/api/_lib.js
-Shared plumbing for the Vercel functions: GCP clients from a service-account key, env-driven limits, run-id minting and validation, counts of running and recent executions of the orchestrator job, JSON response helper.
-Exports: BUCKET, PROJECT, REGION, JOB, MAX_BYTES, MAX_CONCURRENT, MAX_PER_DAY, PAUSED; storage(), jobs() (Run v2 JobsClient), execs() (ExecutionsClient), bucket(); newRunId() -> 32-hex; isRunId(s) -> bool; runningCount() -> Promise<number>; startedToday() -> Promise<number>; json(res, code, body) (no-store)
-Used by: demo/api/runs.js, demo/api/start.js, demo/api/status.js, demo/api/file.js
-Gotcha: env GCP_SA_KEY (whole SA JSON; throws if missing), GCS_BUCKET, GCP_PROJECT, GCP_REGION, RUN_JOB (sih26158-run), MAX_UPLOAD_BYTES (600 MiB), MAX_CONCURRENT (1), MAX_RUNS_PER_DAY (12), PAUSED ("1" = kill switch without redeploy). No auth: the 128-bit run id is the only capability. Listing executions must use ExecutionsClient (JobsClient fails at runtime). Limits must match run_job/run_upload.py and tools/build_run.py.
+Shared plumbing for the Vercel functions: lazily required GCP clients from a service-account key, env-driven limits, run-id minting and validation, the running-execution count, atomic claim objects (per-run start claim and numbered daily slots), JSON response helper.
+Exports: BUCKET, PROJECT, REGION, JOB, MAX_BYTES, MAX_CONCURRENT, MAX_PER_DAY, PAUSED; storage(), jobs() (Run v2 JobsClient), execs() (ExecutionsClient), bucket(); newRunId() -> 32-hex; isRunId(s) -> bool; runningCount() -> Promise<number>; claim(name, body) -> Promise<bool> (create with ifGenerationMatch=0, nonce-checked on 412); release(name) (delete, errors swallowed); slotsUsedToday() -> Promise<number>; reserveSlot(runId) -> Promise<slot name | null> (web/_slots/<UTC day>/NNN.json); execution(shortName) -> Promise<Execution | null> (short name regex-checked); json(res, code, body) (no-store); _inject({storage, jobs, execs}) for tests
+Used by: demo/api/runs.js, demo/api/start.js, demo/api/status.js, demo/api/file.js, demo/test/api.test.js
+Gotcha: env GCP_SA_KEY (whole SA JSON; throws on first client use if missing), GCS_BUCKET, GCP_PROJECT, GCP_REGION, RUN_JOB (sih26158-run), MAX_UPLOAD_BYTES (600 MiB), MAX_CONCURRENT (1), MAX_RUNS_PER_DAY (12), PAUSED ("1" = kill switch without redeploy). No auth: the 128-bit run id is the only capability. The daily cap counts slot objects per UTC day, not executions. Listing executions must use ExecutionsClient (JobsClient fails at runtime). The SA needs objects.create/get/delete for claims. Limits must match run_job/run_upload.py and tools/build_run.py.
 
 ### demo/api/runs.js
-POST /api/runs {name, size, type}: checks pause, size, concurrency and daily caps, mints a runId, returns a 30-min v4 signed PUT URL for gs://BUCKET/web/<runId>/source<ext>.
-Exports: default handler -> 200 {runId, uploadUrl, object} | 405 | 503 paused | 413 | 429 | 500
-Used by: demo/run/index.html
-Gotcha: the video never passes through the function; the browser PUTs to GCS so imagery stays in asia-south1. The signed URL is bound to contentType, so the PUT must send the same header. The size check trusts the client; start.js re-checks the real object.
+POST /api/runs {name, size, type}: checks pause, declared size, running count and daily slots used (advisory), mints a runId, returns a 30-min v4 signed PUT URL for gs://BUCKET/web/<runId>/source<ext> with x-goog-content-length-range 0..MAX_BYTES signed in.
+Exports: default handler -> 200 {runId, uploadUrl, uploadHeaders, object} | 405 | 503 paused | 413 | 429 | 500
+Used by: demo/run/index.html, demo/test/api.test.js
+Gotcha: the video never passes through the function; the browser PUTs to GCS so imagery stays in asia-south1. The PUT must send uploadHeaders exactly (content-type and the signed length range) or GCS rejects it, and the bucket CORS must allow x-goog-content-length-range (deploy/web-bucket-cors.json).
 
 ### demo/api/start.js
-POST /api/start {runId}: validates the id, confirms web/<runId>/source* exists and is under MAX_BYTES, re-checks concurrency, then JobsClient.runJob on job sih26158-run (run_job/run_upload.py) with env override RUN_ID.
-Exports: default handler -> 202 {runId, state: "starting"} | 400 | 413 | 429 | 503 | 500
-Used by: demo/run/index.html
-Gotcha: does not wait for the execution; run_upload.py writes status.json. RUN_ID is the only override; everything else comes from the job definition.
+POST /api/start {runId}: validates the id, confirms web/<runId>/source* exists and is under MAX_BYTES, re-checks concurrency, claims web/<runId>/started.json, reserves a daily slot, then JobsClient.runJob on job sih26158-run (run_job/run_upload.py) with env override RUN_ID.
+Exports: default handler -> 202 {runId, state: "starting"} | 400 | 409 already started | 413 | 429 busy or daily cap | 503 | 500
+Used by: demo/run/index.html, demo/test/api.test.js
+Gotcha: claim and slot are atomic (GCS ifGenerationMatch=0); both are released if runJob throws, and the claim is released when no slot is left. The running-count check is still check-then-act across different ids. Does not wait for the execution; run_upload.py writes status.json.
+
+### demo/test/api.test.js
+node:test suite for the upload API against in-memory fakes of GCS and Cloud Run (no SDKs, no network): status reconciliation for killed workers and starts that never reported; one start per run id, concurrent starts, daily cap at start, release on failed launch, runs and start sharing slots, the signed byte bound, the declared-size check. Run `node --test "demo/test/*.test.js"`.
+Gotcha: sets MAX_RUNS_PER_DAY=2 before requiring _lib; lives outside demo/api/ because Vercel deploys every file there as a function.
 
 ### demo/api/status.js
-GET /api/status?id=<runId>: proxies web/<runId>/status.json (schema sih26158/web-run/1) verbatim with no-store.
-Exports: default handler -> 200 status JSON | 200 {runId, state: "starting", stages: [{id: "boot"}]} while the file does not exist | 400 | 500
-Used by: demo/run/index.html (polled every 5 s)
-Gotcha: a proxy, not a signed URL, because a signed URL would expire mid-run. A missing status.json means cold start, not failure.
+GET /api/status?id=<runId>: proxies web/<runId>/status.json (schema sih26158/web-run/1) with no-store. While the file is non-terminal it asks Cloud Run whether the execution it names has ended, and if so returns it as failed (or partial when a preview exists) with error code WEB-ENDED.
+Exports: default handler -> 200 status JSON | 200 {runId, state: "starting", stages: [{id: "boot"}]} while the file does not exist | 200 failed when started.json is over 15 min old and no status exists | 400 | 500
+Used by: demo/run/index.html (polled every 5 s), demo/test/api.test.js
+Gotcha: a proxy, not a signed URL, because a signed URL would expire mid-run. Never writes back; a terminal state from the job is returned untouched. If the execution lookup fails, the job's own status is returned as is. Needs run.executions.get on the SA.
 
 ### demo/api/file.js
 GET /api/file?id=<runId>&p=<preview|final>/<name>: checks the object exists, 302 to a 15-min signed download URL (attachment). preview maps to web/<runId>3d/export/<name>, final to web/<runId>mvs3d/export/<name>.
@@ -440,7 +447,7 @@ Viva technical Q&A, tiered by exposure; every answer tagged measured/designed/op
 Gotcha: generated by tools/build_qa.py, whose HTML and answers live in the Python (no template); edit that file. The build re-greps about 54 headline figures against their sources and fails if any is missing.
 
 ### demo/run/index.html
-Upload page: drag-drop or pick a clip, then POST /api/runs, PUT to the signed URL, POST /api/start, poll /api/status every 5 s until done/failed/refused/partial. Renders stage rows (elapsed vs expected) and preview/final cards with /api/file links. Run id lives in location.hash so reopening resumes polling.
+Upload page: drag-drop or pick a clip, then POST /api/runs, PUT to the signed URL with the returned uploadHeaders, POST /api/start, poll /api/status every 5 s until done/failed/refused/partial. Renders stage rows (elapsed vs expected) and preview/final cards with /api/file links. Run id lives in location.hash so reopening resumes polling.
 Gotcha: generated from tools/run_template.html by tools/build_run.py (__LIMITS__ injected); edit the template. tools/build_all.py does not build this page. No 3D view yet: the packed.json run_upload.py publishes is not read here.
 
 ## viewer/
@@ -621,7 +628,7 @@ Used by: its packed.json is read by build_gallery.packed()
 Gotcha: exits if the cropped atlas is over 50% fill or the reference quantisation cannot be recovered. Atlas name "kolu_tex.jpg" is hard-coded.
 
 ### tools/run_template.html
-Template for demo/run/index.html: pick or drop a video, POST /api/runs, PUT to the signed URL, POST /api/start, poll /api/status?id=, render stages and preview/final downloads via /api/file. Placeholders __DS_CSS__, __TITLE__, __DESC__, __LIMITS__.
+Template for demo/run/index.html: pick or drop a video, POST /api/runs, PUT to the signed URL sending the server's uploadHeaders, POST /api/start, poll /api/status?id=, render stages and preview/final downloads via /api/file. Placeholders __DS_CSS__, __TITLE__, __DESC__, __LIMITS__.
 Used by: tools/build_run.py
 Gotcha: fixed relative "/api" base, so it is the one page that cannot open from file://. Not audited by check_design or check_wiring.
 
@@ -746,7 +753,7 @@ Deck rebuild brief: cut to the 6-slide limit, slide-by-slide decisions, images t
 Adding Toolse (CC BY-SA 4.0) as a second gallery clip: MapAnything at 10.68 s/view at 60 views, MVS intrinsics-guard refusal fixed with a conf gate, build_console verdict-guard and Vercel token snags, MVS drops open water.
 
 ### research/08-web-upload.md
-Design of the upload feature (one Cloud Run job per upload, preview before final, status.json contract, limits, uploads kept off curated pages) and two defects it exposed: packing scripts pinned to one laptop, and S1 retaining every full-res frame (~112 GB for a 10-min clip) now fixed with a two-pass decode. A 10-minute clip has still not been ingested.
+Design of the upload feature (one Cloud Run job per upload, preview before final, status.json contract, limits, uploads kept off curated pages) and two defects it exposed: packing scripts pinned to one laptop, and S1 retaining every full-res frame (~112 GB for a 10-min clip) now fixed with a two-pass decode. A 10-minute clip has still not been ingested. A 2026-09-24 addendum records the start claim, daily slots and signed byte bound (audit F-04, F-05) and the CORS dependency.
 
 ### research/exp10-mapanything-cpu.md
 EXP-10: MapAnything Apache (1.228B params) at 6.4-8.1 s/view on 8 vCPU; 600 keyframes about 75 min, so a GPU is required. Synthetic renders are inadequate for testing a learned model.
