@@ -70,7 +70,7 @@ Ignores caches, venvs, out/, viewer/model.glb and viewer/run_manifest.json, data
 ## .github/workflows/
 
 ### .github/workflows/ci.yml
-CI gate on push and PR (ubuntu, Python 3.12, PROJ_NETWORK=ON): compileall; test_metrics, test_srt, test_window_fuse, test_tesseract; a synthetic `tesseract.py run` then `verify`; tools/test_console.py (Playwright chromium); tools/check_onboarding.py; a licence check that every requirements.txt pin is named in docs/11-state-of-the-art.md.
+CI gate on push and PR (ubuntu, Python 3.12, PROJ_NETWORK=ON): compileall; test_metrics, test_srt, test_window_fuse, test_tesseract; a synthetic `tesseract.py run` then `verify`; tools/test_console.py (Playwright chromium); tools/check_onboarding.py; the upload API tests (`node --test "demo/test/*.test.js"`); a licence check that every requirements.txt pin is named in docs/11-state-of-the-art.md.
 Gotcha: needs network for the geoid grid and a Playwright install. The demo build and audit gates are local only.
 
 ## src/tesseract/
@@ -365,7 +365,7 @@ Proposed CORS rule for gs://sih26158-mumbai: PUT from https://tesseract-demo.ver
 Ignores .vercel, .env*, node_modules/, package-lock.json.
 
 ### demo/.vercelignore
-Keeps README.md, gallery/README.md, .env* and .vercel out of the Vercel deploy.
+Keeps README.md, gallery/README.md, .env*, .vercel and test/ out of the Vercel deploy.
 
 ### demo/package.json
 Vercel project sih26158-demo on Node 22.x; deps @google-cloud/storage 7.14.0 and @google-cloud/run 1.5.0 for api/*.js. Use npm, not pnpm (pnpm's global store redirect breaks builds on this machine).

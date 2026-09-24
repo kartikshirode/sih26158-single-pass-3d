@@ -44,6 +44,11 @@ jobs:
       - name: pipeline - contracts, scale, orchestration, end to end
         run: python src/tesseract/test_tesseract.py
 
+      # The public upload API spends real compute per start. Its guards (one start per
+      # run id, the daily cap, the signed byte bound) run here against in-memory fakes.
+      - name: upload API guards
+        run: node --test "demo/test/*.test.js"
+
       - name: a run must satisfy its own contracts
         run: |
           python tesseract.py run synthetic --frames 60 --gnss rtk --name ci
