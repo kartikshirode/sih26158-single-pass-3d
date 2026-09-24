@@ -135,9 +135,9 @@ Empty package marker; makes ingest.video_ingest and ingest.screen importable onc
 
 ### src/ingest/video_ingest.py
 S1 ingest. Decodes with PyAV, scores every frame with OpenCV at 0.25 scale, picks keyframes (longest shot, overlay crop, horizon reject/crop, sky gate, slate gate, blur percentile, optical-flow baseline budget) and attaches DJI SRT telemetry. CLI writes kf_NNN_fNNNNN.jpg plus ingest.json to --out.
-Exports: ingest_video(path, *, target_keyframes=600, blur_reject_pct=25, max_sky=0.15, horizon_policy="reject"|"crop", single_shot=True, skip_start_s, end_s, srt_path=None) -> IngestResult(keyframe_indices, frames: list[BGR uint8], telemetry: list[dict], stats: dict); parse_dji_srt(path) -> list[dict] (latitude, longitude, height or None, flags, optional t_us/frame_cnt/satellites/focal_len/gb_yaw/gb_pitch/abs_alt/wall_us); telemetry_for_frames(records, frame_idx, fps) -> list[dict] ({} where no match); sharpness, is_slate, sky_mask, sky_fraction, horizon_present, horizon_row, horizon_crop_fraction, static_overlay_mask, overlay_crop_box -> (t,b,l,r), apply_crop, detect_shots, frame_hist
+Exports: ingest_video(path, *, target_keyframes=600, blur_reject_pct=25, max_sky=0.15, horizon_policy="reject"|"crop", single_shot=True, skip_start_s, end_s, srt_path=None) -> IngestResult(keyframe_indices, frames: list[BGR uint8], telemetry: list[dict], stats: dict); parse_dji_srt(path) -> list[dict] (latitude, longitude, height or None, flags, optional t_us/frame_cnt/satellites/focal_len/gb_yaw/gb_pitch/abs_alt/wall_us); telemetry_for_frames(records, frame_idx, fps, times_s=None) -> list[dict] ({} where no match); timed_frames(container) -> (index, frame, seconds since first PTS or None); sharpness, is_slate, sky_mask, sky_fraction, horizon_present, horizon_row, horizon_crop_fraction, static_overlay_mask, overlay_crop_box -> (t,b,l,r), apply_crop, detect_shots, frame_hist
 Used by: src/ingest/screen.py, src/ingest/test_srt.py, src/tesseract/stages.py, run_job/run_upload.py (as a subprocess script)
-Gotcha: telemetry matches by FrameCnt, then nearest time, never by position. SRT is auto-found at <video>.SRT. abs_alt is barometric, never GNSS height. Two decode passes bound memory to O(keyframes) at full resolution (keeping every frame needed ~112 GB for a 10-min clip). The CLI deletes old kf_*.jpg in --out first.
+Gotcha: telemetry matches by FrameCnt, then nearest time, never by position. The time is each keyframe's presentation timestamp (index / fps only when a frame has none), and skip_start_s / end_s compare PTS too, so variable-frame-rate clips line up; stats.variable_frame_rate says which. SRT is auto-found at <video>.SRT. abs_alt is barometric, never GNSS height. Two decode passes bound memory to O(keyframes) at full resolution (keeping every frame needed ~112 GB for a 10-min clip). The CLI deletes old kf_*.jpg in --out first.
 
 ### src/ingest/screen.py
 S0 admission test. Samples about 140 frames and returns ACCEPT or REJECT with reasons before any GPU time: rejects when the horizon shows in more than 30% of frames, median sky is above 0.15, or the longest shot is under 8 s.
@@ -152,7 +152,7 @@ Used by: standalone script
 Gotcha: needs simscene and eval3d.gnss via a sys.path insert of src/. abs_alt is rel_alt plus a constant, mimicking real barometric DJI files.
 
 ### src/ingest/test_srt.py
-EXP-23 telemetry test script (65 checks, plain prints). T1 pins the first record of each real DJI fixture, T2 runs 21 fuzz deformations (CRLF, BOM, UTF-16, binary, NaN, "longtitude", x10 focal, legacy GPS tuples) in a tempdir, T3 checks telemetry_for_frames is keyed, not positional.
+EXP-23 telemetry test script (68 checks, plain prints). T1 pins the first record of each real DJI fixture, T2 runs 21 fuzz deformations (CRLF, BOM, UTF-16, binary, NaN, "longtitude", x10 focal, legacy GPS tuples) in a tempdir, T3 checks telemetry_for_frames is keyed, not positional, and encodes a variable-frame-rate clip with PyAV to check PTS keying (skipped without av).
 Used by: .github/workflows/ci.yml (run as `python src/ingest/test_srt.py`)
 Gotcha: exits 1 on any FAIL. Expected values are hard-coded per fixture filename, so renaming or re-cutting a fixture breaks it.
 
@@ -728,7 +728,7 @@ DST 2021 geospatial rules (process in India), geoid and UTM traps, DJI sidecar c
 UseGeo chosen over H3D as the LiDAR-referenced benchmark (EXP-22): 829 images, GSD 1.7-1.9 cm, CC BY-NC-SA 4.0 evaluation only; protocol and rented-GPU pricing.
 
 ### research/04-dji-srt-formats.md
-EXP-23: the five DJI SRT format families across 20 fixtures (including the misspelt `longtitude`), abs_alt is barometric; parser fixed and fuzzed (65 checks).
+EXP-23: the five DJI SRT format families across 20 fixtures (including the misspelt `longtitude`), abs_alt is barometric; parser fixed and fuzzed (65 checks, 68 with the variable-frame-rate cases); time-keyed lookup uses frame PTS since 2026-09-25.
 
 ### research/05-deck-audit.md
 Audit of the 2026-09-22 Google Slides deck: run-derived numbers correct, five things to change (an unsourced synthetic figure, barred-licence model references, "0 GCPs" implying GPS scale, live 3D claimed, unbuilt stages in present tense) plus a visual pass.
