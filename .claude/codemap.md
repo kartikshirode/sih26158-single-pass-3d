@@ -747,7 +747,7 @@ Deck rebuild brief: cut to the 6-slide limit, slide-by-slide decisions, images t
 Adding Toolse (CC BY-SA 4.0) as a second gallery clip: MapAnything at 10.68 s/view at 60 views, MVS intrinsics-guard refusal fixed with a conf gate, build_console verdict-guard and Vercel token snags, MVS drops open water.
 
 ### research/08-web-upload.md
-Design of the upload feature (one Cloud Run job per upload, preview before final, status.json contract, limits, uploads kept off curated pages) and two defects it exposed: packing scripts pinned to one laptop, and S1 retaining every full-res frame (~112 GB for a 10-min clip) now fixed with a two-pass decode. A 10-minute clip has still not been ingested.
+Design of the upload feature (one Cloud Run job per upload, preview before final, status.json contract, limits, uploads kept off curated pages) and two defects it exposed: packing scripts pinned to one laptop, and S1 retaining every full-res frame (~112 GB for a 10-min clip) now fixed with a two-pass decode. A 10-minute clip has still not been ingested. A 2026-09-24 addendum records the start claim, daily slots and signed byte bound (audit F-04, F-05) and the CORS dependency.
 
 ### research/exp10-mapanything-cpu.md
 EXP-10: MapAnything Apache (1.228B params) at 6.4-8.1 s/view on 8 vCPU; 600 keyframes about 75 min, so a GPU is required. Synthetic renders are inadequate for testing a learned model.

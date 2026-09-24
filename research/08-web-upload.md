@@ -81,6 +81,22 @@ Chosen as engineering limits, not access control: a size cap, a 10-minute durati
 kill-switch. Each run is roughly 70 minutes of 8 vCPU on a billing account with no auth
 in front of it.
 
+**Added 2026-09-24, after the core-logic audit (F-04, F-05).** Two of those limits did not
+hold as first built. `/api/start` never checked the daily cap and never recorded that a
+run id had started, so one uploaded clip could be started again every time its last
+execution ended. And the upload URL trusted the size the browser declared. Both are
+enforced by GCS now rather than by a count read beforehand:
+
+- a start claims `web/<id>/started.json` and one of `web/_slots/<UTC day>/NNN.json`, each
+  created with `ifGenerationMatch=0`, so a second start of the same id gets 409 and the
+  thirteenth start of the day gets 429, however the requests race;
+- the signed PUT URL carries `x-goog-content-length-range: 0,<MAX_BYTES>`, so GCS refuses
+  a larger body. The bucket's CORS config has to allow that header
+  (`deploy/web-bucket-cors.json`) before the page that sends it is deployed.
+
+What is still advisory: the one-at-a-time check. Two different clips started within the
+same second can both pass it. The daily slots bound what that race can cost.
+
 ## Uploads stay off the gallery and the console
 
 `footage.credit()` refuses a clip whose rights are not recorded, and it is right to.
