@@ -399,7 +399,7 @@ Used by: demo/run/index.html, demo/test/api.test.js
 Gotcha: claim and slot are atomic (GCS ifGenerationMatch=0); both are released if runJob throws, and the claim is released when no slot is left. The running-count check is still check-then-act across different ids. Does not wait for the execution; run_upload.py writes status.json.
 
 ### demo/test/api.test.js
-node:test suite for the upload API against in-memory fakes of GCS and Cloud Run (no SDKs, no network): one start per run id, concurrent starts, daily cap at start, release on failed launch, runs and start sharing slots, the signed byte bound, the declared-size check. Run `node --test "demo/test/*.test.js"`.
+node:test suite for the upload API against in-memory fakes of GCS and Cloud Run (no SDKs, no network): status reconciliation for killed workers and starts that never reported; one start per run id, concurrent starts, daily cap at start, release on failed launch, runs and start sharing slots, the signed byte bound, the declared-size check. Run `node --test "demo/test/*.test.js"`.
 Gotcha: sets MAX_RUNS_PER_DAY=2 before requiring _lib; lives outside demo/api/ because Vercel deploys every file there as a function.
 
 ### demo/api/status.js

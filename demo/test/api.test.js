@@ -15,6 +15,7 @@ const assert = require("node:assert");
 const L = require("../api/_lib");
 const runs = require("../api/runs");
 const start = require("../api/start");
+const status = require("../api/status");
 
 // ---------------------------------------------------------------- fakes
 function fakeBucket() {
@@ -41,6 +42,9 @@ function fakeBucket() {
     async delete() {
       objects.delete(name);
     },
+    async exists() {
+      return [objects.has(name)];
+    },
     async getSignedUrl(opts) {
       signed.push({ name, opts });
       return [`https://signed.example/${name}`];
@@ -57,7 +61,7 @@ function fakeBucket() {
   };
 }
 
-function setup({ running = 0, runJobFails = false } = {}) {
+function setup({ running = 0, runJobFails = false, executions = {} } = {}) {
   const bucket = fakeBucket();
   const launched = [];
   L._inject({
@@ -72,6 +76,11 @@ function setup({ running = 0, runJobFails = false } = {}) {
     execs: {
       async listExecutions() {
         return [Array.from({ length: running }, () => ({ completionTime: null }))];
+      },
+      async getExecution({ name }) {
+        const short = name.split("/").pop();
+        if (!(short in executions)) throw new Error("not found");
+        return [executions[short]];
       },
     },
   });
@@ -89,6 +98,22 @@ function call(handler, body) {
     };
     Promise.resolve(handler({ method: "POST", body }, res)).catch(reject);
   });
+}
+
+function get(handler, query) {
+  return new Promise((resolve, reject) => {
+    const res = {
+      code: 0,
+      setHeader() {},
+      status(c) { this.code = c; return this; },
+      send(s) { resolve({ code: this.code, body: JSON.parse(s) }); },
+    };
+    Promise.resolve(handler({ method: "GET", query }, res)).catch(reject);
+  });
+}
+
+function writeStatus(bucket, runId, d) {
+  bucket.objects.set(`web/${runId}/status.json`, { data: JSON.stringify(d), size: 1 });
 }
 
 function upload(bucket, runId) {
@@ -164,4 +189,62 @@ test("the declared size is still checked before a URL is issued", async () => {
   setup();
   const r = await call(runs, { name: "clip.mp4", size: L.MAX_BYTES + 1, type: "video/mp4" });
   assert.strictEqual(r.code, 413);
+});
+
+// ---------------------------------------------------------------- F-12
+const RUNNING = {
+  runId: ID_A, state: "running", execution: "sih26158-run-abc12",
+  stages: [{ id: "poses", state: "done" }, { id: "densify", state: "running" }],
+};
+
+test("a live execution leaves the job's own status untouched", async () => {
+  const { bucket } = setup({ executions: { "sih26158-run-abc12": { completionTime: null } } });
+  writeStatus(bucket, ID_A, RUNNING);
+  const r = await get(status, { id: ID_A });
+  assert.strictEqual(r.body.state, "running");
+});
+
+test("a killed worker is reported as ended, not running forever", async () => {
+  const { bucket } = setup({
+    executions: { "sih26158-run-abc12": { completionTime: { seconds: 1 }, failedCount: 1 } },
+  });
+  writeStatus(bucket, ID_A, RUNNING);
+  const r = await get(status, { id: ID_A });
+  assert.strictEqual(r.body.state, "failed");
+  assert.strictEqual(r.body.error.code, "WEB-ENDED");
+  assert.strictEqual(r.body.stages[1].state, "failed");
+});
+
+test("a killed worker that already published a preview is partial", async () => {
+  const { bucket } = setup({
+    executions: { "sih26158-run-abc12": { completionTime: { seconds: 1 } } },
+  });
+  writeStatus(bucket, ID_A, { ...RUNNING, preview: { points: 10, files: {} } });
+  assert.strictEqual((await get(status, { id: ID_A })).body.state, "partial");
+});
+
+test("a terminal status is never second-guessed", async () => {
+  const { bucket } = setup({
+    executions: { "sih26158-run-abc12": { completionTime: { seconds: 1 } } },
+  });
+  writeStatus(bucket, ID_A, { ...RUNNING, state: "done" });
+  assert.strictEqual((await get(status, { id: ID_A })).body.state, "done");
+});
+
+test("a start that never reported is failed after fifteen minutes", async () => {
+  const { bucket } = setup();
+  const old = new Date(Date.now() - 20 * 60 * 1000).toISOString();
+  bucket.objects.set(`web/${ID_A}/started.json`,
+                     { data: JSON.stringify({ runId: ID_A, at: old }), size: 1 });
+  assert.strictEqual((await get(status, { id: ID_A })).body.state, "failed");
+  const fresh = new Date().toISOString();
+  bucket.objects.set(`web/${ID_B}/started.json`,
+                     { data: JSON.stringify({ runId: ID_B, at: fresh }), size: 1 });
+  assert.strictEqual((await get(status, { id: ID_B })).body.state, "starting");
+});
+
+test("an execution name from the bucket cannot reach an arbitrary resource path", async () => {
+  const { bucket } = setup({ executions: { "x": { completionTime: { seconds: 1 } } } });
+  writeStatus(bucket, ID_A, { ...RUNNING, execution: "../../other/x" });
+  assert.strictEqual((await get(status, { id: ID_A })).body.state, "running");
 });
