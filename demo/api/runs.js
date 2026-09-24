@@ -49,14 +49,24 @@ module.exports = async (req, res) => {
     const object = `web/${runId}/source${ext}`;
     const contentType = String(body.type || "application/octet-stream");
 
+    // The size above is whatever the caller declared. The real bound has to be on the
+    // upload itself: GCS refuses a PUT whose body falls outside this range, and since
+    // the header is signed into the URL the client cannot drop or widen it (audit
+    // F-05). The bucket's CORS config must allow this header; see
+    // deploy/web-bucket-cors.json.
+    const uploadHeaders = {
+      "content-type": contentType,
+      "x-goog-content-length-range": `0,${L.MAX_BYTES}`,
+    };
     const [uploadUrl] = await L.bucket().file(object).getSignedUrl({
       version: "v4",
       action: "write",
       expires: Date.now() + 30 * 60 * 1000,
       contentType,
+      extensionHeaders: { "x-goog-content-length-range": uploadHeaders["x-goog-content-length-range"] },
     });
 
-    return L.json(res, 200, { runId, uploadUrl, object });
+    return L.json(res, 200, { runId, uploadUrl, uploadHeaders, object });
   } catch (e) {
     return L.json(res, 500, { error: String((e && e.message) || e) });
   }
