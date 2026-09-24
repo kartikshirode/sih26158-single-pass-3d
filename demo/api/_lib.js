@@ -141,6 +141,16 @@ async function reserveSlot(runId) {
   return null;
 }
 
+// The orchestrator execution a status file names, or null. Short names only, since the
+// value comes from a file in the bucket and is spliced into a resource path.
+async function execution(shortName) {
+  if (typeof shortName !== "string" || !/^[a-z0-9-]{1,63}$/.test(shortName)) return null;
+  const [ex] = await execs().getExecution({
+    name: `projects/${PROJECT}/locations/${REGION}/jobs/${JOB}/executions/${shortName}`,
+  });
+  return ex;
+}
+
 function json(res, code, body) {
   res.setHeader("content-type", "application/json");
   res.setHeader("cache-control", "no-store");
@@ -151,5 +161,5 @@ module.exports = {
   BUCKET, PROJECT, REGION, JOB,
   MAX_BYTES, MAX_CONCURRENT, MAX_PER_DAY, PAUSED,
   storage, jobs, execs, bucket, newRunId, isRunId, runningCount,
-  claim, release, slotsUsedToday, reserveSlot, json, _inject,
+  claim, release, slotsUsedToday, reserveSlot, execution, json, _inject,
 };

@@ -83,6 +83,11 @@ _state = {
     "preview": None,
     "final": None,
     "error": None,
+    # Cloud Run sets this on every job task. /api/status uses it to ask the platform
+    # whether this execution has ended: a worker killed for memory or time cannot write
+    # "failed" itself, and the page would otherwise poll a "running" file forever
+    # (audit F-12).
+    "execution": os.environ.get("CLOUD_RUN_EXECUTION"),
 }
 
 

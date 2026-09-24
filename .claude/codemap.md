@@ -298,7 +298,7 @@ Gotcha: needs out/kolumvs3d/points_fused.npy, colors_fused.npy and export/export
 
 ### run_job/run_upload.py
 Web orchestrator, one Cloud Run Job execution per uploaded clip: fetch web/<RUN_ID>/source*, S0 screen, S1 ingest (subprocess video_ingest.py --horizon crop), poses via job kolu-ma, preview via tools/finish_kolu.py, densify via job sih26158-mvs, final via tools/finish_mvs.py. Rewrites web/<RUN_ID>/status.json (schema sih26158/web-run/1) after every transition.
-Exports: main(); run_cloud_job(job, env, label, expect_s, sid); publish_model(bucket, out_run, label) -> {mesh, points, triangles, halfExtent, files}; put_status/stage/expect/fail helpers
+Exports: main(); run_cloud_job(job, env, label, expect_s, sid); publish_model(bucket, out_run, label) -> {mesh, points, triangles, halfExtent, files}; put_status/stage/expect/fail helpers; status.json carries "execution" from CLOUD_RUN_EXECUTION so /api/status can detect a killed worker
 Used by: run_job/Dockerfile (ENTRYPOINT); started as job sih26158-run by demo/api/start.js; status.json read by demo/api/status.js
 Gotcha: env RUN_ID is required; others BUCKET (sih26158-mumbai), GCP_PROJECT (agentbillboard), REGION (asia-south1), MA_JOB, MVS_JOB, MAX_VIEWS=60, MIN_VIEWS=8, MAX_SECONDS=600, MAX_BYTES=600MB, mirrored in demo/api/_lib.js and tools/build_run.py. S0/S1 are called directly, bypassing the ladder. Child jobs get per-execution env overrides, never `jobs update`. Retries once, only on Cloud Run "Internal error running task". Outputs go to web/<RUN_ID>3d (preview) and web/<RUN_ID>mvs3d (final). Expected durations use measured rates (10.68 s/view poses, 2003 s densify per 60 views).
 
@@ -382,7 +382,7 @@ Gotcha: partly stale: still says metres are 5.5x too small "until calibration la
 
 ### demo/api/_lib.js
 Shared plumbing for the Vercel functions: lazily required GCP clients from a service-account key, env-driven limits, run-id minting and validation, the running-execution count, atomic claim objects (per-run start claim and numbered daily slots), JSON response helper.
-Exports: BUCKET, PROJECT, REGION, JOB, MAX_BYTES, MAX_CONCURRENT, MAX_PER_DAY, PAUSED; storage(), jobs() (Run v2 JobsClient), execs() (ExecutionsClient), bucket(); newRunId() -> 32-hex; isRunId(s) -> bool; runningCount() -> Promise<number>; claim(name, body) -> Promise<bool> (create with ifGenerationMatch=0, nonce-checked on 412); release(name) (delete, errors swallowed); slotsUsedToday() -> Promise<number>; reserveSlot(runId) -> Promise<slot name | null> (web/_slots/<UTC day>/NNN.json); json(res, code, body) (no-store); _inject({storage, jobs, execs}) for tests
+Exports: BUCKET, PROJECT, REGION, JOB, MAX_BYTES, MAX_CONCURRENT, MAX_PER_DAY, PAUSED; storage(), jobs() (Run v2 JobsClient), execs() (ExecutionsClient), bucket(); newRunId() -> 32-hex; isRunId(s) -> bool; runningCount() -> Promise<number>; claim(name, body) -> Promise<bool> (create with ifGenerationMatch=0, nonce-checked on 412); release(name) (delete, errors swallowed); slotsUsedToday() -> Promise<number>; reserveSlot(runId) -> Promise<slot name | null> (web/_slots/<UTC day>/NNN.json); execution(shortName) -> Promise<Execution | null> (short name regex-checked); json(res, code, body) (no-store); _inject({storage, jobs, execs}) for tests
 Used by: demo/api/runs.js, demo/api/start.js, demo/api/status.js, demo/api/file.js, demo/test/api.test.js
 Gotcha: env GCP_SA_KEY (whole SA JSON; throws on first client use if missing), GCS_BUCKET, GCP_PROJECT, GCP_REGION, RUN_JOB (sih26158-run), MAX_UPLOAD_BYTES (600 MiB), MAX_CONCURRENT (1), MAX_RUNS_PER_DAY (12), PAUSED ("1" = kill switch without redeploy). No auth: the 128-bit run id is the only capability. The daily cap counts slot objects per UTC day, not executions. Listing executions must use ExecutionsClient (JobsClient fails at runtime). The SA needs objects.create/get/delete for claims. Limits must match run_job/run_upload.py and tools/build_run.py.
 
@@ -403,10 +403,10 @@ node:test suite for the upload API against in-memory fakes of GCS and Cloud Run 
 Gotcha: sets MAX_RUNS_PER_DAY=2 before requiring _lib; lives outside demo/api/ because Vercel deploys every file there as a function.
 
 ### demo/api/status.js
-GET /api/status?id=<runId>: proxies web/<runId>/status.json (schema sih26158/web-run/1) verbatim with no-store.
-Exports: default handler -> 200 status JSON | 200 {runId, state: "starting", stages: [{id: "boot"}]} while the file does not exist | 400 | 500
-Used by: demo/run/index.html (polled every 5 s)
-Gotcha: a proxy, not a signed URL, because a signed URL would expire mid-run. A missing status.json means cold start, not failure.
+GET /api/status?id=<runId>: proxies web/<runId>/status.json (schema sih26158/web-run/1) with no-store. While the file is non-terminal it asks Cloud Run whether the execution it names has ended, and if so returns it as failed (or partial when a preview exists) with error code WEB-ENDED.
+Exports: default handler -> 200 status JSON | 200 {runId, state: "starting", stages: [{id: "boot"}]} while the file does not exist | 200 failed when started.json is over 15 min old and no status exists | 400 | 500
+Used by: demo/run/index.html (polled every 5 s), demo/test/api.test.js
+Gotcha: a proxy, not a signed URL, because a signed URL would expire mid-run. Never writes back; a terminal state from the job is returned untouched. If the execution lookup fails, the job's own status is returned as is. Needs run.executions.get on the SA.
 
 ### demo/api/file.js
 GET /api/file?id=<runId>&p=<preview|final>/<name>: checks the object exists, 302 to a 15-min signed download URL (attachment). preview maps to web/<runId>3d/export/<name>, final to web/<runId>mvs3d/export/<name>.
