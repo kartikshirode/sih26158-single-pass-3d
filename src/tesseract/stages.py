@@ -185,7 +185,7 @@ class PlanKeyframes(BaseStage):
 @dataclass
 class Geometry(BaseStage):
     id: str = "S3-geometry"
-    version: str = "2"          # full cam2world poses when the adopted run has them
+    version: str = "3"          # synthetic gauge now tilted and scaled, with full poses
     needs: tuple = ("plan",)
     # S3 on a synthetic source also reads the scene straight from ctx.source; the
     # orchestrator keys every stage on the source's fingerprint, which covers that.
@@ -297,13 +297,28 @@ class Geometry(BaseStage):
         rngm = np.linalg.norm(P - w["pos"][len(w["pos"]) // 2], axis=1)
         P += rng.normal(0, 1.0, P.shape) * (0.02 + 0.004 * rngm / 100.0)[:, None]
 
-        # a real reconstruction arrives in an arbitrary frame; georeferencing must solve it
+        # A real reconstruction arrives in an arbitrary gauge: any rotation, any scale.
+        # This used to be a yaw and a translation at scale 1.0, which is already level
+        # and already metric, the exact two things the georeferencing fit assumes and
+        # never has to establish, so the synthetic accuracy could not see a missing
+        # levelling step (audit F-07). Roll and pitch up to 25 degrees, scale 0.1-2x.
         th = rng.uniform(0, 2 * np.pi)
-        R_arb = np.array([[np.cos(th), -np.sin(th), 0],
-                          [np.sin(th), np.cos(th), 0], [0, 0, 1.0]])
         t_arb = rng.uniform(-400, 400, 3)
-        P = apply_transform(P, R_arb, t_arb, 1.0)
-        traj = apply_transform(w["pos"], R_arb, t_arb, 1.0)
+        roll, pitch = rng.uniform(-np.radians(25), np.radians(25), 2)
+        s_arb = float(10 ** rng.uniform(-1.0, 0.3))
+        Rz = np.array([[np.cos(th), -np.sin(th), 0], [np.sin(th), np.cos(th), 0],
+                       [0, 0, 1.0]])
+        Rx = np.array([[1.0, 0, 0], [0, np.cos(roll), -np.sin(roll)],
+                       [0, np.sin(roll), np.cos(roll)]])
+        Ry = np.array([[np.cos(pitch), 0, np.sin(pitch)], [0, 1.0, 0],
+                       [-np.sin(pitch), 0, np.cos(pitch)]])
+        R_arb = Rz @ Rx @ Ry
+        P = apply_transform(P, R_arb, t_arb, s_arb)
+        # Full cam2world poses, as MapAnything gives: S5 and S5b can then check the
+        # ground-plane vertical against the gimbal's roll-zero constraint.
+        traj = np.repeat(np.eye(4)[None], len(w["pos"]), axis=0)
+        traj[:, :3, :3] = np.einsum("ij,njk->nik", R_arb, w["R"])
+        traj[:, :3, 3] = apply_transform(w["pos"], R_arb, t_arb, s_arb)
 
         np.save(ctx.path("observed_mask.npy"), observed)
         outs = {
@@ -371,11 +386,14 @@ class Georeference(BaseStage):
     """
     Trajectory to GNSS, in local ENU, then projected last (ADR-008).
 
-    5-DOF only. EXP-09 measured a full 7-DOF fit throwing the scene 267-311 m off a
+    Never 7-DOF. EXP-09 measured a full 7-DOF fit throwing the scene 267-311 m off a
     straight pass even with RTK, so an unrestricted fit is refused rather than offered.
+    The fit is 6-DOF: the one rotation a straight track cannot constrain, roll about
+    its own axis, comes from gravity; the other two come from the track (ADR-026).
     """
 
     id: str = "S5-georef"
+    version: str = "2"          # levels first, then fits yaw and slope to the track
     needs: tuple = ("points", "cameras")
     produces: tuple = ("points_geo",)
     levels: tuple = ("L0", "L1", "L2", "L3", "L4")
@@ -399,15 +417,26 @@ class Georeference(BaseStage):
             raise StageError(Code.REF_7DOF,
                              "a 7-DOF fit on a single pass is refused (EXP-09)", fatal=True)
 
-        from eval3d.gnss import robust_yaw_sim3
+        from eval3d.gnss import robust_track_sim3
         from eval3d.metrics import apply_transform
 
         w = ctx.source.world()
         P = np.load(os.path.join(ctx.workdir, ctx.need("points").path)).astype(np.float64)
-        traj = np.load(os.path.join(ctx.workdir, ctx.need("cameras").path))
+        cam = np.load(os.path.join(ctx.workdir, ctx.need("cameras").path))
+        # A yaw-only fit assumes its input is already level, Z up. A reconstruction in
+        # F3/F4 is not: its gauge has an arbitrary roll and pitch, and on a straight
+        # pass the GNSS track cannot supply them. This stage used to fit the raw frame,
+        # which only worked because the synthetic source handed it a frame that was
+        # already level; a 5 degree roll gave a perfect track fit and a scene 21 m off
+        # (audit F-07). Level first, with the same vertical S5b would use, then fit.
+        B, grav, centres = _level_basis(P, cam)
+        origin = P.mean(0)
         rng = np.random.default_rng(ctx.source.seed + 5)
-        Rg, tg, sg, inl = robust_yaw_sim3(traj, w["gps"], thresh="auto", rng=rng)
-        P_enu = apply_transform(P, Rg, tg, sg)
+        # Yaw and the track's slope from the GNSS; only the roll about the track from
+        # gravity, which is the one rotation a straight pass cannot give (ADR-026).
+        Rg, tg, sg, inl = robust_track_sim3(_level(centres, B, origin), w["gps"],
+                                            thresh="auto", rng=rng)
+        P_enu = apply_transform(_level(P, B, origin), Rg, tg, sg)
 
         lat0, lon0, h0 = w["site"]
         lat, lon, h = _enu_to_geodetic(P_enu, lat0, lon0, h0)
@@ -428,7 +457,10 @@ class Georeference(BaseStage):
                                   "geoid_model": "EGM2008 (EPSG:9518)",
                                   "geoid_separation_m": round(float(np.mean(h - H)), 3),
                                   "gnss_inlier_fraction": round(float(inl.mean()), 4),
-                                  "sim3_scale": round(float(sg), 6), "dof": 5,
+                                  "sim3_scale": round(float(sg), 6), "dof": 6,
+                                  "rotation_from": {"gnss": ["yaw", "track slope"],
+                                                    "gravity": ["roll about the track"]},
+                                  "gravity": grav,
                                   "scale": scale_svc.for_page(cal)})
 
 
@@ -475,6 +507,42 @@ def _enu_to_geodetic(enu, ref_lat, ref_lon, ref_h):
     return np.degrees(lat), np.degrees(lon), p / np.cos(lat) - N
 
 
+# ------------------------------------------------------------------ levelling
+def _level_basis(P: np.ndarray, cam_array: np.ndarray | None):
+    """
+    The F3/F4 -> level rotation, shared by S5 and S5b so both use one vertical.
+
+    Returns (B, gravity facts, camera centres). B's rows are [e1, up, e2], which is a
+    left-handed triple; `_level` reorders to [e1, e2, up], which is right-handed with
+    Z up, the frame a yaw-only fit to ENU assumes.
+
+    The vertical comes from the ground plane cross-checked against the gimbal roll-zero
+    constraint (ADR-007) when full cam2world poses exist, and from the thin principal
+    axis signed by the camera centres when only centres do.
+    """
+    sys.path.insert(0, os.path.join(K.ROOT, "src", "pipeline"))
+    from gravity import estimate, frame as basis_from_up
+    from render_views import upright_frame
+
+    cams, centres = None, None
+    if cam_array is not None and len(cam_array):
+        full = cam_array.ndim == 3 and cam_array.shape[-2:] == (4, 4)
+        cams = cam_array if full else None
+        centres = cam_array[:, :3, 3] if full else cam_array
+    if cams is not None:
+        g = estimate(cams.astype(np.float64), P, log=lambda *_: None)
+        facts = {k: (round(v, 3) if isinstance(v, float) else
+                     (v.tolist() if isinstance(v, np.ndarray) else v))
+                 for k, v in g.items()}
+        return basis_from_up(g["up"]), facts, centres
+    return upright_frame(P, centres), {"method": "pca+centres", "checked": False}, centres
+
+
+def _level(X: np.ndarray, B: np.ndarray, origin: np.ndarray) -> np.ndarray:
+    """Rotate into the level frame: [e1, e2, up], right-handed, Z up, about `origin`."""
+    return ((np.asarray(X, np.float64) - origin) @ B.T)[:, [0, 2, 1]]
+
+
 # ------------------------------------------------------------------ S5b · level
 @dataclass
 class Level(BaseStage):
@@ -498,34 +566,15 @@ class Level(BaseStage):
         if "points_geo" in ctx.artefacts:
             return StageResult(self.id, 0.0, skipped=True,
                                note="already georeferenced (F7); nothing to level")
-        sys.path.insert(0, os.path.join(K.ROOT, "src", "pipeline"))
-        from gravity import estimate, frame as basis_from_up
-        from render_views import upright_frame
-
         P = np.load(os.path.join(ctx.workdir, ctx.need("points").path)).astype(np.float64)
-        cams = None
-        if "cameras" in ctx.artefacts:
-            c = np.load(os.path.join(ctx.workdir, ctx.artefacts["cameras"].path))
-            cams = c if c.ndim == 3 and c.shape[-2:] == (4, 4) else None
-            centres = c if cams is None else c[:, :3, 3]
-        else:
-            centres = None
-
-        facts: dict = {}
-        if cams is not None:
-            g = estimate(cams.astype(np.float64), P, log=lambda *_: None)
-            B = basis_from_up(g["up"])
-            facts["gravity"] = {k: (round(v, 3) if isinstance(v, float) else
-                                    (v.tolist() if isinstance(v, np.ndarray) else v))
-                               for k, v in g.items()}
-        else:
-            B = upright_frame(P, centres)
-            facts["gravity"] = {"method": "pca+centres", "checked": False}
+        c = (np.load(os.path.join(ctx.workdir, ctx.artefacts["cameras"].path))
+             if "cameras" in ctx.artefacts else None)
+        B, grav, _ = _level_basis(P, c)
+        facts: dict = {"gravity": grav}
 
         k = float((ctx.facts.get("scale") or {}).get("factor", 1.0))
         units = ctx.facts.get("units", Units.MODEL)
-        origin = P.mean(0)
-        L = ((P - origin) @ B.T)[:, [0, 2, 1]] * k          # [e1, e2, up], then scaled
+        L = _level(P, B, P.mean(0)) * k                   # [e1, e2, up], then scaled
         art = _save_npy(ctx, "points_llf", L.astype(np.float32), frame=Frame.F5_LLF,
                         units=units, kind="point-cloud")
         # Lengths carry their unit in the key (docs/15 conventions). gravity.estimate
