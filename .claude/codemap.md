@@ -95,9 +95,9 @@ Gotcha: ROOT is three dirnames up from this file. Invariant: units must equal un
 
 ### src/tesseract/pipeline.py
 Orchestrator: runs stages in order with content-addressed resume (state.json), a time budget and the degradation ladder, then writes run_manifest.json. No geometry knowledge.
-Exports: Context(run_id, workdir, source, config, level, budget_s, ...).path()/remaining()/need(name); Stage Protocol; BaseStage (override execute(); fields id, version, needs, produces, levels, estimate()); State(path).key/cached/record; Pipeline(stages).run(ctx, resume=True) -> RunManifest
+Exports: Context(run_id, workdir, source, config, level, budget_s, spent_s, artefacts, facts, cached, ...).path()/remaining()/need(name); Stage Protocol; BaseStage (override execute(); fields id, version, needs, produces, levels, cacheable, estimate()); State(path).key/cached/record; Pipeline(stages).run(ctx, resume=True) -> RunManifest
 Used by: src/tesseract/stages.py, cli.py, __init__.py, test_tesseract.py
-Gotcha: a budget overrun or non-fatal StageError steps down one level and restarts from stage 0; the cache key includes ctx.level, so every stage re-runs and manifest.stages gets duplicates. Pipeline() raises ValueError at construction if a stage needs something no earlier stage produces. Missing scale fact defaults to "unvalidated".
+Gotcha: a budget overrun or non-fatal StageError steps down one level and restarts from stage 0; the cache key includes ctx.level, so every stage re-runs and manifest.stages gets duplicates. Pipeline() raises ValueError at construction if a stage needs something no earlier stage produces. Missing scale fact defaults to "unvalidated". A stage with cacheable=False always re-runs; ctx.cached lists the stage ids this invocation took from the cache (their seconds count as 0).
 
 ### src/tesseract/report.py
 Renders the per-run QA report (markdown) from run_manifest.json: ladder level, frame, units, scale, verdicts, stage and artefact tables. Every figure comes from the manifest.
@@ -124,7 +124,7 @@ Used by: src/tesseract/cli.py, __init__.py, test_tesseract.py
 Gotcha: on a real video S3 needs config "adopt" (out/<run> with points_fused.npy), otherwise non-fatal STAGE_UNAVAILABLE walks the ladder down to L5. S5 only runs on SyntheticSource (gap C-3), so real clips stay in F5. A 7-DOF fit is refused. _orthometric raises fatal REF_BALLPARK if the EGM2008 grid is missing. Importing inserts src/ on sys.path.
 
 ### src/tesseract/test_tesseract.py
-Plain-assert test script: T1 contracts, T2 scale service and footprint check, T3 orchestrator cache/version/budget/ladder, T4 synthetic end to end rtk vs consumer, T5 real Kolu runs (skipped when out/runs is absent).
+Plain-assert test script: T1 contracts, T2 scale service and footprint check, T3 orchestrator cache/version/budget/ladder and uncacheable stages, T3b R-O2 and R-O5 verdict rules, T3c unit-named Level lengths, T4 synthetic end to end rtk vs consumer, T5 real Kolu runs (skipped when out/runs is absent).
 Used by: .github/workflows/ci.yml (run as `python src/tesseract/test_tesseract.py`, exit 1 on any FAIL)
 Gotcha: not pytest. T2 FAILs (not skips) if research/calibration/kolu.json is missing or lacks run "kolumvs3d". T4 needs pyproj network access for the geoid grid.
 

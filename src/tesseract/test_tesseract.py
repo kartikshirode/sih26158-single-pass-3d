@@ -231,6 +231,105 @@ def t_pipeline():
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
 
+    # A stage that judges accumulated facts has no inputs to key on, so a resumed run
+    # would replay its old answer. It has to run every time, and the run has to know
+    # which stages it did not actually time.
+    tmp = tempfile.mkdtemp(prefix="tess-")
+    try:
+        a, judge = Toy("A", produces=("x",)), Toy("judge")
+        judge.cacheable = False
+        Pipeline([a, judge]).run(ctx_for(tmp))
+        ctx = ctx_for(tmp)
+        Pipeline([a, judge]).run(ctx)
+        check("an uncacheable stage runs again on resume", judge.calls == 2)
+        check("the run records which stages came from the cache", ctx.cached == ["A"],
+              str(ctx.cached))
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
+# ---------------------------------------------------------------- T3b verdicts
+class _Clip:
+    """A stand-in video source: the verdicts only ask whether it has a path."""
+    path = "clip.mp4"
+
+
+def t_verdicts():
+    section("T3b: a verdict says met only about what it measured")
+    from tesseract.stages import _verdict_formats, _verdict_time
+
+    three = _verdict_formats(["ply", "las", "geotiff"])
+    check("three of the six PS formats is not met (audit F-02)",
+          three.startswith("not met") and "obj" in three and "fbx" in three, three)
+    check("all six is met, and GLB answers the glTF row",
+          _verdict_formats(["obj", "ply", "las", "geotiff", "glb", "fbx"]) == "met")
+
+    def verdict(source, spent, facts, cached=()):
+        c = Context(run_id="v", workdir=".", source=source, budget_s=900.0,
+                    spent_s=spent, facts=facts, log=lambda *_: None)
+        c.cached = list(cached)
+        return _verdict_time(c)
+
+    ten_min = {"screen": {"duration_s": 600.0}}
+    cases = {
+        "synthetic": verdict(SyntheticSource(n_frames=8), 100, {}),
+        "short clip": verdict(_Clip(), 100, {"screen": {"duration_s": 52.0}}),
+        "adopted": verdict(_Clip(), 100, dict(ten_min, geometry_provider="adopt")),
+        "cached": verdict(_Clip(), 100, ten_min, cached=["S0-screen"]),
+        "timed, inside": verdict(_Clip(), 800, ten_min),
+        "timed, over": verdict(_Clip(), 1200, ten_min),
+    }
+    check("a synthetic scene cannot meet R-O2 (audit F-09)",
+          cases["synthetic"].startswith("not measurable"), cases["synthetic"])
+    check("a clip shorter than ten minutes cannot meet R-O2",
+          cases["short clip"].startswith("not measurable"), cases["short clip"])
+    check("adopted geometry is not timed",
+          cases["adopted"].startswith("not measurable"), cases["adopted"])
+    check("a resumed run's wall clock is not a measurement",
+          cases["cached"].startswith("not measurable"), cases["cached"])
+    check("a timed ten-minute clip is judged on its wall clock",
+          cases["timed, inside"] == "met" and cases["timed, over"] == "not met",
+          f"{cases['timed, inside']} / {cases['timed, over']}")
+    vocab = ("met", "not met", "not measurable")
+    check("every verdict keeps the console's three-word vocabulary",
+          all(s.startswith(vocab) for s in list(cases.values()) + [three]))
+
+
+def t_level_units():
+    section("T3c: a levelled length names its own unit")
+    from tesseract.stages import Level
+
+    rng = np.random.default_rng(0)
+    ground = np.column_stack([rng.uniform(-50, 50, 4000), rng.uniform(-20, 20, 4000),
+                              rng.normal(0, 0.05, 4000)])
+    cams = np.column_stack([np.linspace(-40, 40, 20), np.zeros(20), np.full(20, 30.0)])
+    for status, factor in (("unvalidated", 1.0), ("calibrated", 2.0)):
+        tmp = tempfile.mkdtemp(prefix="tess-")
+        try:
+            np.save(os.path.join(tmp, "points.npy"), ground.astype(np.float32))
+            np.save(os.path.join(tmp, "cameras.npy"), cams)
+            units = K.units_for(status)
+            ctx = Context(run_id="lv", workdir=tmp, source=SyntheticSource(n_frames=8),
+                          facts={"scale": {"factor": factor, "status": status},
+                                 "units": units},
+                          artefacts={"points": Artefact("points.npy", "point-cloud")
+                                     .stamp(tmp),
+                                     "cameras": Artefact("cameras.npy", "array")
+                                     .stamp(tmp)},
+                          log=lambda *_: None)
+            f = Level().execute(ctx).facts
+            keys = set(f) | set(f.get("gravity", {}))
+            want = "extent_m" if units == Units.METRES else "extent_model"
+            metre_named = sorted(k for k in keys if k.endswith("_m"))
+            if units == Units.METRES:
+                check("a calibrated run reports its extent in metres",
+                      want in f and abs(max(f[want]) - 200.0) < 20.0, str(f.get(want)))
+            else:
+                check("an unvalidated run names no length in metres (audit F-06)",
+                      want in f and not metre_named, f"metre-named: {metre_named}")
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
 
 # ---------------------------------------------------------------- T4 end to end
 def t_end_to_end():

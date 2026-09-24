@@ -43,6 +43,9 @@ class Context:
     spent_s: float = 0.0
     artefacts: dict[str, Artefact] = field(default_factory=dict)
     facts: dict[str, Any] = field(default_factory=dict)
+    # Stages this invocation took from the cache. A cached stage adds 0 s to spent_s, so
+    # a resumed run's wall clock is not a measurement of the pipeline (audit F-09).
+    cached: list[str] = field(default_factory=list)
     log: Callable[[str], None] = print
 
     def path(self, *parts: str) -> str:
@@ -83,6 +86,10 @@ class BaseStage:
     needs: tuple[str, ...] = ()
     produces: tuple[str, ...] = ()
     levels: tuple[str, ...] = ("L0", "L1", "L2", "L3", "L4", "L5")
+    # A stage that reads the run's accumulated facts rather than declared artefacts
+    # cannot be keyed on its inputs, so it must run every time or it replays an old
+    # answer about new facts. S8 is the case: its key would be only its config.
+    cacheable: bool = True
 
     def estimate(self, ctx: Context) -> float:
         return 1.0
@@ -189,9 +196,11 @@ class Pipeline:
                 continue
 
             key = state.key(st, ctx)
-            hit = state.cached(st, key, ctx.workdir) if resume else None
+            reuse = resume and getattr(st, "cacheable", True)
+            hit = state.cached(st, key, ctx.workdir) if reuse else None
             if hit is not None:
                 ctx.log(f"  {st.id:<12} cached")
+                ctx.cached.append(st.id)
                 self._absorb(ctx, man, hit)
                 i += 1
                 continue
