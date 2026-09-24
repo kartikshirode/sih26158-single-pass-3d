@@ -151,6 +151,9 @@ Exports: enu_to_geodetic(enu, lat0, lon0, h0) -> (lat, lon, h); srt_timestamp(s)
 Used by: standalone script
 Gotcha: needs simscene and eval3d.gnss via a sys.path insert of src/. abs_alt is rel_alt plus a constant, mimicking real barometric DJI files.
 
+### src/ingest/test_frames.py
+Plain-script test of the frame gates on a synthetic letterboxed frame: bars measured, sky and horizon found below a top bar, horizon row counted past it, the clip crop removes the bars, a watermark above the bottom bar is cropped; frames without bars unchanged. Run `python src/ingest/test_frames.py`.
+
 ### src/ingest/test_srt.py
 EXP-23 telemetry test script (68 checks, plain prints). T1 pins the first record of each real DJI fixture, T2 runs 21 fuzz deformations (CRLF, BOM, UTF-16, binary, NaN, "longtitude", x10 focal, legacy GPS tuples) in a tempdir, T3 checks telemetry_for_frames is keyed, not positional, and encodes a variable-frame-rate clip with PyAV to check PTS keying (skipped without av).
 Used by: .github/workflows/ci.yml (run as `python src/ingest/test_srt.py`)

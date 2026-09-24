@@ -253,9 +253,40 @@ def is_slate(bgr_small: np.ndarray, dark_thr: float = 42.0,
     return (g.mean() < dark_thr) and (float((g < dark_thr).mean()) > flat_frac)
 
 
+def letterbox_rows(bgr_small: np.ndarray, dark: float = 20.0,
+                   max_frac: float = 0.2) -> tuple[int, int]:
+    """
+    Rows of black bar at the top and bottom of a letterboxed frame, as (top, bottom).
+
+    Re-edited clips often carry them: the demo clip has 34 black rows above and below
+    its 1920x1012 picture. They matter twice. The sky test below anchors on the top
+    edge, and a black bar there hid the sky of every frame (screen said sky 0.0 and
+    horizon 0.0 on a clip whose top 15% is sky). And a bar is a perfectly static,
+    textureless band that no reconstruction can use.
+    """
+    v = bgr_small.max(axis=2).mean(axis=1)
+    lim = int(len(v) * max_frac)
+    lit_top, lit_bot = v[:lim] >= dark, v[::-1][:lim] >= dark
+    top = int(np.argmax(lit_top)) if lit_top.any() else 0
+    bot = int(np.argmax(lit_bot)) if lit_bot.any() else 0
+    return top, bot
+
+
+def letterbox_box(frames_small: list) -> tuple:
+    """Crop box (top, bottom, left, right fractions) removing letterbox bars, clip-wide."""
+    if not frames_small:
+        return (0.0, 0.0, 0.0, 0.0)
+    h = frames_small[0].shape[0]
+    med = np.median(np.asarray([letterbox_rows(f) for f in frames_small]), axis=0)
+    # The median across the clip, so a fade or a dark frame cannot set the crop, plus
+    # one row, because the bar's edge row is usually a blend.
+    t, b = (med + (med > 0)).astype(int)
+    return (float(t) / h, float(b) / h, 0.0, 0.0)
+
+
 def sky_mask(bgr_small: np.ndarray) -> np.ndarray:
     """
-    Sky: bright, low-saturation, AND connected to the top edge of the frame.
+    Sky: bright, low-saturation, AND connected to the top edge of the picture.
 
     The connectivity term is not cosmetic. Brightness-and-saturation alone calls
     pale arid ground sky - graded desert fill has exactly the signature, high value
@@ -266,10 +297,12 @@ def sky_mask(bgr_small: np.ndarray) -> np.ndarray:
     """
     hsv = cv2.cvtColor(bgr_small, cv2.COLOR_BGR2HSV)
     raw = ((hsv[..., 1] < 70) & (hsv[..., 2] > 120)).astype(np.uint8)
-    if not raw[0].any():
+    # The top of the PICTURE, below any letterbox bar, is the edge sky touches.
+    t0 = letterbox_rows(bgr_small)[0]
+    if not raw[t0].any():
         return np.zeros(raw.shape, bool)
     n, lab = cv2.connectedComponents(raw, connectivity=8)
-    top = np.unique(lab[0][raw[0] > 0])
+    top = np.unique(lab[t0][raw[t0] > 0])
     return np.isin(lab, top[top > 0])
 
 
@@ -305,15 +338,24 @@ def horizon_present(bgr_small: np.ndarray, min_sky: float = 0.06) -> bool:
     past the edge of a roof in a steep oblique is not, because it does not span
     the frame width.
     """
+    return sky_and_horizon(bgr_small, min_sky)[1]
+
+
+def sky_and_horizon(bgr_small: np.ndarray, min_sky: float = 0.06) -> tuple[float, bool]:
+    """
+    sky_fraction and horizon_present from ONE sky mask.
+
+    S1 called both on every frame and each built its own mask: 6 of the 24 ms spent
+    per frame on the demo clip, half of it duplicated.
+    """
     m = sky_mask(bgr_small)
-    h, w = m.shape
-    if m.mean() < min_sky:
-        return False
+    frac = float(m.mean())
+    if frac < min_sky:
+        return frac, False
     # Row-wise sky coverage; a horizon shows as rows that are almost entirely sky
     # at the top, falling away sharply at one row.
-    rows = m.mean(axis=1)
-    spanning = rows > 0.80
-    return bool(spanning[: int(h * 0.75)].any())
+    spanning = m.mean(axis=1) > 0.80
+    return frac, bool(spanning[: int(m.shape[0] * 0.75)].any())
 
 
 def horizon_row(bgr_small: np.ndarray, purity: float = 0.70) -> int | None:
@@ -329,12 +371,13 @@ def horizon_row(bgr_small: np.ndarray, purity: float = 0.70) -> int | None:
     """
     m = sky_mask(bgr_small)
     h = m.shape[0]
-    cum = np.cumsum(m.mean(axis=1)) / np.arange(1, h + 1)
+    t0 = letterbox_rows(bgr_small)[0]           # count from the top of the picture
+    cum = np.cumsum(m[t0:].mean(axis=1)) / np.arange(1, h - t0 + 1)
     good = np.flatnonzero(cum >= purity)
     if len(good) == 0:
         return None
     r = int(good[-1])
-    return r if r >= h * 0.03 else None
+    return t0 + r if r >= h * 0.03 else None
 
 
 def horizon_crop_fraction(frames_small: list, margin: float = 0.04) -> float:
@@ -382,7 +425,16 @@ def static_overlay_mask(frames_small: list, std_thr: float = 3.0,
     q25, q50, q75 = np.percentile(stack, [25, 50, 75], axis=0)
     spread = q75 - q25
     grad = cv2.Laplacian(q50.astype(np.float32), cv2.CV_32F)
-    return (spread < std_thr) & (np.abs(grad) > grad_thr)
+    mask = (spread < std_thr) & (np.abs(grad) > grad_thr)
+    # A letterbox bar's edge is static and sharp too. Left in, it put "overlay" at the
+    # very top and bottom of the demo clip, no edge crop under 12% could clear both,
+    # and the real watermark above the bottom bar was kept in every keyframe.
+    t, b = letterbox_rows(frames_small[len(frames_small) // 2])
+    if t:
+        mask[:t + 2] = False
+    if b:
+        mask[mask.shape[0] - b - 2:] = False
+    return mask
 
 
 def overlay_crop_box(mask: np.ndarray, max_trim: float = 0.12) -> tuple:
@@ -575,6 +627,8 @@ def ingest_video(path: str, *, target_keyframes: int = 600,
     ar = H / W
     sub = [cv2.resize(smalls[i], (480, int(480 * ar))) for i in idx_shot]
     crop = overlay_crop_box(static_overlay_mask(sub))
+    # Letterbox bars go too, whatever the overlay test found.
+    crop = tuple(max(a, b) for a, b in zip(crop, letterbox_box(sub)))
 
     ok = in_shot.copy()
     if horizon_policy == "reject":
