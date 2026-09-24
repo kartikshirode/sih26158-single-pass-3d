@@ -758,7 +758,7 @@ class Verdicts(BaseStage):
     """
 
     id: str = "S8-verdict"
-    version: str = "2"          # R-O2 and R-O5 no longer pass on inputs they cannot judge
+    version: str = "3"          # R-O4 names both denominators; sensed coverage is not judged
     produces: tuple = ()
     cacheable: bool = False     # it judges the run's facts, which its cache key cannot see
 
@@ -771,9 +771,7 @@ class Verdicts(BaseStage):
                 "met" if f.get("accuracy_absolute_rmse_m", 1e9) <= 1.0 else
                 "not met" if "accuracy_absolute_rmse_m" in f else
                 "not measurable (no ground truth)"),
-            "R-O4 coverage": ("met" if f.get("recall_at_1m_observable", 0) >= 0.9
-                              else "not met" if "recall_at_1m_observable" in f
-                              else "not measurable"),
+            "R-O4 coverage": _verdict_coverage(f),
             "R-O5 formats": _verdict_formats(f.get("exports", [])),
             "R-O6 viewer": "met (tools/build_viewer.py, demo/)",
         }
@@ -788,6 +786,31 @@ R_O5_FORMATS = ("obj", "ply", "las", "geotiff", "gltf", "fbx")
 # R-O2 is "< 15 minutes for a 10-minute video". A shorter clip, or a synthetic scene,
 # says nothing about that input, whatever its own wall clock was.
 R_O2_VIDEO_S = 600.0
+
+
+# R-O4 is "the entire visible scene"; 90% recall at 1 m over what the flight could see.
+R_O4_RECALL = 0.9
+
+
+def _verdict_coverage(f: dict) -> str:
+    """
+    Judged on the observable denominator, which is what the PS asks for, with the
+    whole-scene figure always printed beside it (ADR-022): a pass on the easy surface
+    must not hide that most of the scene is missing (audit F-08).
+
+    Synthetic sensing is not judged at all. Its cloud IS the ground truth over the
+    observable mask, plus noise, so observable recall is 100% by construction and only
+    says whether the points landed within 1 m: a placement figure, already R-O3's.
+    """
+    if "recall_at_1m_observable" not in f:
+        return "not measurable (no ground truth)"
+    both = (f"observable {f['recall_at_1m_observable']:.0%}; whole scene "
+            f"{f.get('recall_at_1m_whole_scene', float('nan')):.0%}")
+    if f.get("geometry_provider") == "sense":
+        return (f"not measurable (synthetic sensing returns every observable point by "
+                f"construction; {both})")
+    verdict = "met" if f["recall_at_1m_observable"] >= R_O4_RECALL else "not met"
+    return f"{verdict} ({both})"
 
 
 def _verdict_formats(exports) -> str:
