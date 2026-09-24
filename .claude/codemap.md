@@ -163,9 +163,9 @@ Gotcha: exits 1 on any FAIL. Expected values are hard-coded per fixture filename
 
 ### src/pipeline/colmap_export.py
 S2 to S3 bridge. Turns MapAnything cameras.npy (cam2world 4x4) plus points.npy into a COLMAP text model for point_triangulator and OpenMVS, fitting intrinsics from the point map and mapping them from the model's centre-cropped grid back onto the full keyframe.
-Exports: derive_intrinsics(points, cams, H, W, mask=None) -> ((N,4) fx,fy,cx,cy, median_resid); full_frame_camera(K, H, W, h0, w0, log) -> dict; qvec_from_R(R) -> (w,x,y,z); db_image_ids(db_path) -> {name: (image_id, camera_id)}; write_model(outdir, cams, names, cam, db_path, log)
-Used by: mvs_job/run_mvs.py, mvs_job/run_mvs_sharded.py (both via /app, copied by mvs_job/Dockerfile)
-Gotcha: image and camera ids must come from COLMAP's database.db. SystemExit if the principal point is more than 8% off centre, the database has more than one camera, or a name is missing. SIMPLE_RADIAL model; poses inverted to world-to-camera.
+Exports: derive_intrinsics(points, cams, H, W, mask=None) -> ((N,4) fx,fy,cx,cy, median_resid); full_frame_camera(K, H, W, h0, w0, log, crop_trbl=None) -> dict (pp_reference names the centre it passed against); parse_crop(value) -> (t,b,l,r) or None; qvec_from_R(R) -> (w,x,y,z); db_image_ids(db_path) -> {name: (image_id, camera_id)}; write_model(outdir, cams, names, cam, db_path, log)
+Used by: mvs_job/run_mvs.py, mvs_job/run_mvs_sharded.py (both via /app, copied by mvs_job/Dockerfile), src/pipeline/test_colmap_export.py
+Gotcha: image and camera ids must come from COLMAP's database.db. SystemExit if the principal point is more than 8% off both the keyframe centre and (given S1's crop) the crop-shifted source centre, if KF_CROP_TRBL is malformed, the database has more than one camera, or a name is missing. SIMPLE_RADIAL model; poses inverted to world-to-camera.
 
 ### src/pipeline/export_formats.py
 S5/S6 export: PLY, OBJ, GLB, glTF, LAS 1.4, GeoTIFF DSM and FBX in one gravity-aligned local level frame centred on the cloud centroid, plus export_manifest.json. CLI: indir holding points_fused/colors_fused/mesh_v/f/c .npy, optional --cameras, --gsd, --no-scale.
