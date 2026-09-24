@@ -771,7 +771,7 @@ class Verdicts(BaseStage):
     """
 
     id: str = "S8-verdict"
-    version: str = "3"          # R-O4 names both denominators; sensed coverage is not judged
+    version: str = "4"          # R-O6 needs a model to view
     produces: tuple = ()
     cacheable: bool = False     # it judges the run's facts, which its cache key cannot see
 
@@ -786,7 +786,9 @@ class Verdicts(BaseStage):
                 "not measurable (no ground truth)"),
             "R-O4 coverage": _verdict_coverage(f),
             "R-O5 formats": _verdict_formats(f.get("exports", [])),
-            "R-O6 viewer": "met (tools/build_viewer.py, demo/)",
+            # A viewer with nothing to show is not an answer for this run.
+            "R-O6 viewer": ("met (tools/build_viewer.py, demo/)" if f.get("exports")
+                            else "not measurable (no model was built to view)"),
         }
         scale = f.get("scale") or {}
         v["scale"] = scale.get("label", "unvalidated (model units)")

@@ -44,7 +44,7 @@ def render(man: dict) -> str:
     w("| | |")
     w("|---|---|")
     w(f"| Ladder level | **{lv.key} - {lv.quality}** ({lv.description}) |")
-    w(f"| Frame | {man.get('frame')} |")
+    w(f"| Frame | {man.get('frame') or 'none (no geometry was built)'} |")
     w(f"| Units | **{man.get('units')}** |")
     w(f"| Scale | {sc.get('label', 'unvalidated')}"
       + (f" - {sc.get('basis')}" if sc.get("basis") else "") + " |")

@@ -83,7 +83,7 @@ def cmd_run(a) -> int:
     man = Pipeline(DEFAULT_STAGES).run(ctx, resume=not a.no_resume)
 
     print(f"\n  level      {man.level}  ({K.LEVELS[man.level].quality})")
-    print(f"  frame      {man.frame}   units {man.units}")
+    print(f"  frame      {man.frame or 'none (no geometry)'}   units {man.units}")
     if man.scale:
         print(f"  scale      {man.scale.get('label')}")
     for k, v in (man.verdicts or {}).items():
