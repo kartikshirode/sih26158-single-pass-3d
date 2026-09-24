@@ -111,6 +111,33 @@ async function claim(name, body) {
   }
 }
 
+// One start at a time, across every function instance. The concurrency check reads
+// the platform's execution list, and two starts for DIFFERENT run ids could both read
+// it before either launched: each won its own run-id claim and its own daily slot, and
+// MAX_CONCURRENT=1 let two orchestrators through (audit F-04, the half the run-id
+// claim did not cover). Holding this lease from the check until runJob returns makes
+// the check and the launch one step. A holder that died mid-start is taken over once
+// its lease is older than LEASE_TTL_MS, well past any function's time limit.
+const START_LEASE = "web/_lock/start.json";
+const LEASE_TTL_MS = 120 * 1000;
+
+async function acquireLease(name = START_LEASE, ttlMs = LEASE_TTL_MS) {
+  if (await claim(name, {})) return true;
+  const file = bucket().file(name);
+  try {
+    const [meta] = await file.getMetadata();
+    const [buf] = await file.download();
+    const at = Date.parse(JSON.parse(buf.toString()).at);
+    if (!(Date.now() - at > ttlMs)) return false;
+    // Delete only the generation we judged stale. If another request took it over
+    // in between, this fails and that request keeps it.
+    await file.delete({ ifGenerationMatch: meta.generation });
+  } catch (_) {
+    return false;
+  }
+  return claim(name, {});
+}
+
 async function release(name) {
   try {
     await bucket().file(name).delete();
@@ -162,4 +189,5 @@ module.exports = {
   MAX_BYTES, MAX_CONCURRENT, MAX_PER_DAY, PAUSED,
   storage, jobs, execs, bucket, newRunId, isRunId, runningCount,
   claim, release, slotsUsedToday, reserveSlot, execution, json, _inject,
+  START_LEASE, acquireLease,
 };

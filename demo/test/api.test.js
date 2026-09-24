@@ -7,6 +7,7 @@
 // would deploy any file in that folder as a public function.
 
 process.env.MAX_RUNS_PER_DAY = "2";
+process.env.MAX_CONCURRENT = "3";
 process.env.MAX_UPLOAD_BYTES = String(600 * 1024 * 1024);
 
 const test = require("node:test");
@@ -18,18 +19,22 @@ const start = require("../api/start");
 const status = require("../api/status");
 
 // ---------------------------------------------------------------- fakes
-function fakeBucket() {
+function fakeBucket({ failSave = () => false } = {}) {
   const objects = new Map();
   const signed = [];
+  let gen = 0;
+  const pre412 = () => Object.assign(new Error("precondition failed"), { code: 412 });
   const file = (name) => ({
     async save(data, opts = {}) {
       const pre = opts.preconditionOpts || {};
-      if (pre.ifGenerationMatch === 0 && objects.has(name)) {
-        const e = new Error("precondition failed");
-        e.code = 412;
-        throw e;
-      }
-      objects.set(name, { data: String(data), size: String(data).length });
+      if (pre.ifGenerationMatch === 0 && objects.has(name)) throw pre412();
+      objects.set(name, { data: String(data), size: String(data).length, generation: ++gen });
+      // A write that lands and still errors, as a timeout after the upload can.
+      if (failSave(name)) throw new Error(`storage timed out writing ${name}`);
+    },
+    async getMetadata() {
+      if (!objects.has(name)) throw Object.assign(new Error("not found"), { code: 404 });
+      return [{ generation: objects.get(name).generation }];
     },
     async download() {
       if (!objects.has(name)) {
@@ -39,7 +44,9 @@ function fakeBucket() {
       }
       return [Buffer.from(objects.get(name).data)];
     },
-    async delete() {
+    async delete(opts = {}) {
+      if (opts.ifGenerationMatch !== undefined && objects.has(name) &&
+          objects.get(name).generation !== opts.ifGenerationMatch) throw pre412();
       objects.delete(name);
     },
     async exists() {
@@ -61,8 +68,8 @@ function fakeBucket() {
   };
 }
 
-function setup({ running = 0, runJobFails = false, executions = {} } = {}) {
-  const bucket = fakeBucket();
+function setup({ running = 0, runJobFails = false, executions = {}, failSave } = {}) {
+  const bucket = fakeBucket({ failSave });
   const launched = [];
   L._inject({
     storage: { bucket: () => bucket },
@@ -74,8 +81,10 @@ function setup({ running = 0, runJobFails = false, executions = {} } = {}) {
       },
     },
     execs: {
+      // A launched execution is listed as running, as the platform lists it.
       async listExecutions() {
-        return [Array.from({ length: running }, () => ({ completionTime: null }))];
+        return [Array.from({ length: running + launched.length },
+                           () => ({ completionTime: null }))];
       },
       async getExecution({ name }) {
         const short = name.split("/").pop();
@@ -139,7 +148,9 @@ test("two concurrent starts of one id launch one execution", async () => {
   upload(bucket, ID_A);
   const codes = (await Promise.all([call(start, { runId: ID_A }),
                                     call(start, { runId: ID_A })])).map((r) => r.code);
-  assert.deepStrictEqual(codes.sort(), [202, 409]);
+  // The loser meets the start lease (429) or the run-id claim (409); either way one runs.
+  assert.strictEqual(codes.filter((c) => c === 202).length, 1, String(codes));
+  assert.ok(codes.every((c) => [202, 409, 429].includes(c)), String(codes));
   assert.strictEqual(launched.length, 1);
 });
 
@@ -170,6 +181,45 @@ test("/api/runs reads the same slots /api/start fills", async () => {
   await call(start, { runId: ID_B });
   const r = await call(runs, { name: "clip.mp4", size: 10, type: "video/mp4" });
   assert.strictEqual(r.code, 429);
+});
+
+test("two starts for different ids cannot both take the last free slot", async () => {
+  const { bucket, launched } = setup({ running: Number(L.MAX_CONCURRENT) - 1 });
+  upload(bucket, ID_A);
+  upload(bucket, ID_B);
+  const codes = (await Promise.all([call(start, { runId: ID_A }),
+                                    call(start, { runId: ID_B })])).map((r) => r.code);
+  assert.deepStrictEqual(codes.sort(), [202, 429]);
+  assert.strictEqual(launched.length, 1);
+  assert.ok(!bucket.objects.has(L.START_LEASE), "the lease is released after the start");
+});
+
+test("a storage error while reserving the slot leaves the id startable", async () => {
+  const { bucket, launched } = setup({ failSave: (n) => n.startsWith("web/_slots/") });
+  upload(bucket, ID_A);
+  assert.strictEqual((await call(start, { runId: ID_A })).code, 500);
+  assert.ok(!bucket.objects.has(`web/${ID_A}/started.json`));
+  assert.strictEqual(launched.length, 0);
+});
+
+test("a started.json write that landed and then errored is handed back", async () => {
+  const { bucket } = setup({ failSave: (n) => n.endsWith("started.json") });
+  upload(bucket, ID_A);
+  assert.strictEqual((await call(start, { runId: ID_A })).code, 500);
+  assert.ok(!bucket.objects.has(`web/${ID_A}/started.json`));
+});
+
+test("a fresh lease blocks a start; one left by a dead start is taken over", async () => {
+  const { bucket, launched } = setup();
+  upload(bucket, ID_A);
+  const lease = (at) => bucket.objects.set(L.START_LEASE, {
+    data: JSON.stringify({ at: new Date(at).toISOString() }), size: 1, generation: 999 });
+  lease(Date.now());
+  assert.strictEqual((await call(start, { runId: ID_A })).code, 429);
+  assert.ok(!bucket.objects.has(`web/${ID_A}/started.json`));
+  lease(Date.now() - 10 * 60 * 1000);
+  assert.strictEqual((await call(start, { runId: ID_A })).code, 202);
+  assert.strictEqual(launched.length, 1);
 });
 
 // ---------------------------------------------------------------- F-05
