@@ -492,16 +492,20 @@ def detect_shots(hists: np.ndarray, flows: np.ndarray,
     sets and asked to fit them as one, and the result is a smear. The Nicosia clip
     had a 180-frame jump at keyframe 11 that nothing in S1 noticed.
 
-    Cuts are found by colour-histogram correlation between consecutive analysed
-    frames, which survives motion blur and exposure ramps far better than a flow
-    threshold; the flow array is used only to confirm.
+    Histogram correlation catches most cuts. A large flow jump catches an edit
+    between visually similar scenes, provided the histogram also changed. A fast
+    camera move through the same scene is not enough on its own.
     """
     n = len(hists)
+    flows = np.asarray(flows, float)
+    good = flows[np.isfinite(flows) & (flows > 0)]
+    typical = float(np.median(good)) if len(good) else 0.0
+    flow_cut = max(10.0, 6.0 * typical)
     cuts = []
     for i in range(1, n):
         c = cv2.compareHist(hists[i - 1].astype(np.float32),
                             hists[i].astype(np.float32), cv2.HISTCMP_CORREL)
-        if c < corr_thr:
+        if c < corr_thr or (c < 0.9 and flows[i] > flow_cut):
             cuts.append(i)
     bounds = [0] + cuts + [n]
     return [(bounds[i], bounds[i + 1]) for i in range(len(bounds) - 1)]

@@ -90,7 +90,7 @@ t2 = t[:50] + [t[49] + 0.2 + i * 2 / 30.0 for i in range(50)]
 check("a real gap is still flagged", _is_vfr(t2, 30.0, 2) is True)
 
 print("\nT3b: keyframe selection never leaves a hole in the chain")
-from ingest.video_ingest import select_keyframes  # noqa: E402
+from ingest.video_ingest import detect_shots, select_keyframes  # noqa: E402
 n = 300
 flows = np.full(n, 1.0)                                  # steady forward motion
 scores = np.random.default_rng(1).uniform(900, 1000, n)
@@ -112,6 +112,17 @@ bad = np.ones(n, bool); bad[100:200] = False
 sel1, _ = select_keyframes(np.ones(n, bool), bad, flows, scores, 4.0, 1000)
 check("a frame that is not usable (a slate, or all sky) is never taken",
       not any(100 <= s < 200 for s in sel1))
+
+print("\nT3c: a high-flow edit is a shot boundary")
+before = np.array([1, 2, 3, 4], np.float32)
+after = np.array([1, 2, 4, 3], np.float32)
+hist = np.stack([before] * 3 + [after] * 3)
+flow = np.array([0, 2, 2, 52, 2, 2], float)
+check("an edit with histogram correlation above 0.55 still splits",
+      detect_shots(hist, flow) == [(0, 3), (3, 6)],
+      str(detect_shots(hist, flow)))
+check("fast motion alone does not split a shot",
+      detect_shots(np.stack([before] * 6), flow) == [(0, 6)])
 
 print("\nT4: the threaded scan scores exactly what the sequential one does")
 try:
