@@ -89,6 +89,30 @@ check("the old comparison would have called it variable", _is_vfr(t, 30.0, 1) is
 t2 = t[:50] + [t[49] + 0.2 + i * 2 / 30.0 for i in range(50)]
 check("a real gap is still flagged", _is_vfr(t2, 30.0, 2) is True)
 
+print("\nT3b: keyframe selection never leaves a hole in the chain")
+from ingest.video_ingest import select_keyframes  # noqa: E402
+n = 300
+flows = np.full(n, 1.0)                                  # steady forward motion
+scores = np.random.default_rng(1).uniform(900, 1000, n)
+ok = np.ones(n, bool)
+ok[80:146] = False                                       # the demo's sky-gated stretch
+ok[240:306] = False                                      # and its blur-gated one
+sel, bridged = select_keyframes(ok, np.ones(n, bool), flows, scores, 4.0, 1000)
+gaps = np.diff(sel)
+check("with the gates alone the stretches would be empty",
+      not ok[80:146].any() and not ok[240:306].any())
+check("no gap between keyframes passes 1.5 budgets", gaps.max() <= 6, f"max gap {gaps.max()}")
+check("the stretches are bridged, and only they", bridged > 0 and
+      all(not ok[s] for s in sel[1:] if 80 <= s < 146 or 240 <= s < 306)
+      and bridged == sum(1 for s in sel[1:] if not ok[s]), f"{bridged} bridged")
+sel0, b0 = select_keyframes(np.ones(n, bool), np.ones(n, bool), flows, scores, 4.0, 1000)
+check("a clip the gates pass whole is picked every budget, nothing bridged",
+      b0 == 0 and set(np.diff(sel0)) == {4}, f"{set(np.diff(sel0))}, {b0} bridged")
+bad = np.ones(n, bool); bad[100:200] = False
+sel1, _ = select_keyframes(np.ones(n, bool), bad, flows, scores, 4.0, 1000)
+check("a frame that is not usable (a slate, or all sky) is never taken",
+      not any(100 <= s < 200 for s in sel1))
+
 print("\nT4: the threaded scan scores exactly what the sequential one does")
 try:
     import tempfile

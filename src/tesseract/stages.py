@@ -99,7 +99,7 @@ class Screen(BaseStage):
 @dataclass
 class Ingest(BaseStage):
     id: str = "S1-ingest"
-    version: str = "2"          # clears old keyframes; letterbox crop; faster scoring
+    version: str = "3"          # gated stretches are bridged, never left as holes
     needs: tuple = ()
     produces: tuple = ("keyframes",)
     levels: tuple = ("L0", "L1", "L2", "L3", "L4")

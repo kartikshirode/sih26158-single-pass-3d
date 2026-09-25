@@ -525,6 +525,41 @@ class IngestResult:
     stats: dict = field(default_factory=dict)
 
 
+def select_keyframes(ok, usable, flows, scores, flow_budget: float, target: int, *,
+                     bridge: float = 1.5) -> tuple[np.ndarray, int]:
+    """
+    Keyframes along the clip: a frame that passed the gates (`ok`) once the flow since
+    the last keyframe reaches `flow_budget`. Where none arrives before `bridge` budgets,
+    the sharpest `usable` frame past one budget is taken, so the chain of shared views
+    never breaks. Returns the indices and how many were bridged.
+    """
+    ok, usable = np.asarray(ok, bool), np.asarray(usable, bool)
+    scores = np.asarray(scores, float)
+    cum = np.cumsum(np.asarray(flows, float))
+    first = np.flatnonzero(ok)
+    if not len(first):
+        return np.zeros(0, int), 0
+    last = int(first[0])
+    selected, bridged = [last], 0
+    for j in np.flatnonzero(usable):
+        if j <= last:
+            continue
+        gap = cum[j] - cum[last]
+        if ok[j] and gap >= flow_budget:
+            last = int(j)
+        elif gap >= bridge * flow_budget:
+            span = np.arange(last + 1, j + 1)
+            span = span[usable[span] & (cum[span] - cum[last] >= flow_budget)]
+            last = int(span[np.argmax(scores[span])])
+            bridged += 1
+        else:
+            continue
+        selected.append(last)
+        if len(selected) >= target:
+            break
+    return np.asarray(selected), bridged
+
+
 def ingest_video(path: str, *, target_keyframes: int = 600,
                  blur_reject_pct: float = 25.0, max_sky: float = 0.15,
                  horizon_policy: str = "reject", single_shot: bool = True,
@@ -532,6 +567,7 @@ def ingest_video(path: str, *, target_keyframes: int = 600,
                  analyse_scale: float = 0.25, analyse_every: int | None = None,
                  flow_method: str = "dis", workers: int | None = None,
                  min_flow_px: float = 1.0, srt_path: str | None = None,
+                 bridge: float = 1.5, bridge_max_sky: float = 0.5,
                  progress: bool = True) -> IngestResult:
     """
     Decode `path`, score every frame, and return the selected keyframes.
@@ -547,7 +583,8 @@ def ingest_video(path: str, *, target_keyframes: int = 600,
       3. drop frames that are mostly sky or blown out by flare         (max_sky)
       4. drop the blurriest `blur_reject_pct` (percentile, not a constant)
       5. require accumulated optical flow between consecutive keyframes, so each
-         pair carries real baseline instead of being near-duplicates
+         pair carries real baseline instead of being near-duplicates, and bridge any
+         stretch the gates emptied with its sharpest frame              (bridge)
 
     `analyse_every` scores one frame in N (all are still decoded, which the codec needs
     anyway); flow is then measured between the scored frames, so the accumulated
@@ -662,17 +699,18 @@ def ingest_video(path: str, *, target_keyframes: int = 600,
             "every frame rejected. Check out/screen.json - this clip is probably "
             "not a survey pass (horizon in frame, or mostly sky).")
 
-    # 5. baseline budget
+    # 5. baseline budget, and no hole in the chain. The gates used to be absolute: on
+    #    the demo clip the sky gate dropped frames 82-144 (pale sand read as sky, 0.15
+    #    to 0.19 against 0.15) and the percentile blur gate dropped 240-306, a stretch
+    #    that was only less textured. Each hole cut the chain of shared views, and the
+    #    poses on either side came out as separate pieces. Now a gated frame is only
+    #    preferred: once the flow since the last keyframe passes `bridge` budgets with no
+    #    frame passing the gates, the sharpest frame past one budget is taken instead.
     need = max(len(idx_ok) / max(target_keyframes, 1), 1.0)
     flow_budget = max(np.median(flows[idx_ok]) * need, min_flow_px)
-    selected, acc = [int(idx_ok[0])], 0.0
-    for j in idx_ok[1:]:
-        acc += flows[j]
-        if acc >= flow_budget:
-            selected.append(int(j)); acc = 0.0
-        if len(selected) >= target_keyframes:
-            break
-    selected = np.asarray(selected)
+    usable = in_shot & ~slates & (skies <= max(bridge_max_sky, max_sky))
+    selected, bridged = select_keyframes(ok, usable, np.where(in_shot, flows, 0.0), scores,
+                                         flow_budget, target_keyframes, bridge=bridge)
 
     srt = srt_path or (os.path.splitext(path)[0] + ".SRT")
     tel_all = parse_dji_srt(srt)
@@ -702,6 +740,7 @@ def ingest_video(path: str, *, target_keyframes: int = 600,
         "rejected_blur": int((scores < blur_thr).sum()),
         "median_sky_fraction": round(float(np.median(skies[in_shot])), 3),
         "flow_budget_px": round(float(flow_budget), 2),
+        "bridged_keyframes": int(bridged),
         "has_gps_sidecar": bool(tel_all), "srt_records": len(tel_all),
     }
     # Second pass for the frames that survive. Only these are needed at full
