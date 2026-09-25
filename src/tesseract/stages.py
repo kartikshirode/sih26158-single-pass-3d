@@ -139,9 +139,16 @@ class Ingest(BaseStage):
             if old.startswith("kf_") and old.endswith(".jpg"):
                 os.remove(os.path.join(os.path.dirname(outdir), old))
         import cv2
-        for i, (fi, img) in enumerate(zip(r.keyframe_indices, r.frames)):
+        from concurrent.futures import ThreadPoolExecutor
+
+        # JPEG encoding releases the GIL; 600 1080p keyframes took ~10 s on one thread.
+        def write(job):
+            i, fi, img = job
             cv2.imwrite(ctx.path("keyframes", f"kf_{i:03d}_f{fi:05d}.jpg"), img,
                         [int(cv2.IMWRITE_JPEG_QUALITY), 95])
+        with ThreadPoolExecutor(max_workers=8) as ex:
+            list(ex.map(write, [(i, int(fi), img) for i, (fi, img) in
+                                enumerate(zip(r.keyframe_indices, r.frames))]))
         rel = "ingest.json"
         with io.open(ctx.path(rel), "w", encoding="utf-8") as f:
             json.dump({"stats": r.stats, "keyframes": [int(x) for x in r.keyframe_indices],

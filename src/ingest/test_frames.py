@@ -89,6 +89,38 @@ check("the old comparison would have called it variable", _is_vfr(t, 30.0, 1) is
 t2 = t[:50] + [t[49] + 0.2 + i * 2 / 30.0 for i in range(50)]
 check("a real gap is still flagged", _is_vfr(t2, 30.0, 2) is True)
 
+print("\nT4: the threaded scan scores exactly what the sequential one does")
+try:
+    import tempfile
+    from fractions import Fraction
+
+    import av
+    from ingest.video_ingest import _scan, _scan_parallel
+except ImportError as e:                      # CI installs av
+    print(f"  SKIP  threaded scan: {e}")
+else:
+    clip = os.path.join(tempfile.mkdtemp(), "cfr.mp4")
+    out = av.open(clip, "w")
+    st = out.add_stream("mpeg4", rate=30)
+    st.width, st.height, st.pix_fmt = 320, 180, "yuv420p"
+    base = np.random.default_rng(0).integers(0, 255, (360, 640, 3), dtype=np.uint8)
+    for i in range(300):                                  # 10 s, panning texture
+        fr = av.VideoFrame.from_ndarray(np.ascontiguousarray(
+            base[i % 150:i % 150 + 180, 2 * i % 300:2 * i % 300 + 320]), format="rgb24")
+        for pk in st.encode(fr):
+            out.mux(pk)
+    for pk in st.encode():
+        out.mux(pk)
+    out.close()
+    kw = dict(analyse_scale=0.25, every=2, flow_method="dis", skip_start_s=1.0, end_s=9.0)
+    seq = _scan(clip, 320, 180, 30.0, skip_n=30, end_n=270, **kw)
+    par = _scan_parallel(clip, 320, 180, 30.0, 3, **kw)
+    same = par is not None and all(
+        np.allclose(np.asarray(seq[k], float), np.asarray(par[k], float))
+        for k in ("n", "score", "sky", "flow"))
+    check("three threads score the same frames with the same flow as one pass", same,
+          "fell back" if par is None else f"{len(par['n'])} vs {len(seq['n'])} frames")
+
 print()
 if FAILED:
     print(f"{len(FAILED)} TEST(S) FAILED: {FAILED}")
