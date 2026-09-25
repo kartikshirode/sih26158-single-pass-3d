@@ -99,27 +99,41 @@ try:
 except ImportError as e:                      # CI installs av
     print(f"  SKIP  threaded scan: {e}")
 else:
-    clip = os.path.join(tempfile.mkdtemp(), "cfr.mp4")
-    out = av.open(clip, "w")
-    st = out.add_stream("mpeg4", rate=30)
-    st.width, st.height, st.pix_fmt = 320, 180, "yuv420p"
-    base = np.random.default_rng(0).integers(0, 255, (360, 640, 3), dtype=np.uint8)
-    for i in range(300):                                  # 10 s, panning texture
-        fr = av.VideoFrame.from_ndarray(np.ascontiguousarray(
-            base[i % 150:i % 150 + 180, 2 * i % 300:2 * i % 300 + 320]), format="rgb24")
-        for pk in st.encode(fr):
+    def encode(first_pts: int) -> str:
+        """10 s of panning texture at 30 fps, the first frame at `first_pts` / 30 s."""
+        clip = os.path.join(tempfile.mkdtemp(), f"cfr{first_pts}.mp4")
+        out = av.open(clip, "w")
+        st = out.add_stream("mpeg4", rate=30)
+        st.width, st.height, st.pix_fmt = 320, 180, "yuv420p"
+        st.codec_context.time_base = Fraction(1, 30)
+        base = np.random.default_rng(0).integers(0, 255, (360, 640, 3), dtype=np.uint8)
+        for i in range(300):
+            fr = av.VideoFrame.from_ndarray(np.ascontiguousarray(
+                base[i % 150:i % 150 + 180, 2 * i % 300:2 * i % 300 + 320]),
+                format="rgb24")
+            fr.pts, fr.time_base = first_pts + i, Fraction(1, 30)
+            for pk in st.encode(fr):
+                out.mux(pk)
+        for pk in st.encode():
             out.mux(pk)
-    for pk in st.encode():
-        out.mux(pk)
-    out.close()
+        out.close()
+        return clip
+
     kw = dict(analyse_scale=0.25, every=2, flow_method="dis", skip_start_s=1.0, end_s=9.0)
-    seq = _scan(clip, 320, 180, 30.0, skip_n=30, end_n=270, **kw)
-    par = _scan_parallel(clip, 320, 180, 30.0, 3, **kw)
-    same = par is not None and all(
-        np.allclose(np.asarray(seq[k], float), np.asarray(par[k], float))
-        for k in ("n", "score", "sky", "flow"))
-    check("three threads score the same frames with the same flow as one pass", same,
-          "fell back" if par is None else f"{len(par['n'])} vs {len(seq['n'])} frames")
+    # A first timestamp of two frames put t - t_first just under 1.0 s, and the
+    # sequential scan then started one frame later than the threaded one (audit 2).
+    for first_pts in (0, 2):
+        clip = encode(first_pts)
+        seq = _scan(clip, 320, 180, 30.0, skip_n=30, end_n=270, **kw)
+        par = _scan_parallel(clip, 320, 180, 30.0, 3, **kw)
+        same = par is not None and all(
+            np.allclose(np.asarray(seq[k], float), np.asarray(par[k], float))
+            for k in ("n", "score", "sky", "flow"))
+        check(f"first timestamp {first_pts}: three threads score the same frames with "
+              "the same flow as one pass", same,
+              "fell back" if par is None else
+              f"{len(par['n'])} vs {len(seq['n'])} frames, first {seq['n'][:2]} vs "
+              f"{par['n'][:2]}")
 
 print()
 if FAILED:

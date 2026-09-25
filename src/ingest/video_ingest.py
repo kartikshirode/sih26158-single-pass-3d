@@ -712,8 +712,11 @@ def ingest_video(path: str, *, target_keyframes: int = 600,
     # The analysis copies are done with; on the 10-minute test clip they and the full
     # frames together peaked at 11.8 GB.
     del smalls, sub
-    full = (_decode_frames_parallel(path, want, crop, fps, workers) if workers > 1
-            else None) or _decode_frames(path, want, crop)
+    # After a parallel scan the frame numbers come from timestamps, so the sequential
+    # fallback must number frames the same way, not by decode count (audit 2).
+    full = ((_decode_frames_parallel(path, want, crop, fps, workers) or
+             _decode_frames(path, want, crop, pts_fps=fps)) if workers > 1
+            else _decode_frames(path, want, crop))
     return IngestResult(keyframe_indices=want, frames=[full[i] for i in want],
                         telemetry=telemetry, stats=stats)
 
@@ -766,11 +769,15 @@ def _scan(path, W, H, fps, *, analyse_scale, every, flow_method, skip_start_s, e
     container.streams.video[0].thread_type = "AUTO"
     dis, prev, n, in_range = _new_dis(flow_method), None, 0, 0
     size = (int(W * analyse_scale), int(H * analyse_scale))
+    # A microsecond of slack on both limits: with a first timestamp other than 0,
+    # t - t_first lands just under whole seconds, and the frame at exactly 1.0 s failed
+    # "t >= 1.0" here while _scan_parallel's frame numbers counted it (audit 2).
+    eps = 1e-6
     for n, frame, t_rel in timed_frames(container):
-        if end_s and (t_rel >= end_s if t_rel is not None else n >= end_n):
+        if end_s and (t_rel >= end_s - eps if t_rel is not None else n >= end_n):
             n += 1
             break
-        if (t_rel >= skip_start_s) if t_rel is not None else (n >= skip_n):
+        if (t_rel >= skip_start_s - eps) if t_rel is not None else (n >= skip_n):
             in_range += 1
             if (in_range - 1) % max(every, 1) == 0:
                 small = cv2.resize(frame.to_ndarray(format="bgr24"), size)
@@ -856,6 +863,7 @@ def _scan_parallel(path, W, H, fps, workers, *, analyse_scale, every, flow_metho
         s.thread_type = "AUTO"
         s.codec_context.thread_count = 2
         dis, prev, seen, last = _new_dis(flow_method), None, 0, -1
+        need_ref = lo > n_skip
         try:
             target = t_first + max(first - 1, 0) / fps
             cont.seek(int(target / tb), stream=s, backward=True, any_frame=False)
@@ -880,6 +888,10 @@ def _scan_parallel(path, W, H, fps, workers, *, analyse_scale, every, flow_metho
                 if n < lo:                                    # the flow reference only
                     prev = gray
                     continue
+                if need_ref and prev is None:
+                    # The seek landed past the reference frame, so this segment's
+                    # first flow would silently read 0. Fall back (audit 2).
+                    return None
                 vals = _score(small, gray, prev, dis)
                 for k, v in zip(_SCAN_KEYS, (n, t_rel) + vals + (small,)):
                     out[k].append(v)
@@ -974,7 +986,7 @@ def _decode_frames_parallel(path, indices, crop, fps, workers) -> dict | None:
     return {k: v for p in parts for k, v in p.items()}
 
 
-def _decode_frames(path, indices, crop=(0.0, 0.0, 0.0, 0.0)):
+def _decode_frames(path, indices, crop=(0.0, 0.0, 0.0, 0.0), pts_fps=None):
     """Decode exactly `indices` (original frame numbers) at full resolution, cropped.
 
     Each frame is cropped as it is decoded and kept as its own copy. A crop is a
@@ -987,18 +999,21 @@ def _decode_frames(path, indices, crop=(0.0, 0.0, 0.0, 0.0)):
     import av
 
     want = set(int(i) for i in indices)
-    out, n = {}, 0
+    out, n, t_first = {}, 0, None
     container = av.open(path)
     container.streams.video[0].thread_type = "AUTO"
     try:
-        for frame in container.decode(video=0):
+        for i, frame in enumerate(container.decode(video=0)):
+            n = i
+            if pts_fps and frame.time is not None:          # number frames by timestamp
+                t_first = frame.time if t_first is None else t_first
+                n = int(round((frame.time - t_first) * pts_fps))
             if n in want:
                 # .copy(), not ascontiguousarray: a top-and-bottom crop is already
                 # contiguous, so that returned the view and kept the frame alive.
                 out[n] = apply_crop(frame.to_ndarray(format="bgr24"), crop).copy()
                 if len(out) == len(want):
                     break
-            n += 1
     finally:
         container.close()
     missing = want - set(out)
