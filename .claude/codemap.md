@@ -836,3 +836,13 @@ Gotcha: point Codex at it with `codex exec -s workspace-write "Read audit/codex/
 ### audit/codex/CONTEXT.md
 Reference facts for that audit: PS targets and status, architecture and the three runtimes, contracts and invariants (frames, scale, georef maths, harness, telemetry, orchestrator, web path, residency), known issues not to re-report, ten unverified leads, the local environment and baseline test results as of 2026-09-24, and a risk-ranked file list.
 Gotcha: the baseline and known-issue tables are dated snapshots; refresh them before reusing the prompt after the code moves.
+
+## audit/codex-opt/
+
+### audit/codex-opt/PROMPT.md
+Instructions for a Codex audit and optimisation run on the local GPU pipeline: target a 10-minute 1080p30 clip in under 15 min (ratio 1.5, short clips at the same ratio); phases 0 machine check, 1 baseline plus a new held-out view check (tools/view_check.py), 2 research (RESEARCH.md), 3 audit of the new local GPU code, 4 optimise (quality first, keep rules with numeric tolerances), 5 final measurement, 6 write-up (research/11, ADRs, REPORT.md). Commits on branch codex-opt only; installs logged and capped at 15 GB; no cloud, no push, no .env.
+Gotcha: launch from the repo root with a sandbox that can run the GPU tools and git, e.g. `codex exec -s danger-full-access "Read audit/codex-opt/PROMPT.md and follow it exactly."`; it expects CONTEXT.md beside it and writes RUNLOG.md, RESEARCH.md and REPORT.md there.
+
+### audit/codex-opt/CONTEXT.md
+Facts for that run as of 2026-09-26 (commit 254aa0d): PS targets and weights, the current S3 chain and the demo's stage times, what is still wrong, what was already tried, benchmarks B1-B5 with scaled budgets (demo 28 s, nicosia 60 s, test_flight 30 s, 10-min 900 s), the machine and tool paths, licence and data rules, out-of-scope items (the GC-1 files, the web path, master).
+Gotcha: stage times and shape numbers are the demo_gpu2 snapshot; refresh before reusing after the code moves.
