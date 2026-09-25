@@ -1,0 +1,370 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>__TITLE__</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+:root{
+  --ground:#0b0e10; --panel:#12161a; --panel-2:#171c21; --line:#232b31;
+  --ink:#e3e8ea; --ink-2:#a9b4ba; --muted:#78848b;
+  --amber:#e3a13c; --teal:#4fb8a0; --red:#e0675c;
+  --mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+  --sans:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--ground);color:var(--ink);font-family:var(--sans);
+     font-size:14px;line-height:1.5}
+.wrap{max-width:1280px;margin:0 auto;padding:24px 16px 48px}
+.eyebrow{font-family:var(--mono);font-size:11px;letter-spacing:.13em;
+         text-transform:uppercase;color:var(--muted)}
+h1{font-size:24px;margin:6px 0 4px;font-weight:600}
+.sub{color:var(--ink-2);font-size:13px;margin:0}
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin:18px 0 22px}
+.chip{background:var(--panel);border:1px solid var(--line);border-radius:4px;padding:8px 12px}
+.chip .k{display:block;font-family:var(--mono);font-size:10.5px;letter-spacing:.1em;
+         text-transform:uppercase;color:var(--muted)}
+.chip .v{font-family:var(--mono);font-size:15px;font-variant-numeric:tabular-nums}
+.chip .v.good{color:var(--teal)} .chip .v.warn{color:var(--amber)}
+
+.viewer{position:relative;height:66vh;min-height:380px;background:var(--panel);
+        border:1px solid var(--line);border-radius:4px;overflow:hidden}
+canvas{display:block;width:100%;height:100%;cursor:grab}
+canvas.drag{cursor:grabbing}
+.dock{position:absolute;left:12px;bottom:12px;right:12px;display:flex;gap:6px;
+      flex-wrap:wrap;align-items:center}
+button{font-family:var(--mono);font-size:11px;color:var(--ink-2);
+       background:rgba(18,22,26,.92);border:1px solid var(--line);border-radius:3px;
+       padding:7px 11px;cursor:pointer}
+button:hover{border-color:#3a444b;color:var(--ink)}
+button[aria-pressed="true"]{border-color:var(--amber);color:var(--amber)}
+button:focus-visible{outline:2px solid var(--teal);outline-offset:2px}
+.sep{width:1px;height:20px;background:var(--line);margin:0 3px}
+.hud{position:absolute;right:12px;top:10px;font-family:var(--mono);font-size:11px;
+     color:var(--muted);text-align:right}
+.hint{position:absolute;left:12px;top:10px;font-size:11.5px;color:var(--muted)}
+
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,560px),1fr));
+      gap:16px;margin-top:16px}
+section.card{background:var(--panel);border:1px solid var(--line);border-radius:4px;
+             padding:16px;min-width:0}
+h2{font-family:var(--mono);font-size:11px;letter-spacing:.13em;text-transform:uppercase;
+   color:var(--muted);margin:0 0 12px;font-weight:500}
+h3{font-size:12.5px;color:var(--ink-2);margin:16px 0 8px;font-weight:500}
+table{width:100%;border-collapse:collapse;font-size:12.5px}
+th{text-align:left;font-weight:500;color:var(--muted);font-size:11px;
+   border-bottom:1px solid var(--line);padding:5px 6px}
+td{border-bottom:1px solid var(--line);padding:6px;vertical-align:top}
+td.n{font-family:var(--mono);text-align:right;font-variant-numeric:tabular-nums;
+     white-space:nowrap}
+td.id{font-family:var(--mono);white-space:nowrap}
+.barcell{position:relative;min-width:90px}
+.bar{height:8px;background:var(--amber);opacity:.75;border-radius:2px;margin-top:5px}
+.facts{color:var(--muted);font-size:11.5px}
+.code{display:inline-block;font-family:var(--mono);font-size:10.5px;padding:1px 6px;
+      border:1px solid var(--line);border-radius:3px;color:var(--amber);margin:1px 3px 1px 0}
+.skip{color:var(--muted);font-style:italic}
+.kv{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px 12px;margin:0;font-size:12.5px}
+.kv dt{color:var(--muted);overflow-wrap:anywhere}
+.kv dd{margin:0;font-family:var(--mono);text-align:right;color:var(--ink-2);
+       overflow-wrap:anywhere}
+.pill{font-family:var(--mono);font-size:11px;padding:2px 8px;border-radius:10px;
+      white-space:nowrap;border:1px solid}
+.pill.met{color:var(--teal);border-color:var(--teal)}
+.pill.not{color:var(--red);border-color:var(--red)}
+.pill.na{color:var(--muted);border-color:var(--line)}
+ul{margin:6px 0 0;padding-left:18px;color:var(--ink-2);font-size:12.5px}
+a{color:var(--teal)}
+.scroll{overflow-x:auto}
+.kfs{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:8px}
+.kfs a{display:block;text-decoration:none;color:var(--muted);font-family:var(--mono);
+       font-size:10.5px}
+.kfs img{width:100%;aspect-ratio:16/9;object-fit:cover;display:block;border-radius:3px;
+         background:var(--panel-2)}
+.note{font-size:12.5px;color:var(--ink-2);border-left:2px solid var(--amber);
+      padding-left:12px;margin:16px 0 0}
+@media (max-width:640px){ .viewer{height:56vh} h1{font-size:20px} }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="eyebrow">SIH26158 &middot; Tesseract run</div>
+  <h1 id="title"></h1>
+  <p class="sub" id="sub"></p>
+  <div class="chips" id="chips"></div>
+
+  <div class="viewer">
+    <canvas id="gl"></canvas>
+    <div class="hint">drag to orbit &middot; shift-drag or right-drag to pan &middot; wheel to zoom</div>
+    <div class="hud" id="hud"></div>
+    <div class="dock">
+      <button id="bMesh" aria-pressed="true">mesh</button>
+      <button id="bPts" aria-pressed="false">points</button>
+      <button id="bCam" aria-pressed="true">flight path</button>
+      <span class="sep"></span>
+      <button data-view="plan">plan</button>
+      <button data-view="oblique">oblique</button>
+      <button data-view="low">low angle</button>
+      <button data-view="along">along track</button>
+    </div>
+  </div>
+
+  <div class="grid">
+    <section class="card">
+      <h2>Stages</h2>
+      <div class="scroll"><table id="stages"></table></div>
+    </section>
+    <section class="card">
+      <h2>3D step (S3, local GPU)</h2>
+      <div class="scroll"><table id="s3"></table></div>
+      <h3>Sparse model after bundle adjustment</h3>
+      <dl class="kv" id="sparse"></dl>
+    </section>
+    <section class="card">
+      <h2>PS targets</h2>
+      <div class="scroll"><table id="verdicts"></table></div>
+      <h3>Codes raised</h3>
+      <div class="scroll"><table id="codes"></table></div>
+    </section>
+    <section class="card">
+      <h2>Screen (S0)</h2>
+      <dl class="kv" id="screen"></dl>
+      <h3>Why the raw clip would be refused</h3>
+      <ul id="reasons"></ul>
+      <p class="facts" id="screenNote"></p>
+    </section>
+    <section class="card">
+      <h2>Ingest (S1)</h2>
+      <dl class="kv" id="ingest"></dl>
+    </section>
+    <section class="card">
+      <h2>Level (S5b) and height map (S6)</h2>
+      <dl class="kv" id="level"></dl>
+      <h3>dsm.tif</h3>
+      <dl class="kv" id="dsm"></dl>
+    </section>
+  </div>
+
+  <section class="card" style="margin-top:16px">
+    <h2>Files</h2>
+    <div class="scroll"><table id="files"></table></div>
+  </section>
+
+  <section class="card" style="margin-top:16px">
+    <h2 id="kfTitle">Keyframes</h2>
+    <div class="kfs" id="kfs"></div>
+  </section>
+
+  <p class="note" id="caveat"></p>
+</div>
+
+<script>
+const D = __DATA__, R = __RUN__;
+const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const fmt = v => typeof v === 'number'
+  ? (Number.isInteger(v) ? v.toLocaleString() : v.toLocaleString(undefined,{maximumFractionDigits:3}))
+  : typeof v === 'boolean' ? (v ? 'yes' : 'no') : esc(v);
+const kv = (el, rows) => el.innerHTML = (rows||[]).map(r =>
+  '<dt>'+esc(String(r[0]).replace(/_/g,' '))+'</dt><dd>'+fmt(r[1])+'</dd>').join('');
+const bytes = b => b > 1e6 ? (b/1e6).toFixed(1)+' MB' : b > 1e3 ? (b/1e3).toFixed(0)+' kB' : b+' B';
+
+// ---- summary ----------------------------------------------------------------
+$('title').textContent = R.run_id;
+$('sub').textContent = [R.source, R.started, 'git ' + R.git, 'config ' + R.config,
+  (R.host.platform||'') + ', ' + (R.host.cpu_count||'?') + ' CPUs'].join('  ·  ');
+const chips = [
+  ['Total time', R.seconds.toFixed(1) + ' s of ' + R.budget.toFixed(0) + ' s', R.within ? 'good' : 'warn'],
+  ['Level', R.level + ' ' + R.quality, ''],
+  ['Units', R.units, R.units === 'metres' ? 'good' : 'warn'],
+  ['Georeferenced', R.georef ? 'yes' : 'no', R.georef ? 'good' : 'warn'],
+  ['Dense points', D.np_full.toLocaleString(), ''],
+  ['Mesh triangles', D.nt_full ? D.nt_full.toLocaleString() : 'none', ''],
+  ['Keyframes', R.keyframes.length.toLocaleString(), ''],
+];
+$('chips').innerHTML = chips.map(c => '<div class="chip"><span class="k">'+c[0]+
+  '</span><span class="v '+c[2]+'">'+esc(c[1])+'</span></div>').join('');
+
+// ---- tables -----------------------------------------------------------------
+const maxS = Math.max(...R.stages.map(s => s.seconds), 1e-9);
+$('stages').innerHTML = '<tr><th>Stage</th><th>Seconds</th><th></th><th>Outcome</th></tr>' +
+  R.stages.map(s => '<tr><td class="id">'+esc(s.id)+'</td><td class="n">'+s.seconds.toFixed(2)+
+    '</td><td class="barcell"><div class="bar" style="width:'+Math.max(1,100*s.seconds/maxS)+'%"></div></td><td>'+
+    (s.skipped ? '<span class="skip">skipped</span> ' : '') +
+    s.codes.map(c => '<span class="code">'+esc(c)+'</span>').join('') +
+    (s.facts.length ? '<div class="facts">'+s.facts.map(f => esc(f[0])+' '+fmt(f[1])).join(' · ')+'</div>' : '') +
+    (s.note ? '<div class="facts">'+esc(s.note)+'</div>' : '') + '</td></tr>').join('');
+
+const maxG = Math.max(...R.s3.map(s => s[1]), 1e-9);
+$('s3').innerHTML = R.s3.length
+  ? '<tr><th>Step</th><th>Seconds</th><th></th></tr>' + R.s3.map(s =>
+      '<tr><td>'+esc(s[0])+'</td><td class="n">'+s[1].toFixed(2)+'</td><td class="barcell"><div class="bar" style="width:'+
+      Math.max(1,100*s[1]/maxG)+'%"></div></td></tr>').join('') +
+    '<tr><td><b>total</b></td><td class="n"><b>'+(R.s3_total||0).toFixed(1)+'</b></td><td></td></tr>'
+  : '<tr><td class="skip">no local GPU breakdown in this run</td></tr>';
+kv($('sparse'), R.sparse);
+
+$('verdicts').innerHTML = R.verdicts.map(v => {
+  const t = String(v[1]);
+  const cls = /^met/.test(t) ? 'met' : /^not met/.test(t) ? 'not' : 'na';
+  const word = cls === 'met' ? 'met' : cls === 'not' ? 'not met' : t.split(' (')[0];
+  const why = (t.match(/\((.*)\)$/) || [,''])[1];
+  return '<tr><td>'+esc(v[0])+'</td><td><span class="pill '+cls+'">'+esc(word)+'</span>'+
+    (why ? '<div class="facts">'+esc(why)+'</div>' : '')+'</td></tr>';
+}).join('');
+$('codes').innerHTML = R.codes.map(c => '<tr><td><span class="code">'+esc(c[0])+
+  '</span></td><td>'+esc(c[1])+'</td></tr>').join('') || '<tr><td class="skip">none</td></tr>';
+
+kv($('screen'), R.screen);
+$('reasons').innerHTML = R.reasons.map(r => '<li>'+esc(r)+'</li>').join('') || '<li>none</li>';
+$('screenNote').textContent = R.screen_note ? 'Outcome: ' + R.screen_note : '';
+kv($('ingest'), R.ingest);
+kv($('level'), R.level_facts);
+kv($('dsm'), R.dsm);
+
+$('files').innerHTML = '<tr><th>Name</th><th>Path</th><th>Frame</th><th>Size</th></tr>' +
+  R.files.map(f => '<tr><td>'+esc(f.name)+'</td><td class="id"><a href="'+encodeURI(f.path)+'">'+
+    esc(f.path)+'</a></td><td class="id">'+esc(f.frame||'')+'</td><td class="n">'+bytes(f.bytes)+'</td></tr>').join('');
+
+$('kfTitle').textContent = 'Keyframes (' + R.keyframes.length + ')';
+$('kfs').innerHTML = R.keyframes.map(k => {
+  const m = k.match(/kf_(\d+)_f(\d+)/);
+  const cap = m ? '#' + (+m[1]) + '  frame ' + (+m[2]) : k;
+  return '<a href="'+encodeURI(k)+'" target="_blank"><img loading="lazy" src="'+encodeURI(k)+
+    '" alt="'+esc(cap)+'">'+esc(cap)+'</a>';
+}).join('');
+
+$('caveat').innerHTML = R.units === 'metres'
+  ? 'Scale: ' + esc(R.scale.label || '') + '.'
+  : '<b>No external ruler.</b> Lengths here are model units, not metres (' +
+    esc(R.scale.basis || 'no scale source') + '), and the model is not placed on a map. ' +
+    'The mesh is thinned to ' + D.nt.toLocaleString() + ' of ' + D.nt_full.toLocaleString() +
+    ' triangles and the cloud to ' + D.np.toLocaleString() + ' of ' + D.np_full.toLocaleString() +
+    ' points for the browser; the full-size files are in the Files table.';
+
+// ---- 3D -----------------------------------------------------------------------
+const un = s => { const b = atob(s), u = new Uint8Array(b.length);
+  for (let i=0;i<b.length;i++) u[i]=b.charCodeAt(i); return u; };
+const VP = new Int16Array(un(D.vpos).buffer), VC = un(D.vcol), IX = new Uint32Array(un(D.idx).buffer);
+const PP = new Int16Array(un(D.ppos).buffer), PC = un(D.pcol), CP = new Int16Array(un(D.cpos).buffer);
+
+const NR = new Float32Array(VP.length);
+for (let t = 0; t < IX.length; t += 3) {
+  const i0=IX[t]*3, i1=IX[t+1]*3, i2=IX[t+2]*3;
+  const ux=VP[i1]-VP[i0], uy=VP[i1+1]-VP[i0+1], uz=VP[i1+2]-VP[i0+2];
+  const vx=VP[i2]-VP[i0], vy=VP[i2+1]-VP[i0+1], vz=VP[i2+2]-VP[i0+2];
+  const nx=uy*vz-uz*vy, ny=uz*vx-ux*vz, nz=ux*vy-uy*vx;
+  for (const i of [i0,i1,i2]) { NR[i]+=nx; NR[i+1]+=ny; NR[i+2]+=nz; }
+}
+for (let i=0;i<NR.length;i+=3){ const L=Math.hypot(NR[i],NR[i+1],NR[i+2])||1;
+  NR[i]/=L; NR[i+1]/=L; NR[i+2]/=L; }
+
+const cv = $('gl');
+const gl = cv.getContext('webgl2', {antialias:true, alpha:false});
+if (!gl) { $('hud').textContent = 'WebGL2 is not available in this browser'; }
+
+function prog(vs, fs){
+  const c=(t,s)=>{const o=gl.createShader(t);gl.shaderSource(o,s);gl.compileShader(o);
+    if(!gl.getShaderParameter(o,gl.COMPILE_STATUS))console.error(gl.getShaderInfoLog(o));return o;};
+  const p=gl.createProgram(); gl.attachShader(p,c(gl.VERTEX_SHADER,vs));
+  gl.attachShader(p,c(gl.FRAGMENT_SHADER,fs)); gl.linkProgram(p); return p;
+}
+const HDR = '#version 300 es\nprecision highp float;\n';
+const pM = prog(HDR+'in vec3 aPos; in vec3 aCol; in vec3 aNrm; uniform mat4 uMVP; out vec3 vCol; out vec3 vN;'+
+  'void main(){ vCol=aCol; vN=aNrm; gl_Position=uMVP*vec4(aPos,1.0); }',
+  HDR+'in vec3 vCol; in vec3 vN; out vec4 o; uniform vec3 uLight;'+
+  'void main(){ float d=0.45+0.55*abs(dot(normalize(vN),normalize(uLight))); o=vec4(vCol*d,1.0); }');
+const pP = prog(HDR+'in vec3 aPos; in vec3 aCol; uniform mat4 uMVP; uniform float uSize; uniform vec3 uTint; uniform float uUseTint; out vec3 vCol;'+
+  'void main(){ vCol=mix(aCol,uTint,uUseTint); gl_Position=uMVP*vec4(aPos,1.0); gl_PointSize=uSize; }',
+  HDR+'in vec3 vCol; out vec4 o; void main(){ o=vec4(vCol,1.0); }');
+
+function buf(data, target){ const t=target||gl.ARRAY_BUFFER, b=gl.createBuffer();
+  gl.bindBuffer(t,b); gl.bufferData(t,data,gl.STATIC_DRAW); return b; }
+function vao(p, pos, col, nrm){
+  const v = gl.createVertexArray(); gl.bindVertexArray(v);
+  const at=(n,b,size,type,norm)=>{ const l=gl.getAttribLocation(p,n); if(l<0||!b)return;
+    gl.bindBuffer(gl.ARRAY_BUFFER,b); gl.enableVertexAttribArray(l);
+    gl.vertexAttribPointer(l,size,type,norm,0,0); };
+  at('aPos',pos,3,gl.SHORT,true); at('aCol',col,3,gl.UNSIGNED_BYTE,true);
+  if (nrm) at('aNrm',nrm,3,gl.FLOAT,false);
+  gl.bindVertexArray(null); return v;
+}
+const hasMesh = IX.length > 0;
+const vM = hasMesh ? vao(pM, buf(VP), buf(VC), buf(NR)) : null, bIX = hasMesh ? buf(IX, gl.ELEMENT_ARRAY_BUFFER) : null;
+const vP = vao(pP, buf(PP), buf(PC), null);
+const vC = D.nc ? vao(pP, buf(CP), buf(new Uint8Array(CP.length)), null) : null;
+
+let az=0.55, el=0.80, dist=2.2, panx=0, pany=0, target=null;
+const PRESETS = {plan:[0,1.5605,2.0], oblique:[0.55,0.80,2.2], low:[1.25,0.26,2.0], along:[1.5705,0.50,2.0]};
+const mul=(a,b)=>{const o=new Float32Array(16);
+  for(let i=0;i<4;i++)for(let j=0;j<4;j++){let s=0;for(let k=0;k<4;k++)s+=a[k*4+j]*b[i*4+k];o[i*4+j]=s;}return o;};
+const persp=(f,ar,n,fa)=>{const t=1/Math.tan(f/2);return new Float32Array(
+  [t/ar,0,0,0, 0,t,0,0, 0,0,(fa+n)/(n-fa),-1, 0,0,2*fa*n/(n-fa),0]);};
+const look=(e,c,u)=>{
+  const nz=v=>{const L=Math.hypot(v[0],v[1],v[2])||1;return[v[0]/L,v[1]/L,v[2]/L];};
+  const cr=(a,b)=>[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]];
+  const dt=(a,b)=>a[0]*b[0]+a[1]*b[1]+a[2]*b[2];
+  const f=nz([c[0]-e[0],c[1]-e[1],c[2]-e[2]]), r=nz(cr(f,u)), v=cr(r,f);
+  return new Float32Array([r[0],v[0],-f[0],0, r[1],v[1],-f[1],0, r[2],v[2],-f[2],0,
+    -dt(r,e),-dt(v,e),dt(f,e),1]);};
+
+let showMesh=hasMesh, showPts=!hasMesh, showCam=true;
+if (!hasMesh) { $('bMesh').disabled = true; $('bMesh').setAttribute('aria-pressed','false');
+  $('bPts').setAttribute('aria-pressed','true'); }
+const U = n => [gl.getUniformLocation(pM,n), gl.getUniformLocation(pP,n)];
+
+function draw(){
+  if (target){
+    az+=(target[0]-az)*0.16; el+=(target[1]-el)*0.16; dist+=(target[2]-dist)*0.16;
+    if (Math.abs(target[0]-az)+Math.abs(target[1]-el)+Math.abs(target[2]-dist)<2e-3) target=null;
+  }
+  const dpr=Math.min(window.devicePixelRatio||1,2);
+  const w=Math.max(1,cv.clientWidth*dpr|0), h=Math.max(1,cv.clientHeight*dpr|0);
+  if (cv.width!==w||cv.height!==h){ cv.width=w; cv.height=h; }
+  gl.viewport(0,0,w,h); gl.clearColor(0.071,0.086,0.102,1);
+  gl.enable(gl.DEPTH_TEST); gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
+  const eye=[Math.cos(el)*Math.sin(az)*dist+panx, Math.sin(el)*dist+pany, Math.cos(el)*Math.cos(az)*dist];
+  const mvp=mul(persp(0.85,w/h,0.02,60), look(eye,[panx,pany,0],[0,1,0]));
+  if (showMesh && vM){
+    gl.useProgram(pM); gl.bindVertexArray(vM);
+    gl.uniformMatrix4fv(U('uMVP')[0],false,mvp); gl.uniform3f(U('uLight')[0],0.36,0.78,0.51);
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,bIX);
+    gl.drawElements(gl.TRIANGLES, IX.length, gl.UNSIGNED_INT, 0);
+  }
+  gl.useProgram(pP); gl.uniformMatrix4fv(U('uMVP')[1],false,mvp);
+  if (showPts){
+    gl.bindVertexArray(vP); gl.uniform1f(U('uSize')[1],Math.max(1.0,1.6*dpr));
+    gl.uniform1f(U('uUseTint')[1],0.0); gl.drawArrays(gl.POINTS,0,PP.length/3);
+  }
+  if (showCam && vC){
+    gl.bindVertexArray(vC); gl.uniform3f(U('uTint')[1],0.89,0.63,0.24); gl.uniform1f(U('uUseTint')[1],1.0);
+    gl.drawArrays(gl.LINE_STRIP,0,D.nc); gl.uniform1f(U('uSize')[1],4.0*dpr); gl.drawArrays(gl.POINTS,0,D.nc);
+  }
+  gl.bindVertexArray(null);
+  $('hud').textContent = 'az '+(az*57.2958).toFixed(0)+'°  el '+(el*57.2958).toFixed(0)+'°' +
+    (showMesh&&hasMesh ? '  ·  '+D.nt.toLocaleString()+' tri' : '') +
+    (showPts ? '  ·  '+D.np.toLocaleString()+' pts' : '') +
+    (showCam&&D.nc ? '  ·  '+D.nc+' cameras' : '');
+  requestAnimationFrame(draw);
+}
+
+let down=false, lx=0, ly=0, panning=false;
+cv.addEventListener('pointerdown',e=>{down=true;panning=e.shiftKey||e.button===2;lx=e.clientX;ly=e.clientY;
+  cv.classList.add('drag');cv.setPointerCapture(e.pointerId);target=null;});
+cv.addEventListener('pointerup',()=>{down=false;cv.classList.remove('drag');});
+cv.addEventListener('pointermove',e=>{ if(!down)return;
+  const dx=e.clientX-lx, dy=e.clientY-ly; lx=e.clientX; ly=e.clientY;
+  if(panning){ panx-=dx*0.0022*dist; pany+=dy*0.0022*dist; }
+  else { az-=dx*0.0062; el=Math.max(-1.52,Math.min(1.52,el+dy*0.0062)); } });
+cv.addEventListener('contextmenu',e=>e.preventDefault());
+cv.addEventListener('wheel',e=>{e.preventDefault();
+  dist=Math.max(0.2,Math.min(9,dist*(1+Math.sign(e.deltaY)*0.09)));target=null;},{passive:false});
+function toggle(id,fn){const b=$(id); b.onclick=()=>{const v=b.getAttribute('aria-pressed')!=='true';
+  b.setAttribute('aria-pressed',String(v)); fn(v);};}
+toggle('bMesh',v=>showMesh=v); toggle('bPts',v=>showPts=v); toggle('bCam',v=>showCam=v);
+document.querySelectorAll('[data-view]').forEach(b=>{ b.onclick=()=>{ target=PRESETS[b.dataset.view].slice(); panx=0; pany=0; }; });
+if (gl) draw();
+</script>
+</body>
+</html>

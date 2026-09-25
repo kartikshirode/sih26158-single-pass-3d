@@ -520,6 +520,12 @@ Exports: Q(tier, q, a, tag, src, detail) -> dict; QA, TIERS, CHECKS; render() ->
 Used by: tools/build_all.py
 Gotcha: check_numbers() greps about 64 literal figures in their cited files (out/ runs, docs/*.md, research/calibration/kolu.json) and exits 1 if any is missing, so editing a figure in a doc can break this build.
 
+### tools/build_run_page.py
+Writes <run>/index.html for one tesseract run from run_page_template.html: inlined int16 mesh, points and camera path in the levelled F5 frame, plus stages, S3 breakdown, verdicts, codes, screen/ingest/level/DSM facts, file links and keyframe thumbnails.
+Exports: read_mesh_ply(path) -> (V, F); similarity(src, dst) -> (s, R, t); cluster_decimate(V, F, target) -> (V, F); pack(run, tri_budget, pt_budget); describe(run) -> dict; main(argv) (CLI `<run> --out --tris --points`)
+Used by: run manually; not in build_all
+Gotcha: no open3d; mesh thinned by vertex clustering and coloured from the nearest dense point. F4->F5 map is fitted from points.npy vs points_llf.npy (same order). File and keyframe links are relative, so the page must stay in its run folder.
+
 ### tools/build_run.py
 Generates demo/run/index.html (upload page) from run_template.html, injecting __DS_CSS__, __TITLE__, __DESC__, __LIMITS__.
 Exports: main(); TITLE, DESC, LIMITS
@@ -638,6 +644,11 @@ Packs a textured OpenMVS OBJ for the console: pymeshlab texture-aware decimation
 Exports: decimate(obj, target), main() -> int; env SRC (out/kolu_tex_mvs), REF (out/kolumvs3d), OUT (out/kolutex3d), TRI (300000), ALIGN
 Used by: its packed.json is read by build_gallery.packed()
 Gotcha: exits if the cropped atlas is over 50% fill or the reference quantisation cannot be recovered. Atlas name "kolu_tex.jpg" is hard-coded.
+
+### tools/run_page_template.html
+Template for <run>/index.html: summary chips, WebGL2 viewer (mesh, points, flight path, four presets), stage/S3/verdict/code tables, fact lists, file table, lazy keyframe grid. Placeholders __TITLE__, `const D = __DATA__, R = __RUN__;`.
+Used by: tools/build_run_page.py
+Gotcha: dark-only tokens and Google Fonts over the network; keyframe images load from relative keyframes/ paths.
 
 ### tools/run_template.html
 Template for demo/run/index.html: pick or drop a video, POST /api/runs, PUT to the signed URL sending the server's uploadHeaders, POST /api/start, poll /api/status?id=, render stages and preview/final downloads via /api/file. Placeholders __DS_CSS__, __TITLE__, __DESC__, __LIMITS__.
