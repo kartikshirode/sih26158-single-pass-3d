@@ -7,12 +7,15 @@ GPU quota. On Kolu that meant 11.45 s per view for poses, an exhaustive matcher 
 grows with the square of the view count (391 s for 45 views), and 46 s per view to
 densify (77% of a 34-minute run). Here, measured on an RTX 4060 laptop (8 GB):
 
-  poses    MapAnything in bf16, in overlapping windows of views stitched into one
-           frame, weights loaded once: about 0.13 s per view
-  sparse   COLMAP with GPU SIFT and SEQUENTIAL matching (video order), triangulation
-           against the known poses, bundle adjustment, then the S3b gate
+  camera   MapAnything in bf16 on a spread subset of the views; one shared camera
+           is fitted from its point maps
+  poses    COLMAP with GPU SIFT, a wide sequential matching window (video order) and
+           the global mapper with that camera held fixed, then the S3b gate. The
+           older path (pose_method "mapanything") took MapAnything's stitched window
+           poses, triangulated against them and ran a short bundle adjustment
   dense    OpenMVS DensifyPointCloud on CUDA over the dense view set only
-  mesh     OpenMVS ReconstructMesh, optional
+  mesh     OpenMVS ReconstructMesh, then TextureMesh to a decimated textured OBJ;
+           both optional and neither fails the stage
 
 Writes points_fused.npy, colors_fused.npy and cameras.npy (the files the tesseract
 `adopt` provider reads) plus local_gpu_result.json with every stage's time.
@@ -39,6 +42,13 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(HERE)), "mvs_job
 CHECKPOINT = "facebook/map-anything-apache"   # Apache-2.0; the default is CC-BY-NC
 
 DEFAULTS = {
+    # "global": MapAnything fits the intrinsics only, and COLMAP's global mapper solves
+    # every pose from long feature tracks. "mapanything": MapAnything's stitched window
+    # poses, triangulated and refined. On the demo clip the second drifted between
+    # windows and stacked the ground in three or four tilted sheets; the first kept 78%
+    # of the sparse ground within 3% of one plane, against 45% (research/10).
+    "pose_method": "global",
+    "global_match_overlap": 30,  # one ground point stays matchable ~30 keyframes apart
     "pose_window": 0,           # views per MapAnything call; 0 sizes it to the GPU
     "pose_overlap": 8,          # shared views between windows, for the Sim(3) stitch
     "pose_size": 0,             # 0: the model's own 518 mapping; else the longest side
@@ -56,10 +66,17 @@ DEFAULTS = {
     "dense_resolution_level": 1,
     "dense_views_fuse": 3,
     "dense_neighbours": 5,      # views per depth map (OpenMVS default 8): 107 s to 96 s
+    # OpenMVS fusion filter: 0 merge, 1 fuse, 2 dense-fuse (its default). On the demo's
+    # global poses dense-fuse kept 160k points from 52M depths, all from the first few
+    # frames, while the depth maps themselves were 90-96% valid; fuse kept 7.9M covering
+    # 90-96% of every view (research/10).
+    "dense_fusion_filter": 1,
     # ReconstructMesh's minimum point spacing in pixels (default 1.5): 91 s and 4.0M
     # faces at 1.5, 60 s and 2.6M at 2.5, on 600 views.
     "mesh_min_point_distance": 2.5,
     "mesh": True,
+    "texture": True,            # OpenMVS TextureMesh on the mesh, to a textured OBJ
+    "texture_decimate": 0.1,    # fraction of the mesh's faces kept before texturing
     # Depth maps (6.6 MB each at 967x297), undistorted images, the matches database and
     # the intermediate sparse models were 1.4 of the 1.5 GB a 134-view demo run left.
     "keep_intermediate": False,
@@ -77,7 +94,7 @@ def find_tools() -> dict:
         raise FileNotFoundError("COLMAP not found: set SIH_COLMAP to the colmap "
                                 "executable (a CUDA build) or put colmap on PATH")
     tools = {n: os.path.join(mvs or "", n + exe) for n in
-             ("InterfaceCOLMAP", "DensifyPointCloud", "ReconstructMesh")}
+             ("InterfaceCOLMAP", "DensifyPointCloud", "ReconstructMesh", "TextureMesh")}
     missing = [n for n, t in tools.items() if not os.path.exists(t)]
     if missing:
         raise FileNotFoundError(f"OpenMVS {', '.join(missing)} not found: set SIH_OPENMVS "
@@ -296,6 +313,92 @@ def analyze(r: Runner, colmap: str, model: str, label: str) -> dict:
     return got
 
 
+def global_sparse(r: Runner, colmap: str, img: str, db: str, cam: dict, o: dict) -> str:
+    """
+    Poses from COLMAP's global mapper over long feature tracks, the camera held fixed.
+
+    The camera is fixed because it cannot be recovered here. Self-calibrating, the
+    incremental mapper put the demo's focal length at 576 px against the 1100 px
+    MapAnything fits, and the ground curled into a bowl: a forward flight over flat
+    ground barely constrains focal length. PINHOLE, so the undistorter hands OpenMVS a
+    camera it accepts (a SIMPLE_RADIAL with k = 0 is copied through and refused).
+    """
+    r.sh([colmap, "feature_extractor", "--database_path", db, "--image_path", img,
+          "--ImageReader.single_camera", "1",
+          "--ImageReader.camera_model", "PINHOLE",
+          "--ImageReader.camera_params",
+          f"{cam['f']},{cam['f']},{cam['cx']},{cam['cy']}",
+          "--FeatureExtraction.use_gpu", "1",
+          "--SiftExtraction.max_num_features", o["sift_features"]], "feature_extractor")
+    # Wide, not exhaustive: exhaustive grows with the square of the view count. On the
+    # demo, keyframes still shared 50+ verified matches 30-40 apart, and a window of 30
+    # kept 78% of the ground on one plane against 82% for all pairs, in 14 s against
+    # about 100 s.
+    r.sh([colmap, "sequential_matcher", "--database_path", db,
+          "--SequentialMatching.overlap", o["global_match_overlap"],
+          "--FeatureMatching.use_gpu", "1"], "sequential_matcher")
+    out = os.path.join(r.work, "sparse_g")
+    shutil.rmtree(out, ignore_errors=True)
+    os.makedirs(out)
+    r.sh([colmap, "global_mapper", "--database_path", db, "--image_path", img,
+          "--output_path", out,
+          "--GlobalMapper.ba_refine_focal_length", "0",
+          "--GlobalMapper.ba_refine_principal_point", "0",
+          "--GlobalMapper.ba_refine_extra_params", "0"], "global_mapper")
+    models = [os.path.join(out, d) for d in os.listdir(out)
+              if os.path.exists(os.path.join(out, d, "images.bin"))]
+    if not models:
+        raise RuntimeError("global_mapper wrote no model")
+    # Several models mean the views split into groups with no shared tracks; the
+    # largest is kept and the S3b gate then refuses the run for the views it lacks.
+    return max(models, key=lambda m: os.path.getsize(os.path.join(m, "images.bin")))
+
+
+def mapanything_sparse(r: Runner, colmap: str, img: str, db: str, names: list,
+                       cams_ma: np.ndarray, cam: dict, o: dict, log=print) -> tuple:
+    """MapAnything's stitched poses, triangulated against and refined by BA."""
+    from colmap_export import write_model
+
+    r.sh([colmap, "feature_extractor", "--database_path", db, "--image_path", img,
+          "--ImageReader.single_camera", "1",
+          "--ImageReader.camera_model", "SIMPLE_RADIAL",
+          "--FeatureExtraction.use_gpu", "1",
+          "--SiftExtraction.max_num_features", o["sift_features"]], "feature_extractor")
+    # Sequential, not exhaustive. Exhaustive over 45 views was 391 s on 8 vCPU and
+    # grows with the square of the count: about 19 h at 600 views. A video's
+    # neighbours are its neighbours in time.
+    r.sh([colmap, "sequential_matcher", "--database_path", db,
+          "--SequentialMatching.overlap", o["match_overlap"],
+          "--FeatureMatching.use_gpu", "1"], "sequential_matcher")
+
+    sp_in, sp_tri, sp_ba, sp_f = (os.path.join(r.work, d) for d in
+                                  ("sparse_in", "sparse_tri", "sparse_ba", "sparse_f"))
+    for d in (sp_in, sp_tri, sp_ba, sp_f):
+        shutil.rmtree(d, ignore_errors=True)
+        os.makedirs(d)
+    write_model(sp_in, cams_ma, names, cam, db, log=log)
+    r.sh([colmap, "point_triangulator", "--database_path", db, "--image_path", img,
+          "--input_path", sp_in, "--output_path", sp_tri,
+          "--Mapper.ba_global_max_refinements", o["tri_refinements"],
+          "--Mapper.ba_global_max_num_iterations", o["tri_ba_iterations"]],
+         "point_triangulator")
+    before = analyze(r, colmap, sp_tri, "analyze_triangulated")
+    r.sh([colmap, "bundle_adjuster", "--input_path", sp_tri, "--output_path", sp_ba,
+          "--BundleAdjustment.refine_focal_length", "1",
+          "--BundleAdjustment.refine_principal_point", "1",
+          "--BundleAdjustment.refine_extra_params", "1",
+          "--BundleAdjustmentCeres.max_num_iterations", o["ba_iterations"]],
+         "bundle_adjuster")
+    # Drop the observations BA could not explain. The demo's first run converged to a
+    # 0.28 px cost, yet model_analyzer reported a mean error of 2.0e149 px: a handful
+    # of points triangulated at near-zero depth dominate a plain mean. The mapper does
+    # this filtering itself; triangulating against known poses skips it. The COLMAP
+    # 4.2 Windows build has no CUDA Ceres, so BA stays on the CPU.
+    r.sh([colmap, "point_filtering", "--input_path", sp_ba, "--output_path", sp_f,
+          "--max_reproj_error", "4", "--min_tri_angle", "1.5"], "point_filtering")
+    return before, sp_f
+
+
 def read_images_txt(path: str) -> dict:
     """{name: cam2world 4x4} from a COLMAP text model's images.txt."""
     from scipy.spatial.transform import Rotation
@@ -388,7 +491,6 @@ def run(images_dir: str, work: str, *, crop_trbl=None, dense_names: list | None 
     set (docs/13 section 3.2: poses want every view, density an even subset).
     """
     import cv2
-    from colmap_export import write_model
     from run_mvs import ba_gate
     from run_mvs_sharded import filter_model
 
@@ -416,8 +518,16 @@ def run(images_dir: str, work: str, *, crop_trbl=None, dense_names: list | None 
     # at L1 and L2 to meet the same failure (audit 1). colmap_export refuses with
     # SystemExit, which would otherwise end the whole process with no manifest.
     try:
+        glob_poses = o["pose_method"] == "global"
+        if o["pose_method"] not in ("global", "mapanything"):
+            raise RuntimeError(f"pose_method {o['pose_method']!r}: global or mapanything")
+        # The global path wants MapAnything only for the camera, which one spread subset
+        # of the views fits as well as all of them.
+        ma_names = ([names[i] for i in np.unique(np.linspace(
+                        0, len(names) - 1, min(o["intrinsics_views"], len(names))).astype(int))]
+                    if glob_poses else names)
         ma = r.timed("poses (MapAnything)", mapanything_poses,
-                     [os.path.join(img, n) for n in names],
+                     [os.path.join(img, n) for n in ma_names],
                      window=o["pose_window"], overlap=o["pose_overlap"], size=o["pose_size"],
                      log=log)
         cam, resid = r.timed("intrinsics fit", fit_camera, ma, h0, w0, crop_trbl,
@@ -429,43 +539,11 @@ def run(images_dir: str, work: str, *, crop_trbl=None, dense_names: list | None 
         db = os.path.join(r.work, "db.db")
         if os.path.exists(db):
             os.remove(db)
-        r.sh([colmap, "feature_extractor", "--database_path", db, "--image_path", img,
-              "--ImageReader.single_camera", "1",
-              "--ImageReader.camera_model", "SIMPLE_RADIAL",
-              "--FeatureExtraction.use_gpu", "1",
-              "--SiftExtraction.max_num_features", o["sift_features"]], "feature_extractor")
-        # Sequential, not exhaustive. Exhaustive over 45 views was 391 s on 8 vCPU and
-        # grows with the square of the count: about 19 h at 600 views. A video's
-        # neighbours are its neighbours in time.
-        r.sh([colmap, "sequential_matcher", "--database_path", db,
-              "--SequentialMatching.overlap", o["match_overlap"],
-              "--FeatureMatching.use_gpu", "1"], "sequential_matcher")
-
-        sp_in, sp_tri, sp_ba, sp_f = (os.path.join(r.work, d) for d in
-                                      ("sparse_in", "sparse_tri", "sparse_ba", "sparse_f"))
-        for d in (sp_in, sp_tri, sp_ba, sp_f):
-            shutil.rmtree(d, ignore_errors=True)
-            os.makedirs(d)
-        write_model(sp_in, cams_ma, names, cam, db, log=log)
-        r.sh([colmap, "point_triangulator", "--database_path", db, "--image_path", img,
-              "--input_path", sp_in, "--output_path", sp_tri,
-              "--Mapper.ba_global_max_refinements", o["tri_refinements"],
-              "--Mapper.ba_global_max_num_iterations", o["tri_ba_iterations"]],
-             "point_triangulator")
-        before = analyze(r, colmap, sp_tri, "analyze_triangulated")
-        r.sh([colmap, "bundle_adjuster", "--input_path", sp_tri, "--output_path", sp_ba,
-              "--BundleAdjustment.refine_focal_length", "1",
-              "--BundleAdjustment.refine_principal_point", "1",
-              "--BundleAdjustment.refine_extra_params", "1",
-              "--BundleAdjustmentCeres.max_num_iterations", o["ba_iterations"]],
-             "bundle_adjuster")
-        # Drop the observations BA could not explain. The demo's first run converged to a
-        # 0.28 px cost, yet model_analyzer reported a mean error of 2.0e149 px: a handful
-        # of points triangulated at near-zero depth dominate a plain mean. The mapper does
-        # this filtering itself; triangulating against known poses skips it. The COLMAP
-        # 4.2 Windows build has no CUDA Ceres, so BA stays on the CPU.
-        r.sh([colmap, "point_filtering", "--input_path", sp_ba, "--output_path", sp_f,
-              "--max_reproj_error", "4", "--min_tri_angle", "1.5"], "point_filtering")
+        if glob_poses:
+            before, sp_f = None, global_sparse(r, colmap, img, db, cam, o)
+        else:
+            before, sp_f = mapanything_sparse(r, colmap, img, db, names, cams_ma, cam, o,
+                                              log=log)
         after = analyze(r, colmap, sp_f, "analyze_adjusted")
     except (SystemExit, ImportError) as e:
         raise SparseError(str(e)) from None
@@ -473,6 +551,7 @@ def run(images_dir: str, work: str, *, crop_trbl=None, dense_names: list | None 
         raise SparseError(str(e)) from e
     problems = ba_gate(after, len(names))
     result = {"n_views": len(names), "keyframe_size": [w0, h0], "options": o,
+              "pose_method": o["pose_method"], "mapanything_views": len(ma_names),
               "camera": {k: (round(v, 3) if isinstance(v, float) else v)
                          for k, v in cam.items() if k != "crop_span_full"},
               "intrinsics_fit_residual_px": round(resid, 4), "stitch": stitch,
@@ -513,10 +592,16 @@ def run(images_dir: str, work: str, *, crop_trbl=None, dense_names: list | None 
           "--output_path", dense, "--output_type", "COLMAP"], "image_undistorter")
     r.sh([mvs["InterfaceCOLMAP"], "-i", dense, "-o", "scene.mvs", "-w", r.work],
          "InterfaceCOLMAP")
+    # No region of interest: OpenMVS estimates one assuming a Z-up scene and trims the
+    # cloud to it, which cut the far field of this oblique, forward-looking footage.
+    # Tower mode is for orbits around a vertical structure and would add a cylinder of
+    # points to pick neighbours with.
     r.sh([mvs["DensifyPointCloud"], "scene.mvs", "-w", r.work,
           "--resolution-level", o["dense_resolution_level"],
           "--number-views-fuse", o["dense_views_fuse"],
           "--number-views", o["dense_neighbours"],
+          "--fusion-filter", o["dense_fusion_filter"],
+          "--estimate-roi", "0", "--crop-to-roi", "0", "--tower-mode", "0",
           "--cuda-device", "0", "--max-threads", "0"], "DensifyPointCloud")
     P, C = read_ply_points(os.path.join(r.work, "scene_dense.ply"))
     np.save(os.path.join(r.work, "points_fused.npy"), P)
@@ -532,11 +617,27 @@ def run(images_dir: str, work: str, *, crop_trbl=None, dense_names: list | None 
         except RuntimeError as e:
             result["mesh_error"] = str(e)[-500:]
             log("  ReconstructMesh failed; continuing without a mesh")
+    if o["mesh"] and o["texture"] and "mesh_error" not in result:
+        # Colour from the photos, not from the nearest dense point: the page coloured
+        # each vertex of a thinned mesh that way and the result was a smear. Textured
+        # after decimating to `texture_decimate`, so the OBJ is one a browser can hold
+        # (demo: 2.1M faces to 208k, 60 s, one 4096 px atlas). Seam levelling is off:
+        # with it on, 73% of the demo's faces sampled black from the atlas (95% with
+        # the global pass alone, 66% with the local one), and 0.2% with both off.
+        try:
+            r.sh([mvs["TextureMesh"], "scene.mvs", "-m", "scene_dense_mesh.ply",
+                  "-w", r.work, "--decimate", o["texture_decimate"],
+                  "--global-seam-leveling", "0", "--local-seam-leveling", "0",
+                  "--export-type", "obj", "-o", "scene_tex.mvs"], "TextureMesh")
+            result["textured_mesh"] = "scene_tex.obj"
+        except RuntimeError as e:
+            result["texture_error"] = str(e)[-500:]
+            log("  TextureMesh failed; continuing with the untextured mesh")
     if not o["keep_intermediate"]:
         for f in os.listdir(r.work):
             p = os.path.join(r.work, f)
             if f.endswith(".dmap") or f in ("db.db", "dense", "sparse_in", "sparse_tri",
-                                              "sparse_ba", "sparse_dense"):
+                                              "sparse_ba", "sparse_dense", "sparse_g"):
                 shutil.rmtree(p, ignore_errors=True) if os.path.isdir(p) else os.remove(p)
         if img == os.path.join(r.work, "images"):
             shutil.rmtree(img, ignore_errors=True)

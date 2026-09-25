@@ -200,7 +200,7 @@ class PlanKeyframes(BaseStage):
 @dataclass
 class Geometry(BaseStage):
     id: str = "S3-geometry"
-    version: str = "4"          # adds the local GPU provider
+    version: str = "5"          # local GPU: global-mapper poses, fuse filter
     needs: tuple = ("plan",)
     # S3 on a synthetic source also reads the scene straight from ctx.source; the
     # orchestrator keys every stage on the source's fingerprint, which covers that.
@@ -337,9 +337,10 @@ class Geometry(BaseStage):
                           os.path.join(g, "cameras.npy"),
                           {"geometry_provider": "local",
                            "local_gpu": {k: res[k] for k in
-                                         ("n_views", "dense_points", "total_seconds",
+                                         ("n_views", "pose_method", "dense_points",
+                                          "total_seconds",
                                           "sparse_after_bundle_adjustment", "stages",
-                                          "mesh_error")
+                                          "mesh_error", "textured_mesh", "texture_error")
                                          if k in res}},
                           f"local GPU, {res.get('total_seconds')} s")
 
