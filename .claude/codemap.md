@@ -203,7 +203,7 @@ Gotcha: orthometric_height turns PROJ networking on and raises if the EGM2008 gr
 ### src/pipeline/local_gpu.py
 S3 and S4 on one machine with an NVIDIA GPU (research/09, research/10). Default pose_method "global": MapAnything bf16 on 60 spread views fits one camera, then COLMAP GPU SIFT with that camera fixed as PINHOLE, sequential matching over 30 neighbours, global_mapper with intrinsics fixed, the S3b gate. "mapanything" keeps the old path (stitched window poses, triangulation, short BA, point_filtering). Then OpenMVS CUDA densify (fusion filter 1, no ROI, tower mode off), ReconstructMesh at 2.5 px, TextureMesh on the mesh decimated to 10% into scene_tex.obj/.mtl/_Kd.jpg. Demo, 177 views: S3 259 s. Writes points_fused/colors_fused/cameras.npy and local_gpu_result.json. CLI: `python src/pipeline/local_gpu.py <keyframes> --work <dir> [--set k=v]`.
 Exports: DEFAULTS; SparseError; frame_order(name); find_tools() (SIH_COLMAP, SIH_OPENMVS, else PATH; four OpenMVS tools incl. TextureMesh, torch, mapanything); Runner(work).timed/sh; mapanything_poses(paths, *, window, overlap); pose_window_for(H, W, total_bytes); fit_camera(ma, h0, w0, crop, *, views); analyze(r, colmap, model, label); global_sparse(r, colmap, img, db, cam, o) -> model dir; mapanything_sparse(r, colmap, img, db, names, cams_ma, cam, o) -> (before, model dir); read_images_txt(path) -> {name: cam2world}; read_ply_points(path) -> (xyz, rgb); run(images_dir, work, *, crop_trbl, dense_names, options, log) -> result dict
-Used by: src/tesseract/stages.py (Geometry provider "local"), src/pipeline/test_local_gpu.py
+Used by: src/tesseract/stages.py (Geometry provider "local"), src/pipeline/test_local_gpu.py, tools/view_check.py
 Gotcha: global_mapper keeps the largest model if views split; the S3b gate then refuses missing views. Self-calibration curled the demo ground (focal 576 vs 1100 px), hence the fixed camera. Seam levelling is off in TextureMesh (on, 73% of faces sampled black). A SIMPLE_RADIAL camera with k=0 passes the undistorter unchanged and OpenMVS refuses it, hence PINHOLE. Mesh and texture failures are recorded (mesh_error, texture_error), not raised. SparseError for anything up to the S3b gate, RuntimeError for a dense tool, FileNotFoundError when tools are missing. Deletes depth maps, the database and intermediate models (sparse_g too) unless keep_intermediate.
 
 ### src/pipeline/test_local_gpu.py
@@ -523,8 +523,19 @@ Gotcha: check_numbers() greps about 64 literal figures in their cited files (out
 ### tools/build_run_page.py
 Writes <run>/index.html for one tesseract run from run_page_template.html: the textured mesh (geometry/scene_tex.obj, per-corner int16 positions and uint16 UVs, atlas re-encoded as a 4096 px JPEG) or else a thinned vertex-coloured mesh, points and camera path in the levelled F5 frame, plus stages, S3 breakdown, verdicts, codes, screen/ingest/level/DSM facts, file links and keyframe thumbnails.
 Exports: read_mesh_ply(path) -> (V, F); read_obj(path) -> (V, T, F, FT, texture path); similarity(src, dst) -> (s, R, t); cluster_decimate(V, F, target) -> (V, F); pack(run, tri_budget, pt_budget); describe(run) -> dict; main(argv) (CLI `<run> --out --tris --points`)
-Used by: run manually; not in build_all
+Used by: tools/view_check.py and run manually; not in build_all
 Gotcha: no open3d. Faces whose UV centroid samples TextureMesh's orange empty colour (0xFF7F27) are dropped. F4->F5 map is fitted from points.npy vs points_llf.npy (same order). File and keyframe links are relative, so the page must stay in its run folder. A textured demo page is about 17 MB.
+
+### tools/view_check.py
+Builds held-out geometry by excluding every tenth keyframe from the OpenMVS dense and texture model, then renders its textured OBJ into each held-out registered camera at quarter resolution. Reports covered-pixel PSNR and SSIM with coverage separately in JSON.
+Exports: project_points(vertices, camera, intrinsics) -> (uv, depth); rasterize(...); score(run_dir, geometry_dir, holdout_names, scale=4) -> dict; main() (CLI `<run> --build --geometry <dir> --out <json>`)
+Used by: tools/test_view_check.py and local audit runs
+Gotcha: imports numba and skimage, plus src/pipeline/local_gpu.py and tools/build_run_page.py. Use identical keyframe sets when comparing runs; poses are fitted on all keyframes but dense and texture inputs exclude held-out views.
+
+### tools/test_view_check.py
+Projection test for one camera and point with known pixel (370, 360). Run `python tools/test_view_check.py`.
+Used by: local audit runs
+Gotcha: plain-script test; fails with exit code 1 on a projection mismatch.
 
 ### tools/geometry_check.py
 Shape checks for a local GPU geometry folder with no ground truth (research/10): sparse points within 3% of the flight height of one RANSAC ground plane, share of dense cells layered over 10% of it, largest camera step over the median; --out writes side and top pictures.
@@ -846,3 +857,9 @@ Gotcha: launch from the repo root with a sandbox that can run the GPU tools and 
 ### audit/codex-opt/CONTEXT.md
 Facts for that run as of 2026-09-26 (commit 254aa0d): PS targets and weights, the current S3 chain and the demo's stage times, what is still wrong, what was already tried, benchmarks B1-B5 with scaled budgets (demo 28 s, nicosia 60 s, test_flight 30 s, 10-min 900 s), the machine and tool paths, licence and data rules, out-of-scope items (the GC-1 files, the web path, master).
 Gotcha: stage times and shape numbers are the demo_gpu2 snapshot; refresh before reusing after the code moves.
+
+### audit/codex-opt/RUNLOG.md
+Ordered machine and experiment record for the local GPU audit. Holds baseline B1-B3 quality and timing, B4 ingest throughput, the B5 render probe, the 600-view sparse failure, profile samples and subsequent experiments.
+Exports: machine table, experiment table, per-benchmark measurements
+Used by: audit/codex-opt/REPORT.md and research/11-codex-optimisation.md
+Gotcha: B5 full render is absent; the long sparse test uses 600 frames from a 20 s synthetic source, so it is a scaling probe rather than a 600 s end-to-end run.
