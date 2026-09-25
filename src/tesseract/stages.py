@@ -210,12 +210,14 @@ class Geometry(BaseStage):
     # measured rates, docs/13 section 6: feed-forward on a T4, MVS on 8 vCPU
     S_PER_VIEW_POSE_GPU = 0.55
     S_PER_VIEW_DENSE_CPU = 39.0
-    # measured on the RTX 4060 laptop, research/09-gpu-pipeline.md: poses, matching,
-    # triangulation and bundle adjustment per pose view; densify per dense view at
-    # resolution level 1; model load, undistortion and meshing as a fixed cost
-    S_PER_VIEW_LOCAL_SPARSE = 1.2
-    S_PER_VIEW_LOCAL_DENSE = 0.35
-    S_LOCAL_FIXED = 90.0
+    # measured on the RTX 4060 laptop, research/09-gpu-pipeline.md, 600 uncropped
+    # views: poses, SIFT, matching, triangulation and BA 0.58 s per pose view; densify,
+    # undistortion and meshing 0.54 s per dense view. With the first-draft rates
+    # (1.2 and 0.35 plus 90 s) a 10-minute clip was estimated at 915 s and sent down
+    # the ladder by the 900 s budget it fits in.
+    S_PER_VIEW_LOCAL_SPARSE = 0.6
+    S_PER_VIEW_LOCAL_DENSE = 0.55
+    S_LOCAL_FIXED = 30.0
 
     def estimate(self, ctx: Context) -> float:
         n_pose = int(ctx.facts.get("pose_views") or 0)
@@ -336,7 +338,8 @@ class Geometry(BaseStage):
                           {"geometry_provider": "local",
                            "local_gpu": {k: res[k] for k in
                                          ("n_views", "dense_points", "total_seconds",
-                                          "sparse_after_bundle_adjustment", "stages")
+                                          "sparse_after_bundle_adjustment", "stages",
+                                          "mesh_error")
                                          if k in res}},
                           f"local GPU, {res.get('total_seconds')} s")
 
