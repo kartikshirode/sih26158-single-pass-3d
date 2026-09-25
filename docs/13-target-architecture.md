@@ -198,6 +198,13 @@ measured.**
 | Reserve | 30 | |
 | **Total** | **900** | **Target ≤ 600** (`docs/11` §6) |
 
+**Measured on one laptop GPU (RTX 4060, 8 GB), 2026-09-25** (`research/09-gpu-pipeline.md`,
+ADR-027): S0 10 s and S1 55 s on a 10-minute 1080p file; on 600 uncropped views MapAnything
+254 s, SIFT, matching, triangulation and BA 86 s, densify with undistortion 104 s and
+meshing 58 s. Predicted total for a 10-minute clip: 8 to 12 minutes. Densify came in at
+0.33 s/view, inside the 0.83 s/view the table below needs; poses at 0.42 s/view on this
+card are over the 300 s line.
+
 The arithmetic that matters: 250 s for 300 dense views is **0.83 s/view** on the densifier,
 against 35 s/view on CPU. That is a ~42× requirement on the GPU path, and EXP-16 is what
 says whether it holds.

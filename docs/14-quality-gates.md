@@ -180,13 +180,14 @@ Every figure the project states in public, its source, its gate, and its status 
 | 25 | "R-O2 processing time: met" on the synthetic console runs (3 runs) | S8 in `src/tesseract/stages.py` | none | **Invalid.** A 60-240 frame synthetic scene inside 900 s says nothing about a 10-minute video, and cached stages counted as 0 s (audit F-09). Code fixed 2026-09-24: `met` now needs a timed, uncached video of at least 10 minutes; everything else is `not measurable`. Same rebuild caveat as item 24 |
 | 26 | "RTK/PPK 0.098 m absolute, R-O3 PASS" end to end on Cloud Run (README "Measured results", `docs/00` section 6.4) | `run_demo.py` via `cloud_job.py` | Simulation | **Relabel.** The reconstruction was placed in a frame differing from truth by yaw and translation only, at scale 1.0, so the figure never tested levelling or scale recovery (audit F-07). The tesseract synthetic path now hands S5 a tilted, scaled gauge and measures 0.06-0.09 m with RTK over three seeds (ADR-026). Say "synthetic, reconstruction already level and metric" beside 0.098 m, or quote the ADR-026 figure |
 | 27 | "100%" completeness with RTK (README "Measured results", `docs/00` section 6.4) and "R-O4 coverage: met" on the synthetic console runs | `run_demo.py`; S8 in `src/tesseract/stages.py` | Simulation | **Invalid as a coverage figure.** Synthetic sensing hands back the ground truth over the observable mask plus noise, so observable recall is 100% by construction, and at 1 m it only says the points landed within 1 m (consumer GNSS scores 8.8% for being 2.26 m off, not for missing surface). S8 now says "not measurable" for sensed geometry and prints the whole-scene figure beside the observable one on every run (audit F-08, 2026-09-25). Drop the completeness column for the synthetic rows, or label it "placement within 1 m" |
+| 28 | A 10-minute 1080p30 clip reconstructs in 8 to 12 minutes on one laptop (RTX 4060, 8 GB) | `research/09-gpu-pipeline.md` section 8 | Prediction | **Predicted, not run.** S0 and S1 were timed on a 10-minute file and S3 on 568 and 600 views; the full run has not been done. Quote it as a prediction until it is, and never as R-O2 (which is 15 minutes on the finale hardware) |
 
 **Status 2026-09-17: every item above is corrected, relabelled or removed** across the
 viewers, the exported files, the Q&A, the deck and the portal text, except 6 and 20, which
 stay unvalidated until their data exists. Items 24 and 25 were added on 2026-09-24 and are
 fixed in code but not yet on the deployed console. Item 26 was added the same day,
 and item 27 on 2026-09-25; the console still shows R-O4 "met" on two synthetic runs until it
-is rebuilt.
+is rebuilt. Item 28 was added the same day.
 
 **Remediation (as originally planned).** Items 4–7, 14–18 and 17a are fixed by `docs/08` S7 in a single change: correct or
 relabel the source files, then let `build_qa.py`'s re-grep fail on every stale figure and fix

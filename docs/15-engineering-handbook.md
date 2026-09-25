@@ -68,6 +68,7 @@ out/             every run artefact — gitignored, regenerable
 |---|---|---|
 | Everything, one clip | `python tesseract.py run <video> [--adopt out/<run>] [--calibration-run <run>]` | local |
 | Everything, no data | `python tesseract.py run synthetic --gnss rtk` | local, seconds |
+| Everything, one clip, on a local NVIDIA GPU | `python tesseract.py run <video> --geometry local --horizon crop` with `SIH_COLMAP` and `SIH_OPENMVS` set (`research/09-gpu-pipeline.md` section 9) | local GPU, ~10 min for a 10-min clip (predicted) |
 | Screen only | `python tesseract.py screen data/cand/*.webm` | local |
 | Calibrate from a known length | `python tesseract.py calibrate <run> --points X1 Y1 Z1 X2 Y2 Z2 --length 21.0 --what "ecoduct waist"` | local |
 | Check a finished run | `python tesseract.py verify out/runs/<run>` | local |

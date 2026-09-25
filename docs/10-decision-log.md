@@ -37,10 +37,11 @@ never by editing the old one's text.
 | 020 | Robust Sim(3) with a MAD-derived threshold | Accepted |
 | 021 | Chain windows for shape, anchor once for position | Accepted |
 | 022 | Report completeness against two denominators | Accepted |
-| 023 | GPU dense path is COLMAP PatchMatch (BSD), not OpenMVS CUDA | Proposed |
+| 023 | GPU dense path is COLMAP PatchMatch (BSD), not OpenMVS CUDA | Rejected by 027 |
 | 024 | Adapt a permissive metric-depth prior for aerial altitude | Proposed |
 | 025 | The product surface is a run console, built from run manifests | Accepted |
 | 026 | Level before georeferencing; the track gives yaw and slope, gravity only the roll about it | Accepted |
+| 027 | The GPU path runs on one machine: MapAnything, COLMAP sequential, OpenMVS CUDA | Accepted |
 
 ---
 
@@ -340,3 +341,30 @@ seeds above that still beat the ground-plane vertical.
 **Status.** Accepted. Synthetic path only, like ADR-008; gap C-3 still blocks a real clip.
 **Revisit when.** A real clip with per-frame GNSS (EXP-21) shows the GNSS slope noisier than
 the scene's vertical, or a curved track makes the principal direction a poor summary of it.
+
+## ADR-027 · The GPU path runs on one machine: MapAnything, COLMAP sequential, OpenMVS CUDA
+
+**Context.** Every recorded run used CPU only (no GPU quota on the GCP account), and a
+10-minute clip had never been timed end to end. ADR-023 proposed COLMAP PatchMatch as the
+GPU densifier because it is BSD where OpenMVS is AGPL. A laptop with an 8 GB RTX 4060 was
+available, and both COLMAP 4.2 and OpenMVS 2.4 publish Windows CUDA builds.
+**Decision.** `src/pipeline/local_gpu.py`, selected in tesseract by `--geometry local`:
+MapAnything in bf16 over overlapping windows sized to the GPU, COLMAP GPU SIFT with
+sequential matching (6 neighbours, quadratic overlap), triangulation against the known
+poses, a 10-iteration BA, point filtering and the S3b gate, then OpenMVS DensifyPointCloud
+on CUDA over the dense view set and ReconstructMesh. OpenMVS stays a separate, unmodified
+process (ADR-005's licence position).
+**Evidence.** `research/09-gpu-pipeline.md`. On 129 views at 967x297, OpenMVS CUDA
+densified in 31 s; COLMAP PatchMatch took 488 s for its photometric pass alone. On 600
+uncropped views S3 takes 511 s at 0.63 px after BA; with S0 and S1 measured on a 10-minute
+file, the prediction for a 10-minute 1080p30 clip is 8 to 12 minutes on this laptop.
+**Consequences.** ADR-023 is rejected on speed. A local run needs CUDA torch, MapAnything
+and the two CUDA builds (`research/09` section 1), found through `SIH_COLMAP` and
+`SIH_OPENMVS`. MapAnything at 392 or 448 px was faster but failed the intrinsics guard, so
+the model's own 518 mapping stays. The cloud jobs (`mapanything_job/`, `mvs_job/`) are
+unchanged and still CPU.
+**Status.** Accepted for the local path. The 10-minute prediction is not a measurement
+until the full run is done (claims ledger item 28).
+**Revisit when.** The full 10-minute run disagrees with the prediction by more than 25%,
+or the job runs on a GPU with more than 8 GB, where larger MapAnything windows and full
+resolution densify become affordable.
