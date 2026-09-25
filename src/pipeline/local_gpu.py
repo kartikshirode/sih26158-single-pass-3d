@@ -47,12 +47,18 @@ DEFAULTS = {
     # and five triangulation refinements took 657 s for matching, triangulation and
     # BA; 4096, 10 and one took 150 s and ended at 0.49 px against 0.46.
     "sift_features": 4096,
-    "match_overlap": 10,        # sequential neighbours matched per image
+    # Overlap 10 took 135 s on 600 uncropped views; 6 took 43 s and ended at 0.63 px
+    # against 0.64 (research/09 section 6). Quadratic overlap still adds far pairs.
+    "match_overlap": 6,         # sequential neighbours matched per image
     "tri_refinements": 1,
     "tri_ba_iterations": 3,
     "ba_iterations": 10,        # the cost is flat after 10 (0.3587 px; 0.3582 at 100)
     "dense_resolution_level": 1,
     "dense_views_fuse": 3,
+    "dense_neighbours": 5,      # views per depth map (OpenMVS default 8): 107 s to 96 s
+    # ReconstructMesh's minimum point spacing in pixels (default 1.5): 91 s and 4.0M
+    # faces at 1.5, 60 s and 2.6M at 2.5, on 600 views.
+    "mesh_min_point_distance": 2.5,
     "mesh": True,
     # Depth maps (6.6 MB each at 967x297), undistorted images, the matches database and
     # the intermediate sparse models were 1.4 of the 1.5 GB a 134-view demo run left.
@@ -510,6 +516,7 @@ def run(images_dir: str, work: str, *, crop_trbl=None, dense_names: list | None 
     r.sh([mvs["DensifyPointCloud"], "scene.mvs", "-w", r.work,
           "--resolution-level", o["dense_resolution_level"],
           "--number-views-fuse", o["dense_views_fuse"],
+          "--number-views", o["dense_neighbours"],
           "--cuda-device", "0", "--max-threads", "0"], "DensifyPointCloud")
     P, C = read_ply_points(os.path.join(r.work, "scene_dense.ply"))
     np.save(os.path.join(r.work, "points_fused.npy"), P)
@@ -520,8 +527,8 @@ def run(images_dir: str, work: str, *, crop_trbl=None, dense_names: list | None 
         # The mesh is a product, not an input: tesseract loads the dense cloud. A
         # meshing failure is recorded rather than failing the stage (audit 1).
         try:
-            r.sh([mvs["ReconstructMesh"], "scene_dense.mvs", "-w", r.work],
-                 "ReconstructMesh")
+            r.sh([mvs["ReconstructMesh"], "scene_dense.mvs", "-w", r.work,
+                  "-d", o["mesh_min_point_distance"]], "ReconstructMesh")
         except RuntimeError as e:
             result["mesh_error"] = str(e)[-500:]
             log("  ReconstructMesh failed; continuing without a mesh")
