@@ -863,3 +863,9 @@ Ordered machine and experiment record for the local GPU audit. Holds baseline B1
 Exports: machine table, experiment table, per-benchmark measurements
 Used by: audit/codex-opt/REPORT.md and research/11-codex-optimisation.md
 Gotcha: B5 full render is absent; the long sparse test uses 600 frames from a 20 s synthetic source, so it is a scaling probe rather than a 600 s end-to-end run.
+
+### audit/codex-opt/RESEARCH.md
+Stage-by-stage options for keyframes, cameras, dense reconstruction, mesh, models, throughput and missing outputs on the 8 GiB Windows laptop, with licence and source links, risks and ranked experiments.
+Exports: ranked experiment list and per-option cost, licence, risk and test
+Used by: audit/codex-opt/RUNLOG.md and research/11-codex-optimisation.md
+Gotcha: expected gains are predictions unless a named local run supports them; the 600-view sparse run failed before dense work.
