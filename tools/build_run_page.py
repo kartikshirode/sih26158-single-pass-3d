@@ -7,9 +7,10 @@ Run:  python tools/build_run_page.py out/runs/<run>      -> out/runs/<run>/index
 
 The 3D payload is inlined as base64 int16, so the model opens straight from disk with
 no server. Keyframe thumbnails and file links are relative paths, so the page only
-works while it sits inside its run folder. No open3d here: the mesh is thinned by
-vertex clustering in numpy, cruder than build_viewer.py's quadric decimation but it
-runs on the global Python this laptop has.
+works while it sits inside its run folder. The textured OBJ from local_gpu is drawn
+with its photo texture when the run has one. Otherwise the mesh is thinned by vertex
+clustering in numpy (no open3d here; cruder than build_viewer.py's quadric
+decimation) and coloured from the nearest dense point.
 """
 from __future__ import annotations
 
@@ -70,6 +71,29 @@ def read_mesh_ply(path: str):
     if not np.all(Fr["n"] == 3):
         raise ValueError(f"{path}: non-triangle faces")
     return xyz, Fr["i"].astype(np.int64)
+
+
+def read_obj(path: str):
+    """Vertices, texture coordinates, face corners as (vertex, uv) indices, texture file."""
+    V, T, F, tex = [], [], [], None
+    base = os.path.dirname(path)
+    with open(path, encoding="utf-8", errors="replace") as f:
+        for ln in f:
+            if ln.startswith("v "):
+                V.append(ln.split()[1:4])
+            elif ln.startswith("vt "):
+                T.append(ln.split()[1:3])
+            elif ln.startswith("f "):
+                c = [p.split("/") for p in ln.split()[1:4]]
+                F.append([int(x[0]) for x in c] + [int(x[1]) for x in c])
+            elif ln.startswith("mtllib "):
+                mtl = os.path.join(base, ln.split(None, 1)[1].strip())
+                if os.path.exists(mtl):
+                    for m in open(mtl, encoding="utf-8", errors="replace"):
+                        if m.strip().startswith("map_Kd"):
+                            tex = os.path.join(base, m.split(None, 1)[1].strip())
+    F = np.asarray(F, np.int64) - 1
+    return (np.asarray(V, np.float64), np.asarray(T, np.float64), F[:, :3], F[:, 3:], tex)
 
 
 def similarity(src: np.ndarray, dst: np.ndarray):
@@ -148,9 +172,41 @@ def pack(run: str, tri_budget: int, pt_budget: int, log=print):
         idx = np.sort(rng.choice(idx, pt_budget, replace=False))
     Qp, Cp = Qp[idx].astype(np.int16), C[idx]
 
-    mesh = {"vpos": "", "vcol": "", "idx": "", "nv": 0, "nt": 0, "nt_full": 0}
+    mesh = {"vpos": "", "vcol": "", "idx": "", "nv": 0, "nt": 0, "nt_full": 0,
+            "tpos": "", "tuv": "", "tex": "", "ntc": 0}
     mpath = os.path.join(run, "geometry", "scene_dense_mesh.ply")
-    if os.path.exists(mpath):
+    opath = os.path.join(run, "geometry", "scene_tex.obj")
+    if os.path.exists(opath):
+        # The textured mesh, drawn as it is: one position and one texture coordinate
+        # per face corner, since OBJ seams give a vertex several of them.
+        import cv2
+
+        V, T, F, FT, tex = read_obj(opath)
+        Qv = q(to5(V))
+        keep = inside(Qv)[F].all(1)
+        F, FT = F[keep], FT[keep]
+        img = cv2.imread(tex) if tex else None
+        if img is not None:
+            # Faces no photo covers carry TextureMesh's empty colour, a saturated orange
+            # (0xFF7F27); on the demo 3.8% of faces, mostly in the grazing far field.
+            # Drawn, they read as orange paint on the model, so they are left out.
+            h_, w_ = img.shape[:2]
+            uvc = T[FT].mean(1)
+            texel = img[np.clip(((1 - uvc[:, 1]) * h_).astype(int), 0, h_ - 1),
+                        np.clip((uvc[:, 0] * w_).astype(int), 0, w_ - 1)].astype(int)
+            covered = np.abs(texel - np.array([39, 127, 255])).max(1) >= 25
+            F, FT = F[covered], FT[covered]
+            s_ = 4096 / max(img.shape[:2])
+            if s_ < 1:
+                img = cv2.resize(img, None, fx=s_, fy=s_, interpolation=cv2.INTER_AREA)
+            jpg = cv2.imencode(".jpg", img, [int(cv2.IMWRITE_JPEG_QUALITY), 85])[1]
+            uv = np.clip(np.round(T[FT.ravel()] * 65535), 0, 65535).astype(np.uint16)
+            nt_full = len(read_mesh_ply(mpath)[1]) if os.path.exists(mpath) else len(F)
+            mesh.update({"tpos": b64(Qv[F.ravel()].astype(np.int16)), "tuv": b64(uv),
+                         "tex": base64.b64encode(jpg.tobytes()).decode(),
+                         "ntc": int(F.size), "nt": int(len(F)), "nt_full": int(nt_full)})
+            log(f"  textured mesh {len(F):,} faces, texture {img.shape[1]}x{img.shape[0]}")
+    if not mesh["ntc"] and os.path.exists(mpath):
         V, F = read_mesh_ply(mpath)
         nt_full = len(F)
         if len(F) > tri_budget:
@@ -165,9 +221,9 @@ def pack(run: str, tri_budget: int, pt_budget: int, log=print):
         # OpenMVS's mesh is colourless: take each vertex's colour from the nearest
         # dense point, which is what finish_mvs.py does too.
         _, nn = cKDTree(P5).query(V5, k=1, workers=-1)
-        mesh = {"vpos": b64(Qv.astype(np.int16)), "vcol": b64(C[nn]),
-                "idx": b64(F.astype(np.uint32)), "nv": int(len(V5)), "nt": int(len(F)),
-                "nt_full": int(nt_full)}
+        mesh.update({"vpos": b64(Qv.astype(np.int16)), "vcol": b64(C[nn]),
+                     "idx": b64(F.astype(np.uint32)), "nv": int(len(V5)), "nt": int(len(F)),
+                     "nt_full": int(nt_full)})
 
     Qc = q(K5)
     Qc = Qc[inside(Qc)].astype(np.int16)

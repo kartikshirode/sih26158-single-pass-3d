@@ -290,8 +290,33 @@ function vao(p, pos, col, nrm){
   if (nrm) at('aNrm',nrm,3,gl.FLOAT,false);
   gl.bindVertexArray(null); return v;
 }
-const hasMesh = IX.length > 0;
-const vM = hasMesh ? vao(pM, buf(VP), buf(VC), buf(NR)) : null, bIX = hasMesh ? buf(IX, gl.ELEMENT_ARRAY_BUFFER) : null;
+// Textured mesh: one position and one texture coordinate per face corner. The photo
+// texture already carries the scene's light, so it is drawn unshaded.
+const hasTex = D.ntc > 0;
+let vT = null, texReady = false;
+const pT = prog(HDR+'in vec3 aPos; in vec2 aUV; uniform mat4 uMVP; out vec2 vUV;'+
+  'void main(){ vUV=aUV; gl_Position=uMVP*vec4(aPos,1.0); }',
+  HDR+'in vec2 vUV; uniform sampler2D uTex; out vec4 o; void main(){ o=vec4(texture(uTex,vUV).rgb,1.0); }');
+if (hasTex) {
+  const TP = new Int16Array(un(D.tpos).buffer), TU = new Uint16Array(un(D.tuv).buffer);
+  vT = gl.createVertexArray(); gl.bindVertexArray(vT);
+  const bind = (n, data, size, type) => { const l = gl.getAttribLocation(pT, n);
+    gl.bindBuffer(gl.ARRAY_BUFFER, buf(data)); gl.enableVertexAttribArray(l);
+    gl.vertexAttribPointer(l, size, type, true, 0, 0); };
+  bind('aPos', TP, 3, gl.SHORT); bind('aUV', TU, 2, gl.UNSIGNED_SHORT);
+  gl.bindVertexArray(null);
+  const tx = gl.createTexture(), im = new Image();
+  im.onload = () => { gl.bindTexture(gl.TEXTURE_2D, tx);
+    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);          // OBJ v runs bottom-up
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, gl.RGB, gl.UNSIGNED_BYTE, im);
+    gl.generateMipmap(gl.TEXTURE_2D);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    texReady = true; };
+  im.src = 'data:image/jpeg;base64,' + D.tex;
+}
+const hasMesh = IX.length > 0 || hasTex;
+const vM = IX.length ? vao(pM, buf(VP), buf(VC), buf(NR)) : null, bIX = IX.length ? buf(IX, gl.ELEMENT_ARRAY_BUFFER) : null;
 const vP = vao(pP, buf(PP), buf(PC), null);
 const vC = D.nc ? vao(pP, buf(CP), buf(new Uint8Array(CP.length)), null) : null;
 
@@ -326,7 +351,11 @@ function draw(){
   gl.enable(gl.DEPTH_TEST); gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
   const eye=[Math.cos(el)*Math.sin(az)*dist+panx, Math.sin(el)*dist+pany, Math.cos(el)*Math.cos(az)*dist];
   const mvp=mul(persp(0.85,w/h,0.02,60), look(eye,[panx,pany,0],[0,1,0]));
-  if (showMesh && vM){
+  if (showMesh && hasTex && texReady){
+    gl.useProgram(pT); gl.bindVertexArray(vT);
+    gl.uniformMatrix4fv(gl.getUniformLocation(pT,'uMVP'),false,mvp);
+    gl.drawArrays(gl.TRIANGLES, 0, D.ntc);
+  } else if (showMesh && vM){
     gl.useProgram(pM); gl.bindVertexArray(vM);
     gl.uniformMatrix4fv(U('uMVP')[0],false,mvp); gl.uniform3f(U('uLight')[0],0.36,0.78,0.51);
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,bIX);
