@@ -249,6 +249,7 @@ Machine-readable, so a finale operator (`docs/17`) reads a code rather than a tr
 | `ADM-OVERLAY` | S0 | static burned-in overlay | automatic crop; re-screen |
 | `ING-NOGNSS` | S1 | no telemetry found by any parser | proceed; result will be LLF and `unvalidated` |
 | `ING-SCHEMA` | S1 | telemetry found but unparseable | attach sample to the report; proceed without |
+| `ING-REJECT` | S1 | ingest reports no decoded or usable frames | stop; keep the run manifest with the ingest reason |
 | `GEO-UNREG` | S3b | registered < N | drop unregistered views; warn if < 80% |
 | `GEO-REPROJ` | S3b | reprojection error > 1 px after BA | stop; poses unreliable |
 | `MVS-RC` | S4 | a stage returned rc ≠ 0 | ladder step down (`docs/13` §5) |

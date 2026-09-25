@@ -124,12 +124,15 @@ class Ingest(BaseStage):
         from ingest.video_ingest import ingest_video
 
         cfg = ctx.config.get("ingest", {})
-        r = ingest_video(ctx.source.path,
-                         target_keyframes=cfg.get("target_keyframes", 600),
-                         horizon_policy=cfg.get("horizon_policy", "reject"),
-                         skip_start_s=cfg.get("skip_start_s", 0.0),
-                         end_s=cfg.get("end_s"),
-                         srt_path=ctx.source.telemetry, progress=False)
+        try:
+            r = ingest_video(ctx.source.path,
+                             target_keyframes=cfg.get("target_keyframes", 600),
+                             horizon_policy=cfg.get("horizon_policy", "reject"),
+                             skip_start_s=cfg.get("skip_start_s", 0.0),
+                             end_s=cfg.get("end_s"),
+                             srt_path=ctx.source.telemetry, progress=False)
+        except RuntimeError as e:
+            raise StageError(Code.ING_REJECT, str(e), fatal=True) from e
         outdir = ctx.path("keyframes/.")
         os.makedirs(os.path.dirname(outdir), exist_ok=True)
         # Clear the last run's keyframes first, as the ingest CLI does. The local GPU

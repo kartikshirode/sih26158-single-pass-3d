@@ -33,6 +33,7 @@ CODES = {
     "ADM-OVERLAY": "burned-in overlay or watermark; cropped",
     "ING-NOGNSS": "no GPS track, so no metres and no map position",
     "ING-SCHEMA": "telemetry file did not parse",
+    "ING-REJECT": "ingest could not select usable video frames",
     "GEO-UNREG": "some views failed to register",
     "GEO-REPROJ": "reprojection error over the gate",
     "MVS-RC": "a reconstruction tool exited non-zero",

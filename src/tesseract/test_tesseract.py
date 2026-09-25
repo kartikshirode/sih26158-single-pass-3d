@@ -31,7 +31,7 @@ from tesseract.contracts import (Artefact, Code, Frame, StageError,     # noqa: 
 from tesseract.pipeline import BaseStage, Context, Pipeline             # noqa: E402
 from tesseract.report import render                                     # noqa: E402
 from tesseract.sources import SyntheticSource                           # noqa: E402
-from tesseract.stages import DEFAULT_STAGES                             # noqa: E402
+from tesseract.stages import DEFAULT_STAGES, Ingest                     # noqa: E402
 
 PASS = FAIL = SKIP = 0
 
@@ -663,6 +663,34 @@ def _raises_as(fn):
     return None
 
 
+def t_ingest_failure_manifest():
+    section("T3f: an ingest rejection leaves a manifest")
+    from unittest.mock import patch
+
+    class VideoStub:
+        path = "not-opened.mp4"
+        telemetry = None
+
+        def describe(self):
+            return "video stub"
+
+        def inputs(self):
+            return ["video stub"]
+
+    with tempfile.TemporaryDirectory() as tmp:
+        with patch("ingest.video_ingest.ingest_video",
+                   side_effect=RuntimeError("every frame rejected")):
+            Pipeline([Ingest()]).run(ctx_for(tmp, source=VideoStub()), resume=False)
+        path = os.path.join(tmp, "run_manifest.json")
+        check("ingest failure still writes a run manifest", os.path.isfile(path))
+        if os.path.isfile(path):
+            man = json.load(open(path, encoding="utf-8"))
+            check("ingest failure is labelled", any(
+                s["id"] == "S1-ingest" and s.get("skipped") and
+                "every frame rejected" in s.get("note", "") for s in man["stages"]))
+            check("ingest failure has its own code", Code.ING_REJECT in man["codes"])
+
+
 if __name__ == "__main__":
     print("=" * 62)
     print("tesseract - contracts, scale, orchestration, end to end")
@@ -674,6 +702,7 @@ if __name__ == "__main__":
     t_level_units()
     t_georef_fit()
     t_local_provider()
+    t_ingest_failure_manifest()
     t_end_to_end()
     t_real_run()
     print("\n" + "=" * 62)
