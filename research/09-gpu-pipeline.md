@@ -10,6 +10,12 @@ The 10-minute run itself has **not** been executed. The prediction in section 8 
 from smoke tests: S0 and S1 were timed on a real 10-minute file (the demo clip looped),
 and S3 on 568 and 600 views, which is the view count a 10-minute clip produces.
 
+**Superseded in part (same day).** The models this pose path built were wrong in shape:
+the ground came out in stacked, tilted sheets. `research/10-reconstruction-quality.md`
+traces it and replaces the pose step with COLMAP's global mapper. S3 on the demo went
+from 134 s to 259 s, so the section 8 prediction no longer holds until it is measured
+again on the new path.
+
 ## 1. Changes made to this machine
 
 Everything installed or changed for this work, and whether it has been undone. Nothing

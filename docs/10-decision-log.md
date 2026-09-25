@@ -368,3 +368,28 @@ until the full run is done (claims ledger item 28).
 **Revisit when.** The full 10-minute run disagrees with the prediction by more than 25%,
 or the job runs on a GPU with more than 8 GB, where larger MapAnything windows and full
 resolution densify become affordable.
+
+## ADR-028 · Local poses from COLMAP's global mapper; OpenMVS fuse filter; textured mesh
+
+**Context.** The demo run built on ADR-027 passed every gate, yet its ground came out as
+three or four stacked, tilted sheets. Three causes were found (`research/10`): the
+keyframe gates left two 2-second holes in the flight; MapAnything's window poses drift,
+and triangulating against them rejected the long feature tracks that would have exposed
+the drift, so the short bundle adjustment never saw it; and OpenMVS's default fusion
+filter kept almost none of the depth maps on corrected poses.
+**Decision.** S1 bridges any stretch the gates empty with its sharpest usable frame
+(`select_keyframes`). In `local_gpu`, MapAnything fits only the shared camera, on 60
+spread views; COLMAP matches 30 neighbours per keyframe and `global_mapper` solves every
+pose with that camera fixed (`pose_method` "global"; the old path stays as
+"mapanything"). DensifyPointCloud runs with `--fusion-filter 1` and no region of
+interest. TextureMesh textures the mesh decimated to 10%, with seam levelling off.
+**Evidence.** `research/10` section 6, on the demo clip: sparse ground within 3% of one
+plane 0.47 to 0.77, layered dense cells 0.35 to 0.06, largest camera step 25 to 2.2 times
+the median, dense points 0.93M to 7.0M. Self-calibrating SfM (incremental, or with the
+focal length free) curled the ground into a bowl, so the camera stays fixed.
+**Consequences.** S3 on the demo went from 134 s to 259 s. ADR-027's 10-minute prediction
+was measured on the old pose path and no longer holds. Seams show where photos differ in
+exposure, and the far field, seen only at grazing angles, is smeared.
+**Status.** Accepted for the local path. Partly supersedes ADR-027 (its pose step).
+**Revisit when.** The global mapper is timed on 600 views, or a clip with GPS gives a
+metric check of the shape.
