@@ -764,8 +764,11 @@ Deck rebuild brief: cut to the 6-slide limit, slide-by-slide decisions, images t
 ### research/07-gallery-clip-attempt.md
 Adding Toolse (CC BY-SA 4.0) as a second gallery clip: MapAnything at 10.68 s/view at 60 views, MVS intrinsics-guard refusal fixed with a conf gate, build_console verdict-guard and Vercel token snags, MVS drops open water.
 
+### research/09-gpu-pipeline.md
+The local GPU pipeline (2026-09-25): every change made to the laptop and whether it was reverted, the demo clip, the baseline, both optimisation passes (with what was tried and rejected), both review passes, the 10-minute prediction (8 to 12 min on an RTX 4060, predicted not run), how to run it, and a table of every smoke run.
+
 ### research/08-web-upload.md
-Design of the upload feature (one Cloud Run job per upload, preview before final, status.json contract, limits, uploads kept off curated pages) and two defects it exposed: packing scripts pinned to one laptop, and S1 retaining every full-res frame (~112 GB for a 10-min clip) now fixed with a two-pass decode. A 10-minute clip has still not been ingested. A 2026-09-24 addendum records the start claim, daily slots and signed byte bound (audit F-04, F-05) and the CORS dependency.
+Design of the upload feature (one Cloud Run job per upload, preview before final, status.json contract, limits, uploads kept off curated pages) and two defects it exposed: packing scripts pinned to one laptop, and S1 retaining every full-res frame (~112 GB for a 10-min clip) now fixed with a two-pass decode. A 10-minute clip was first ingested on 2026-09-25 (402 s as the code stood, 55 s after research/09). A 2026-09-24 addendum records the start claim, daily slots and signed byte bound (audit F-04, F-05) and the CORS dependency.
 
 ### research/exp10-mapanything-cpu.md
 EXP-10: MapAnything Apache (1.228B params) at 6.4-8.1 s/view on 8 vCPU; 600 keyframes about 75 min, so a GPU is required. Synthetic renders are inadequate for testing a learned model.
@@ -802,7 +805,7 @@ EXP-14 output: lane factor 5.38-5.77, waist 5.32-5.57, arch floor at least 3.85;
 Scale calibration contract (schema sih26158/scale-calibration/1) for runs kolumvs3d and kolu3d: factor 5.54, bracket [5.32, 5.77], status "calibrated", method known-object, with lane, waist and arch-floor references. Written by exp14_scale_audit.py; read by src/tesseract/scale.py, tools/scale_cal.py, tools/build_qa.py, test_tesseract.py.
 
 ### research/run-evidence/
-Frozen evidence (about 9 MB): JSON results for MapAnything CPU and Kolu model runs (8.14 and 11.45 s/view), Kolu ingest and fuse diagnostics, three textured-MVS results (0.2214 px intrinsics residual, 45/45 registered), run_demo manifests (consumer 2.26 m, RTK 0.098 m absolute), screen-verdicts.json, toolse-intrinsics-gates.txt (10.69 px fit fixed to 0.214 px by a conf gate), and PNG/JPG figures.
+Frozen evidence (about 9 MB): JSON results for MapAnything CPU and Kolu model runs (8.14 and 11.45 s/view), Kolu ingest and fuse diagnostics, three textured-MVS results (0.2214 px intrinsics residual, 45/45 registered), run_demo manifests (consumer 2.26 m, RTK 0.098 m absolute), screen-verdicts.json, toolse-intrinsics-gates.txt (10.69 px fit fixed to 0.214 px by a conf gate), gpu-2026-09-25/ (local_gpu_result.json timings of the laptop GPU smokes and the S0/S1 10-minute benchmarks, research/09), and PNG/JPG figures.
 
 ## audit/codex/
 

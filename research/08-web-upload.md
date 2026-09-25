@@ -73,6 +73,10 @@ identical. One extra sequential decode, about 20 s on a 114 s clip.
 here has yet been run at that length. The next honest step is to ingest a 10-minute clip
 and record what it actually costs, rather than assuming the fix is sufficient.
 
+Done on 2026-09-25 (`research/09-gpu-pipeline.md`), on the demo clip looped to 10 minutes of
+1080p30: the code as it stood took 402 s and peaked at 10.7 GB. After the S1 changes
+recorded there it takes 55 s and peaks at 6.0 GB, scoring every second frame on threads.
+
 ## Limits on the public endpoint
 
 Chosen as engineering limits, not access control: a size cap, a 10-minute duration cap

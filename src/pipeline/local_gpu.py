@@ -460,7 +460,7 @@ def run(images_dir: str, work: str, *, crop_trbl=None, dense_names: list | None 
               "--BundleAdjustmentCeres.max_num_iterations", o["ba_iterations"]],
              "bundle_adjuster")
         # Drop the observations BA could not explain. The demo's first run converged to a
-        # 0.28 px cost, yet model_analyzer reported a mean error of 1.9e146 px: a handful
+        # 0.28 px cost, yet model_analyzer reported a mean error of 2.0e149 px: a handful
         # of points triangulated at near-zero depth dominate a plain mean. The mapper does
         # this filtering itself; triangulating against known poses skips it. The COLMAP
         # 4.2 Windows build has no CUDA Ceres, so BA stays on the CPU.

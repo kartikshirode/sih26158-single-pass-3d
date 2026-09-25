@@ -1,0 +1,143 @@
+{
+  "n_views": 134,
+  "keyframe_size": [
+    1920,
+    595
+  ],
+  "options": {
+    "pose_window": 0,
+    "pose_overlap": 8,
+    "pose_size": 0,
+    "intrinsics_views": 60,
+    "sift_features": 4096,
+    "match_overlap": 6,
+    "tri_refinements": 1,
+    "tri_ba_iterations": 3,
+    "ba_iterations": 10,
+    "dense_resolution_level": 1,
+    "dense_views_fuse": 3,
+    "dense_neighbours": 5,
+    "mesh_min_point_distance": 2.5,
+    "mesh": true,
+    "keep_intermediate": false
+  },
+  "camera": {
+    "f": 1099.917,
+    "cx": 955.054,
+    "cy": 289.446,
+    "w": 1920,
+    "h": 595,
+    "pp_reference": "keyframe centre",
+    "scale": 0.282,
+    "crop_x0_full": 42.708,
+    "crop_y0_full": 0.0
+  },
+  "intrinsics_fit_residual_px": 0.1444,
+  "stitch": [
+    {
+      "window": 1,
+      "views": [
+        46,
+        100
+      ],
+      "scale": 0.66141,
+      "inlier_frac": 0.804
+    },
+    {
+      "window": 2,
+      "views": [
+        92,
+        134
+      ],
+      "scale": 0.50063,
+      "inlier_frac": 0.83
+    }
+  ],
+  "mapanything_s": {
+    "model": 16.2,
+    "images": 3.6,
+    "inference": 20.6,
+    "stitch": 0.6
+  },
+  "mapanything_peak_gib": 6.78,
+  "sparse_after_triangulation": {
+    "Registered images": "134",
+    "Points": "73975",
+    "Observations": "327069",
+    "Mean track length": "4.421345",
+    "Mean observations per image": "2440.813433",
+    "Mean reprojection error": "1.970394px"
+  },
+  "sparse_after_bundle_adjustment": {
+    "Registered images": "134",
+    "Points": "71251",
+    "Observations": "317949",
+    "Mean track length": "4.462379",
+    "Mean observations per image": "2372.753731",
+    "Mean reprojection error": "0.442374px"
+  },
+  "ba_gate": {
+    "passed": true,
+    "problems": []
+  },
+  "dense_points": 931348,
+  "stages": [
+    {
+      "stage": "poses (MapAnything)",
+      "seconds": 45.48
+    },
+    {
+      "stage": "intrinsics fit",
+      "seconds": 0.73
+    },
+    {
+      "stage": "feature_extractor",
+      "seconds": 3.41
+    },
+    {
+      "stage": "sequential_matcher",
+      "seconds": 17.66
+    },
+    {
+      "stage": "point_triangulator",
+      "seconds": 4.1
+    },
+    {
+      "stage": "analyze_triangulated",
+      "seconds": 0.24
+    },
+    {
+      "stage": "bundle_adjuster",
+      "seconds": 3.44
+    },
+    {
+      "stage": "point_filtering",
+      "seconds": 0.38
+    },
+    {
+      "stage": "analyze_adjusted",
+      "seconds": 0.24
+    },
+    {
+      "stage": "model_converter",
+      "seconds": 1.34
+    },
+    {
+      "stage": "image_undistorter",
+      "seconds": 2.39
+    },
+    {
+      "stage": "InterfaceCOLMAP",
+      "seconds": 0.19
+    },
+    {
+      "stage": "DensifyPointCloud",
+      "seconds": 33.28
+    },
+    {
+      "stage": "ReconstructMesh",
+      "seconds": 19.89
+    }
+  ],
+  "total_seconds": 133.4
+}
