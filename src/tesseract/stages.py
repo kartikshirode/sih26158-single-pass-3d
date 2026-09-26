@@ -213,14 +213,16 @@ class Geometry(BaseStage):
     # measured rates, docs/13 section 6: feed-forward on a T4, MVS on 8 vCPU
     S_PER_VIEW_POSE_GPU = 0.55
     S_PER_VIEW_DENSE_CPU = 39.0
-    # measured on the RTX 4060 laptop, research/09-gpu-pipeline.md, 600 uncropped
-    # views: poses, SIFT, matching, triangulation and BA 0.58 s per pose view; densify,
-    # undistortion and meshing 0.54 s per dense view. With the first-draft rates
-    # (1.2 and 0.35 plus 90 s) a 10-minute clip was estimated at 915 s and sent down
-    # the ladder by the 900 s budget it fits in.
-    S_PER_VIEW_LOCAL_SPARSE = 0.6
-    S_PER_VIEW_LOCAL_DENSE = 0.55
-    S_LOCAL_FIXED = 30.0
+    # Measured on the RTX 4060 laptop on the global-mapper path (research/11 section 10).
+    # Fixed: MapAnything's load and its 60-view intrinsics fit, 37-57 s. Per pose view,
+    # SIFT, matching and the mapper: 0.29 s on the 600 s synthetic clip (B5v), 0.36 on
+    # test_flight, 0.59 on the demo, 0.90 on Nicosia's pan, whose tracks run 32 views.
+    # Per dense view, undistortion, densify, mesh and texture: 1.25, 1.22, 0.90 and 0.22.
+    # With these B5v's S3 is estimated at 563 s against 543 measured, the demo's at 341
+    # against 302. The earlier 0.6 / 0.55 / 30 put B5v at 407 s.
+    S_PER_VIEW_LOCAL_SPARSE = 0.5
+    S_PER_VIEW_LOCAL_DENSE = 1.1
+    S_LOCAL_FIXED = 57.0
     LOCAL_L1_DENSE_FACTOR = 0.65
 
     def estimate(self, ctx: Context) -> float:
