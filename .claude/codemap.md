@@ -149,7 +149,7 @@ Gotcha: decodes every frame (frame-threaded, ~10 s for a 10-min 1080p clip) to s
 CLI that renders the synthetic single-pass scene into a real H.264 1080p30 MP4 (every 6th frame motion-blurred) plus a Mavic-3-style DJI .SRT with simulated GNSS noise.
 Exports: enu_to_geodetic(enu, lat0, lon0, h0) -> (lat, lon, h); srt_timestamp(s); write_srt(path, lat, lon, rel_alt, abs_alt, yaw, pitch, fps, focal_mm=24); main() (out, --seconds, --fps, --gnss consumer|rtk, --lat/--lon, --crf, --seed)
 Used by: standalone script
-Gotcha: needs simscene and eval3d.gnss via a sys.path insert of src/. abs_alt is rel_alt plus a constant, mimicking real barometric DJI files.
+Gotcha: needs simscene and eval3d.gnss via a sys.path insert of src/. abs_alt is rel_alt plus a constant, mimicking real barometric DJI files. Gimbal angles follow DJI: gb_yaw 90 (the pass flies east), gb_pitch -pitch (60 degrees down is -60); it used to write -(90 - pitch), and data/test_flight.SRT was corrected to match, since S5 reads the pitch.
 
 ### src/ingest/test_frames.py
 Plain-script test of the frame gates on a synthetic letterboxed frame: bars measured, sky and horizon found below a top bar, horizon row counted past it, the clip crop removes the bars, a watermark above the bottom bar is cropped even with a black sample mid-clip; frames without bars unchanged; the variable-frame-rate flag with a scoring stride; select_keyframes bridges gated stretches and never takes an unusable frame (T3b); T3c splits a high-flow, moderately changed histogram but keeps fast motion with unchanged histograms; a threaded scan of an encoded clip equals the sequential one, also when the first timestamp is not 0. Run `python src/ingest/test_frames.py`.

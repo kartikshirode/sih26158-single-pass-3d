@@ -132,8 +132,13 @@ def main():
     # abs_alt on a real DJI file is barometric: rel_alt plus a fixed takeoff offset.
     rel_alt = gps_enu[:, 2] - gps_enu[0, 2] + a.alt
     abs_alt = rel_alt + (a.site_alt - a.alt)
-    yaw = np.full(n_frames, 0.0)
-    pitch_arr = np.full(n_frames, -(90.0 - a.pitch))
+    # DJI's gimbal angles: yaw clockwise from north (single_pass flies east, heading 0
+    # in its own counter-clockwise-from-east terms), pitch below the horizon negative,
+    # -90 straight down. single_pass's pitch_deg is already the angle below the horizon.
+    # This wrote -(90 - pitch), -30 for a camera looking 60 degrees down, until S5 began
+    # reading the pitch (research/11 section 9).
+    yaw = np.full(n_frames, 90.0)
+    pitch_arr = np.full(n_frames, -a.pitch)
 
     face_rgb = shade_faces(scene.mesh, scene.labels, rng=np.random.default_rng(11))
     V = np.asarray(scene.mesh.vertices)
