@@ -417,3 +417,29 @@ cameras. The cloud path keeps its 100% gate.
 **Status.** Accepted for the local path.
 **Revisit when.** A real clip shows the mapper splitting into two large models; keeping
 only the largest then drops a real part of the flight, and merging would be the fix.
+
+## ADR-030 · A clip's SRT track georeferences it to F6, with heights above take-off
+
+**Context.** GAP C-3: S1 parsed and aligned a DJI SRT sidecar to every keyframe, but S5
+only read GNSS through the synthetic source, so a real clip with GPS still came out in
+model units and a local frame. Judging weighs accuracy at 30%, and the problem statement
+asks for a georeferenced, metric model. The SRT gives latitude, longitude and a height
+above take-off. Its `abs_alt` is barometric (rel_alt plus a constant), so nothing in the
+file gives the take-off point's own height, and an orthometric F7 height would be a guess.
+**Decision.** On a video source S5 fits the keyframes' camera centres to their SRT fixes
+with the same levelled 6-DOF fit as the synthetic path (ADR-026), keyframe i to camera i,
+skipping keyframes with no pose or no fix. The result is F6: local ENU in metres about the
+first fix, up being height above take-off. `georef.json` holds the whole transform, so
+S6 carries the textured mesh into the same frame. The LAS and GeoTIFF carry an
+orthographic CRS about the reference fix, which matches ENU horizontally to within 2 cm
+per km per 100 m of height, and the vertical is named in the tags and the manifest.
+Fewer than 8 usable fixes or a track under 20 m skips the stage with `ING-NOGNSS`.
+**Evidence.** `src/tesseract/test_tesseract.py` T3g: a gauge rotated on all three axes and
+scaled 0.04 comes back to 0.010 m RMS against the truth, with an unposed view and an
+empty fix left out. `audit/codex-opt/RUNLOG.md` row G1 has the test_flight clip.
+**Consequences.** A clip with an SRT is in metres, scale status "gnss", with a CRS a GIS
+can place. Heights stay relative until a take-off elevation (a DEM lookup, or the
+operator) is supplied; that is the step to F7.
+**Status.** Accepted.
+**Revisit when.** A take-off elevation source is available, or an SRT family writes an
+RTK flag, which would let the scale status say "gnss+rtk".

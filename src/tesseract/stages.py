@@ -508,9 +508,9 @@ class Georeference(BaseStage):
     """
 
     id: str = "S5-georef"
-    version: str = "3"          # gravity lengths in metres, not the raw gauge's units
+    version: str = "4"          # a real clip's SRT track, to F6 (GAP C-3)
     needs: tuple = ("points", "cameras")
-    produces: tuple = ("points_geo",)
+    produces: tuple = ("points_geo", "georef_transform")
     levels: tuple = ("L0", "L1", "L2", "L3", "L4")
 
     def execute(self, ctx: Context) -> StageResult:
@@ -518,19 +518,11 @@ class Georeference(BaseStage):
             return StageResult(self.id, 0.0, skipped=True, codes=[Code.ING_NOGNSS],
                                facts={"georeferenced": False, "frame": Frame.F5_LLF},
                                note="no telemetry: the result stays in a local frame")
-        if not hasattr(ctx.source, "world"):
-            # S1 now parses and aligns a real sidecar (EXP-23), but this stage still
-            # reads GNSS through the synthetic source's world(). Until the video path
-            # is wired (docs/09 GAP C-3, plan Phase 1.2) say so rather than crash.
-            return StageResult(self.id, 0.0, skipped=True,
-                               codes=[Code.STAGE_UNAVAILABLE],
-                               facts={"georeferenced": False, "frame": Frame.F5_LLF,
-                                      "telemetry_unwired": True},
-                               note="telemetry parsed but not yet consumed on the video "
-                                    "path (GAP C-3): the result stays in a local frame")
         if ctx.config.get("dof") == 7:
             raise StageError(Code.REF_7DOF,
                              "a 7-DOF fit on a single pass is refused (EXP-09)", fatal=True)
+        if not hasattr(ctx.source, "world"):
+            return self._from_srt(ctx)
 
         from eval3d.gnss import robust_track_sim3
         from eval3d.metrics import apply_transform
@@ -579,6 +571,89 @@ class Georeference(BaseStage):
                                   # them metres.
                                   "gravity": _gravity_lengths(grav, sg, Units.METRES),
                                   "scale": scale_svc.for_page(cal)})
+
+
+    # Fewest usable fixes, and shortest horizontal track, a heading fit is trusted on.
+    SRT_MIN_FIXES = 8
+    SRT_MIN_TRACK_M = 20.0
+
+    def _from_srt(self, ctx: Context) -> StageResult:
+        """
+        A real clip's SRT track (GAP C-3), with the same 6-DOF fit as the synthetic path.
+
+        S1 aligns one telemetry record to each keyframe; cameras.npy has one pose per
+        keyframe (NaN where the mapper placed none), so fix i and camera i are the same
+        instant. The result is F6: local ENU in metres about the first fix. Heights are
+        the SRT's height above take-off, not orthometric: DJI's abs_alt is barometric
+        (rel_alt plus a constant), and nothing in the file gives the take-off point's
+        own height. So this is no F7, and the vertical is labelled for what it is.
+        """
+        from eval3d.gnss import geodetic_to_enu, robust_track_sim3
+        from eval3d.metrics import apply_transform
+
+        def skip(why: str) -> StageResult:
+            return StageResult(self.id, 0.0, skipped=True, codes=[Code.ING_NOGNSS],
+                               facts={"georeferenced": False, "frame": Frame.F5_LLF},
+                               note=f"{why}: the result stays in a local frame")
+
+        with io.open(ctx.path("ingest.json"), encoding="utf-8") as f:
+            tel = json.load(f).get("telemetry") or []
+        P = np.load(os.path.join(ctx.workdir, ctx.need("points").path)).astype(np.float64)
+        cam = np.load(os.path.join(ctx.workdir, ctx.need("cameras").path)).astype(np.float64)
+        if cam.ndim != 3 or len(cam) != len(tel):
+            return skip(f"{len(tel)} telemetry records for {len(cam)} cameras")
+        ok = [i for i in range(len(cam)) if np.isfinite(cam[i]).all() and tel[i]
+              and tel[i].get("latitude") is not None and tel[i].get("longitude") is not None
+              and tel[i].get("height") is not None]
+        if len(ok) < self.SRT_MIN_FIXES:
+            return skip(f"{len(ok)} keyframes have both a pose and a GNSS fix with height")
+        lat = np.array([tel[i]["latitude"] for i in ok])
+        lon = np.array([tel[i]["longitude"] for i in ok])
+        hgt = np.array([tel[i]["height"] for i in ok], np.float64)
+        lat0, lon0 = float(lat[0]), float(lon[0])
+        # Height above take-off as the ellipsoidal height of a take-off at 0 m: ENU up
+        # is then height above take-off, to the curvature over the site (millimetres).
+        gps = np.asarray(geodetic_to_enu(lat, lon, hgt, lat0, lon0, 0.0), np.float64)
+        track = float(np.ptp(gps[:, :2], axis=0).max())
+        if track < self.SRT_MIN_TRACK_M:
+            return skip(f"the GNSS track spans {track:.1f} m, too short to fix a heading")
+
+        B, grav, _ = _level_basis(P, cam)
+        origin = P.mean(0)
+        src = _level(cam[ok][:, :3, 3], B, origin)
+        Rg, tg, sg, inl = robust_track_sim3(src, gps, thresh="auto",
+                                            rng=np.random.default_rng(5))
+        fit = np.linalg.norm(apply_transform(src, Rg, tg, sg) - gps, axis=1)
+        rms = float(np.sqrt(np.mean(fit[inl] ** 2))) if inl.any() else float("nan")
+        P_enu = apply_transform(_level(P, B, origin), Rg, tg, sg)
+        art = _save_npy(ctx, "points_geo", P_enu, frame=Frame.F6_ENU,
+                        units=Units.METRES, kind="point-cloud")
+        ref = {"latitude": lat0, "longitude": lon0,
+               "height": "take-off point (SRT height 0); its absolute height is unknown"}
+        with io.open(ctx.path("georef.json"), "w", encoding="utf-8") as f:
+            json.dump({"from": Frame.F4_REFINED_WORLD, "to": Frame.F6_ENU,
+                       "basis_rows": B.tolist(), "origin": origin.tolist(), "scale": 1.0,
+                       "sim3": {"R": Rg.tolist(), "t": np.asarray(tg).tolist(),
+                                "s": float(sg)},
+                       "enu_reference": ref, "gnss_fit_rms_m": rms,
+                       "apply": "sim3(((X - origin) @ basis_rows.T)[:, [0, 2, 1]])"},
+                      f, indent=2)
+        tf = Artefact("georef.json", "transform", frame=Frame.F6_ENU).stamp(ctx.workdir)
+        cal = scale_svc.from_gnss(sg, rtk=False, residual_m=rms)
+        return StageResult(
+            self.id, 0.0, outputs={"points_geo": art, "georef_transform": tf},
+            facts={"georeferenced": True, "frame": Frame.F6_ENU, "units": Units.METRES,
+                   "crs": None, "enu_reference": ref,
+                   "vertical": "height above take-off (SRT), not orthometric",
+                   "gnss_fixes_used": len(ok), "gnss_track_m": round(track, 1),
+                   "gnss_inlier_fraction": round(float(inl.mean()), 4),
+                   "gnss_fit_rms_m": round(rms, 3), "sim3_scale": round(float(sg), 6),
+                   "dof": 6,
+                   "rotation_from": {"gnss": ["yaw", "track slope"],
+                                     "gravity": ["roll about the track"]},
+                   "gravity": _gravity_lengths(grav, sg, Units.METRES),
+                   "scale": scale_svc.for_page(cal)},
+            note=f"SRT track, {len(ok)} fixes, fit {rms:.2f} m RMS; heights above take-off")
 
 
 def _utm_epsg(lon: float, lat: float) -> int:
@@ -680,6 +755,17 @@ def _level(X: np.ndarray, B: np.ndarray, origin: np.ndarray) -> np.ndarray:
     return ((np.asarray(X, np.float64) - origin) @ B.T)[:, [0, 2, 1]]
 
 
+def _apply_frame_json(X: np.ndarray, tf: dict) -> np.ndarray:
+    """F4 points through level.json or georef.json: level, scale, then any GNSS fit."""
+    L = _level(X, np.asarray(tf["basis_rows"]), np.asarray(tf["origin"]))
+    L = L * float(tf.get("scale", 1.0))
+    if "sim3" in tf:
+        from eval3d.metrics import apply_transform
+        L = apply_transform(L, np.asarray(tf["sim3"]["R"]), np.asarray(tf["sim3"]["t"]),
+                            float(tf["sim3"]["s"]))
+    return L
+
+
 # ------------------------------------------------------------------ S5b · level
 @dataclass
 class Level(BaseStage):
@@ -702,7 +788,7 @@ class Level(BaseStage):
     def execute(self, ctx: Context) -> StageResult:
         if "points_geo" in ctx.artefacts:
             return StageResult(self.id, 0.0, skipped=True,
-                               note="already georeferenced (F7); nothing to level")
+                               note="already georeferenced (F6/F7); nothing to level")
         P = np.load(os.path.join(ctx.workdir, ctx.need("points").path)).astype(np.float64)
         c = (np.load(os.path.join(ctx.workdir, ctx.artefacts["cameras"].path))
              if "cameras" in ctx.artefacts else None)
@@ -766,6 +852,21 @@ class Export(BaseStage):
         frame = src.frame or (Frame.F7_PROJECTED if geo else Frame.F5_LLF)
         units = ctx.facts.get("units", Units.MODEL)
         crs = ctx.facts.get("crs") if geo else None
+        # A CRS the GIS side can read. F7 has its EPSG code. F6 is local ENU about the
+        # first GNSS fix, which is the orthographic projection about that point to
+        # within 2 cm per km per 100 m of height; its heights are above take-off.
+        crs_obj, crs_label = None, None
+        if crs:
+            import pyproj
+            crs_obj, crs_label = pyproj.CRS.from_epsg(int(str(crs).split(":")[1])), str(crs)
+        elif geo and frame == Frame.F6_ENU and ctx.facts.get("enu_reference"):
+            import pyproj
+            r = ctx.facts["enu_reference"]
+            crs_obj = pyproj.CRS.from_proj4(
+                f"+proj=ortho +lat_0={r['latitude']} +lon_0={r['longitude']} +x_0=0 "
+                "+y_0=0 +ellps=WGS84 +units=m +no_defs")
+            crs_label = (f"local ENU about {r['latitude']:.6f}, {r['longitude']:.6f} "
+                         f"(orthographic); {ctx.facts.get('vertical', 'heights unknown')}")
 
         out = ctx.path("export/.")
         os.makedirs(os.path.dirname(out), exist_ok=True)
@@ -780,11 +881,10 @@ class Export(BaseStage):
         paths["ply"] = p
 
         p = ctx.path("export", "cloud.las")
-        hdr = laspy.LasHeader(version="1.4", point_format=6 if crs else 3)
+        hdr = laspy.LasHeader(version="1.4", point_format=6 if crs_obj else 3)
         hdr.offsets, hdr.scales = P.min(0), [0.001, 0.001, 0.001]
-        if crs:
-            import pyproj
-            hdr.add_crs(pyproj.CRS.from_epsg(int(str(crs).split(":")[1])))
+        if crs_obj:
+            hdr.add_crs(crs_obj)
         las = laspy.LasData(hdr)
         las.x, las.y, las.z = P[:, 0], P[:, 1], P[:, 2]
         las.write(p)
@@ -805,34 +905,35 @@ class Export(BaseStage):
         dsm[~np.isfinite(dsm)] = np.nan
         p = ctx.path("export", "dsm.tif")
         with rasterio.open(p, "w", driver="GTiff", height=ny, width=nx, count=1,
-                           dtype="float32", nodata=np.nan, crs=crs,
-                           transform=from_origin(e0 if crs else 0.0,
-                                                 (n0 + ny * res) if crs else ny * res,
+                           dtype="float32", nodata=np.nan, crs=crs_obj,
+                           transform=from_origin(e0 if crs_obj else 0.0,
+                                                 (n0 + ny * res) if crs_obj else ny * res,
                                                  res, res), compress="deflate") as ds:
             ds.write(np.flipud(dsm).astype("float32"), 1)
             ds.update_tags(FRAME=frame, UNITS=units,
-                           CRS_STATUS=str(crs) if crs else
+                           CRS_STATUS=crs_label or
                            "NONE - not georeferenced, no GNSS in source",
                            GSD=str(res))
         paths["geotiff"] = p
 
         # The textured mesh, when S3 made one, in the same frame as the cloud: OBJ,
-        # GLB and FBX (R-O5). Only the levelled frame has its transform on disk; a
-        # georeferenced run would need S5's, so its mesh is not exported yet.
+        # GLB and FBX (R-O5), carried by the transform S5b or S5 wrote rather than one
+        # refitted here.
         notes = []
         tex = ctx.path("geometry", "scene_tex.obj")
-        if os.path.isfile(tex) and not geo and "level_transform" in ctx.artefacts:
-            with io.open(os.path.join(ctx.workdir, ctx.artefacts["level_transform"].path),
+        key = "georef_transform" if geo else "level_transform"
+        if os.path.isfile(tex) and key in ctx.artefacts:
+            with io.open(os.path.join(ctx.workdir, ctx.artefacts[key].path),
                          encoding="utf-8") as f:
-                lt = json.load(f)
+                tf = json.load(f)
             sys.path.insert(0, os.path.join(K.ROOT, "src", "pipeline"))
             from mesh_export import export_textured
-            got, why = export_textured(tex, ctx.path("export"), np.asarray(lt["basis_rows"]),
-                                       np.asarray(lt["origin"]), float(lt["scale"]))
+            got, why = export_textured(tex, ctx.path("export"),
+                                       lambda V: _apply_frame_json(V, tf))
             paths.update(got)
             notes += why
         elif os.path.isfile(tex):
-            notes.append("textured mesh not exported: no levelled-frame transform")
+            notes.append(f"textured mesh not exported: no {key.replace('_', ' ')}")
 
         arts = {}
         for fmt, path in paths.items():

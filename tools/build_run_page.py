@@ -139,7 +139,11 @@ def pack(run: str, tri_budget: int, pt_budget: int, log=print):
     from scipy.spatial import cKDTree
 
     P4 = np.load(os.path.join(run, "points.npy")).astype(np.float64)
-    P5 = np.load(os.path.join(run, "points_llf.npy")).astype(np.float64)
+    # The export frame: levelled (F5), or georeferenced (F6/F7) when S5 ran and S5b
+    # skipped. Either way the same points as points.npy, in the same order.
+    p5 = os.path.join(run, "points_llf.npy")
+    P5 = np.load(p5 if os.path.exists(p5) else os.path.join(run, "points_geo.npy"))
+    P5 = P5.astype(np.float64)
     C = np.load(os.path.join(run, "colors.npy"))
     if C.dtype != np.uint8:
         C = (np.clip(C, 0, 1) * 255).astype(np.uint8) if C.max() <= 1.0 else C.astype(np.uint8)

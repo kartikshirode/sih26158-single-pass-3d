@@ -2,9 +2,9 @@
 The textured mesh from S3 in the export frame, as OBJ, GLB and FBX (R-O5).
 
 OpenMVS TextureMesh writes geometry/scene_tex.obj in the reconstruction's own frame
-(F4). The cloud leaves S5b levelled and scaled (F5), so the mesh gets the same
-transform, read from level.json rather than refitted, and the three files overlay the
-PLY and LAS of the same run.
+(F4). The cloud leaves S5b levelled and scaled (F5), or S5 georeferenced (F6), so the mesh
+gets the same transform, read from level.json or georef.json rather than refitted, and
+the three files overlay the PLY and LAS of the same run.
 
   OBJ  vertices rewritten, UVs and faces copied line for line; a clean MTL (OpenMVS
        writes `Tr 1`, which some readers take as fully transparent)
@@ -75,12 +75,14 @@ def _assimp():
         return None, f"fbx: no assimp library ({type(e).__name__}); set SIH_ASSIMP"
 
 
-def export_textured(obj: str, out: str, basis_rows, origin, scale: float,
-                    log=lambda *_: None) -> tuple[dict, list]:
-    """Write model.obj/.mtl/_Kd.jpg, model.glb and model.fbx into `out`."""
+def export_textured(obj: str, out: str, transform) -> tuple[dict, list]:
+    """
+    Write model.obj/.mtl/_Kd.jpg, model.glb and model.fbx into `out`. `transform`
+    maps the OBJ's F4 vertices (N, 3) into the export frame, Z up.
+    """
     os.makedirs(out, exist_ok=True)
     lines, vi, V, tex = _read(obj)
-    F5 = to_frame(V, basis_rows, origin, scale)
+    F5 = np.asarray(transform(V), np.float64)
     paths, notes = {}, []
 
     mtl = None

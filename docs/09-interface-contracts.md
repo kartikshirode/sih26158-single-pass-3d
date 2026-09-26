@@ -124,7 +124,7 @@ The stage numbers follow `docs/02` §3, with S3b added for bundle adjustment.
 | `ingest.json` | `stats{video, resolution, fps, frames_decoded, shots_detected, keyframes_selected, rejected_*, overlay_crop_trbl, blur_threshold_varlap, flow_budget_px, has_gps_sidecar, srt_records}`, `keyframes[]` (source frame indices), `telemetry[]` |
 | `telemetry[i]` | `FrameTelemetry{t_us, lat, lon, alt_ellipsoid, alt_rel, alt_baro?, yaw?, pitch?, roll?, focal_mm?, fov?, quality_flags[]}` (`docs/02` §4.2) |
 | Must persist | **crop box** (F0 → cropped F0), source frame index per keyframe, telemetry aligned to keyframes |
-| **GAP C-3** | `telemetry` is written and aligned (`video_ingest.py`, `telemetry_for_frames`), but no development clip has a sidecar, so every run reports `srt_records 0` (and until 2026-09-22 the parser's longitude pattern matched only the Mavic 2 misspelling `longtitude`, so a modern sidecar would have parsed to nothing; EXP-23). The unfed half is downstream: `VideoSource` has no `world()`, so S5 cannot read what S1 writes (`docs/13` S5) |
+| **GAP C-3** | `telemetry` is written and aligned (`video_ingest.py`, `telemetry_for_frames`), but no development clip has a sidecar, so every run reports `srt_records 0` (and until 2026-09-22 the parser's longitude pattern matched only the Mavic 2 misspelling `longtitude`, so a modern sidecar would have parsed to nothing; EXP-23). The unfed half is downstream: `VideoSource` has no `world()`, so S5 could not read what S1 writes (`docs/13` S5). **Closed 2026-09-26 (ADR-030):** S5 reads `ingest.json` telemetry on a video source |
 | Rule | a stale keyframe from a previous run in the output directory is an error, not a file to ignore (T-ROB-09) |
 
 ### S3 · Pose + metric prior (MapAnything)
@@ -165,6 +165,7 @@ The stage numbers follow `docs/02` §3, with S3b added for bundle adjustment.
 | Rule | **Level first, then 6-DOF**: yaw and the track's slope from the GNSS, roll about the track from gravity, plus t and s (ADR-026, amending ADR-008's 5-DOF). A 7-DOF fit on a single pass is refused (EXP-09) |
 | Rule | the fit is done in F6 and projected to F7 last; the PROJ transformer is built with `allow_ballpark=False` and the geoid grid is checked at startup |
 | Without GNSS | S5 is skipped, `georeferenced: false`, and **no CRS is written anywhere** |
+| Video (ADR-030) | an SRT track from S1 is fitted the same way, keyframe i to camera i, and gives **F6**, not F7: local ENU in metres about the first fix, heights above take-off (the SRT's `height`; `abs_alt` is barometric and never used). Needs 8 fixes with a pose and a 20 m track, else skipped with `ING-NOGNSS`. Writes `georef.json` `{basis_rows, origin, sim3: {R, t, s}, enu_reference, gnss_fit_rms_m}`; S6 labels the LAS and GeoTIFF with an orthographic CRS about the reference |
 
 ### S6 · Export
 

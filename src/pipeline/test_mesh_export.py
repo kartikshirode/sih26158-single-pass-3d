@@ -42,7 +42,8 @@ with tempfile.TemporaryDirectory() as tmp:
     B = np.array([[c, 0.0, -s], [0.0, 1.0, 0.0], [s, 0.0, c]])
     origin, k = np.array([2.0, 3.0, 3.0]), 2.5
     out = os.path.join(tmp, "export")
-    paths, notes = export_textured(os.path.join(tmp, "scene_tex.obj"), out, B, origin, k)
+    paths, notes = export_textured(os.path.join(tmp, "scene_tex.obj"), out,
+                                   lambda X: to_frame(X, B, origin, k))
 
     lines = open(paths["obj"]).read().splitlines()
     got = np.array([ln.split()[1:] for ln in lines if ln.startswith("v ")], float)

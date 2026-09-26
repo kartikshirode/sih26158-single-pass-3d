@@ -721,6 +721,75 @@ def _raises_as(fn):
     return None
 
 
+def t_srt_georef():
+    section("T3g: a real clip's SRT track georeferences it to F6 (GAP C-3)")
+    from eval3d.gnss import geodetic_to_enu
+    from eval3d.metrics import apply_transform
+    from tesseract.stages import Export, Georeference, _enu_to_geodetic
+
+    rng = np.random.default_rng(11)
+    n, hd = 40, np.radians(30)
+    fwd, right = np.array([np.sin(hd), np.cos(hd), 0.0]), np.array([np.cos(hd), -np.sin(hd), 0])
+    s_ = np.linspace(0, 400, n)
+    cams_enu = s_[:, None] * fwd + [0, 0, 100.0]
+    ground = np.column_stack([rng.uniform(-150, 550, 4000), rng.uniform(-150, 550, 4000),
+                              rng.uniform(0, 3, 4000)])
+    # The reconstruction's gauge: rotated, scaled and shifted, as a mapper leaves it.
+    a = np.radians([25, -40, 70])
+    Rx = np.array([[1, 0, 0], [0, np.cos(a[0]), -np.sin(a[0])], [0, np.sin(a[0]), np.cos(a[0])]])
+    Ry = np.array([[np.cos(a[1]), 0, np.sin(a[1])], [0, 1, 0], [-np.sin(a[1]), 0, np.cos(a[1])]])
+    Rz = np.array([[np.cos(a[2]), -np.sin(a[2]), 0], [np.sin(a[2]), np.cos(a[2]), 0], [0, 0, 1]])
+    Rf, tf_, sf = Rz @ Ry @ Rx, np.array([3.0, -7, 1]), 0.04
+    down = np.array([0, 0, -1.0])
+    R_cam = np.stack([right, np.cross(down, right), down], axis=1)   # x right, z down
+    cams = np.repeat(np.eye(4)[None], n, 0)
+    cams[:, :3, :3] = Rf @ R_cam
+    cams[:, :3, 3] = apply_transform(cams_enu, Rf, tf_, sf)
+    cams[7] = np.nan                                  # a view the mapper did not place
+    lat, lon, h = _enu_to_geodetic(cams_enu, 28.6, 77.2, 0.0)
+    tel = [{"latitude": float(la), "longitude": float(lo), "height": float(z), "flags": []}
+           for la, lo, z in zip(lat, lon, cams_enu[:, 2])]
+    tel[3] = {}                                       # a keyframe with no fix
+
+    tmp = tempfile.mkdtemp(prefix="tess-")
+    try:
+        with io.open(os.path.join(tmp, "ingest.json"), "w", encoding="utf-8") as f:
+            json.dump({"stats": {}, "telemetry": tel}, f)
+        np.save(os.path.join(tmp, "points.npy"), apply_transform(ground, Rf, tf_, sf))
+        np.save(os.path.join(tmp, "cameras.npy"), cams)
+        c = ctx_for(tmp, source=_Clip(), facts={"has_telemetry": True})
+        c.artefacts["points"] = Artefact("points.npy", "point-cloud")
+        c.artefacts["cameras"] = Artefact("cameras.npy", "array")
+        r = Georeference().execute(c)
+        check("S5 georeferences a video with an SRT track, in F6 metres",
+              not r.skipped and r.facts.get("frame") == Frame.F6_ENU
+              and r.facts.get("units") == Units.METRES and r.facts.get("georeferenced"),
+              r.note)
+        gl = _enu_to_geodetic(ground, 28.6, 77.2, 0.0)
+        want = np.asarray(geodetic_to_enu(*gl, float(lat[0]), float(lon[0]), 0.0))
+        got = np.load(os.path.join(tmp, "points_geo.npy"))
+        rms = float(np.sqrt(np.mean(np.sum((got - want) ** 2, axis=1))))
+        check("the ground lands where the GNSS says, heights above take-off",
+              rms < 0.5, f"{rms:.3f} m RMS over {len(got)} points")
+        check("fixes without a pose or without a fix are left out",
+              r.facts.get("gnss_fixes_used") == n - 2, str(r.facts.get("gnss_fixes_used")))
+        check("the vertical is labelled for what it is",
+              "take-off" in r.facts.get("vertical", ""))
+        c.artefacts.update(r.outputs)
+        c.facts.update(r.facts)
+        e = Export().execute(c)
+        import laspy
+        import rasterio
+        with rasterio.open(os.path.join(tmp, "export", "dsm.tif")) as ds:
+            tif_crs = ds.crs
+        las_crs = laspy.read(os.path.join(tmp, "export", "cloud.las")).header.parse_crs()
+        check("the GeoTIFF and the LAS carry a CRS a GIS can place",
+              tif_crs is not None and las_crs is not None and e.facts["frame"] == "F6",
+              f"{tif_crs}")
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
 def t_ingest_failure_manifest():
     section("T3f: an ingest rejection leaves a manifest")
     from unittest.mock import patch
@@ -761,6 +830,7 @@ if __name__ == "__main__":
     t_georef_fit()
     t_local_provider()
     t_ingest_failure_manifest()
+    t_srt_georef()
     t_end_to_end()
     t_real_run()
     print("\n" + "=" * 62)
