@@ -260,6 +260,17 @@ vary by about 20% with other use of the laptop, so a time claim needs the final 
 | Q0b | None (timing baseline run next to C1 and C2) | 54.6 / 68.7 / 60.7 | quarter 21.700 dB, 0.5367, 97.82%; full 22.830 dB, 0.6493 | 0.774, 0.056 | Reference for the rows below |
 | C1 | `-d 4` and texture decimation 0.2 | 56.2 / 43.8 / 62.3 | quarter 21.699 dB, 0.5352, 98.63%; full 22.817 dB, 0.6468 | 0.774, 0.056 | Candidate: mesh and texture 106 s against 129 s, full-size PSNR within the 0.03 dB noise, coverage up 0.8 points |
 | C2 | `-d 4`, ReconstructMesh `--target-face-num 200000`, no texture decimation | 57.5 / 59.8 / 45.2 | quarter 21.700 dB, 0.5362, 98.75%; full 22.804 dB, 0.6475 | 0.774, 0.056 | Candidate: 105 s against 129 s, 0.026 dB lower at full size |
+| Q4 | ReconstructMesh `-d 1.5` (was 2.5) | 74.1 / 161.9 / 120.3 | quarter 21.705 dB, 0.5267, 97.37%; full 22.985 dB, 0.6518 | 0.774, 0.055 | Reject: 0.15 dB at full size for 2.4 times the mesh time (it overlapped the CB test for part of its run, so the ratio is rough) |
+| Q5 | Texture decimation 0.3 (was 0.1) | 56.5 / 75.8 / 157.3 | quarter 21.976 dB, 0.5494; full 22.812 dB, 0.6325 | 0.774, 0.056 | Reject: 0.28 dB better at quarter size but 0.017 SSIM worse at full size, and 2.6 times the texture time. Three times the faces in the same 4096 atlas leaves each patch fewer texels |
+| Q6 | Densify `--postprocess-dmaps 7` | 58.3 / 66.1 / 66.7 | quarter 21.742 dB, 0.5320, 92.61%; full 22.786 dB, 0.6419 | 0.774, 0.021 | Reject: layered cells fall from 0.056 to 0.021, a much cleaner ground, but coverage falls 5.2 points, past the 2-point rule. Q13 and Q14 try parts of it |
+| Q7 | ReconstructMesh `-f 1` (free-space support) | 58.3 / 81.7 / 61.0 | full 22.841 dB, 0.6496, 97.80% | 0.774, 0.056 | Reject: no change, 13 s slower |
+| Q8 | TextureMesh `--ignore-mask-label -2` with both levellings | 51.2 / 68.4 / crashed | none | none | TextureMesh 2.4 exits right after cleaning the mesh with label -2, so the lens-mask idea (openMVS issue 1251) cannot be tested this way. Q9 fails the same way |
+| Q10 | ReconstructMesh `--remove-spurious 10` (was 20) | 54.1 / 73.3 / 61.1 | full 22.872 dB, 0.6484, 97.01% | 0.774, 0.055 | Reject: it cuts holes in the far-field houses rather than tidying them (`out/codex/novel_12.jpg`) |
+| Q11 | `--remove-spurious 5` | 54.8 / 75.2 / 59.6 | full 22.880 dB, 0.6480, 95.72% | 0.774, 0.056 | Reject: more holes, coverage down 2.1 points |
+| CB | Per-image colour gains from the sparse points (`out/codex/colour_balance.py`), applied to the dense images before TextureMesh, on M0's mesh | texture 85 s against 90 s | raw full 22.638 dB against 22.834; after fitting one gain per channel to each held-out frame 23.468 against 23.147 | not applicable | Not kept. The gains are real (0.92 to 1.22 across the flight, the camera's exposure drifting), and removing them makes the texture 0.32 dB more self-consistent, but the renders look the same: the blue-white sand comes from the later, backlit frames that see that ground closest, which is view-dependent light and not exposure |
+| Q12 | Texture decimation 0.2 (was 0.1) | 55.3 / 68.8 / 92.2 | quarter 21.699 dB, 0.5265, 97.98%; full 23.016 dB, 0.6542 | 0.774, 0.056 | Candidate for quality: 0.19 dB and 0.005 SSIM better than Q0b at full size, six times the noise, still one 4096 atlas (23,390 patches). Costs 31 s of texturing here. Checked on B2 next |
+| Q13 | Densify `--postprocess-dmaps 1` (speckles only) | 48.9 / 59.4 / 62.0 | full 22.803 dB, 0.6449, 92.51% | 0.774, 0.020 | Reject: the speckle filter alone takes the 5 points of coverage |
+| Q14 | `--postprocess-dmaps 3` (speckles and gap filling) | 49.6 / 61.1 / 60.0 | full 22.908 dB, 0.6455, 92.83% | 0.774, 0.022 | Reject: coverage down 5.0 points |
 
 Rendering a held-out view next to the real frame (`out/codex/compare_views.py`) shows
 the main visual fault is colour, not geometry: patches of sand come out blue-white where
@@ -279,3 +290,97 @@ compares camera centres with M0's after a similarity fit, as a share of the trac
 | G2 | `ba_num_iterations 1` (3) | 116.9 | identical | 0.774 | 0, 0 | Reject: no effect |
 | G3 | `keep_max_num_tracks 20000` | 115.4 | 177, 0.490 px, 10.77 | 0.768 | 1e-5, 1e-5 | Reject: no faster at this size |
 | G4 | `gp_max_num_iterations 50` (100) | 119.0 | identical | 0.774 | 0, 0 | Reject: no effect |
+
+### R1: test_flight georeferenced from its SRT, and a focal length 33% off
+
+`codex-b3-geo`: `tesseract.py run data/test_flight.mp4 --geometry local`, verify PASS.
+S0 3.5 s, S1 5.5 s, S3 392.0 s, S5 2.2 s, S6 14.3 s. The manifest says F6, metres,
+georeferenced, scale "gnss x63.580", fit 0.136 m RMS over 171 fixes.
+`out/codex/b3_truth.py` compares it with the synthetic scene the clip was rendered from.
+
+| Check | Result |
+|---|---|
+| Camera centres against the true flight path, 173 cameras | 0.135 m RMS in 3D, 0.120 m horizontal |
+| Dense cloud against the true surface, 200k points | median 12.59 m, 1.0% within 1 m |
+
+The cameras are right and the ground is not: the cloud sits 10 to 17 m below the true
+ground (median height -10.5 m where the site is at 0 to 1.5 m). The reason is the camera
+model. MapAnything fitted f = 1414 px; the renderer used 1066 px. `out/codex/focal_probe.py`
+fits the same 60 trajectory positions three ways:
+
+| Frames | Fitted f (px) |
+|---|---:|
+| The sharp renders (b5s) | 1058.1 |
+| The same frames decoded from the H.264 clip | 1425.9 |
+| The same, without the 1-in-6 blurred frames | 1423.1 |
+| S1's keyframes (what production used) | 1414.3 |
+
+So the encoding alone (CRF 26, yuv420p) moves MapAnything's focal length by a third, and
+with the camera fixed the mapper builds a stretched model that still reprojects at
+0.90 px. A straight track pins the scale along the flight, so the georeferenced cameras
+land within 14 cm while the depth direction is wrong by about 10%. This is finding F6,
+an S1 finding for R-O3: the fixed focal length is the weakest input to the metric model.
+F1 below tests letting the global mapper refine it.
+
+### B5v: a 600-second clip end to end
+
+`src/ingest/make_test_video.py out/codex/b5v.mp4 --seconds 600 --fps 1` renders the same
+synthetic pass as 600 frames at 1 fps, H.264, with a 600-record DJI SRT (RTK noise), in
+about 16 minutes. It is a genuine 600 s file, so S0, S1, S2, S5, S6 and S8 all run on a
+ten-minute input; what it lacks is the 18,000 frames a 30 fps clip would make S1 decode.
+S1 on the 30 fps loop (B4) took 51.5 s, against 9.2 s here.
+
+`codex-b5v`: `tesseract.py run out/codex/b5v.mp4 --geometry local`, current defaults,
+verify PASS, level L0.
+
+| Stage | Seconds |
+|---|---:|
+| S0 screen | 2.0 |
+| S1 ingest (353 keyframes; 192 rejected for blur, 37 bridged) | 9.2 |
+| S3 MapAnything and intrinsics fit | 59.6 |
+| S3 SIFT, matching, global mapper | 182.2 |
+| S3 undistort, densify (300 views, 23.2M points) | 150.5 |
+| S3 ReconstructMesh | 159.9 |
+| S3 TextureMesh | 190.3 |
+| S5 georeference | 3.1 |
+| S6 export (PLY, LAS, GeoTIFF, OBJ, GLB, FBX) | 24.5 |
+| **Whole run** | **792.3** |
+
+R = 792.3 / 600 = 1.32, and S8 reports R-O2 met, R-O5 met (all six formats), F6 in
+metres, scale "gnss x64.046". Against the synthetic truth: cameras 0.137 m RMS (0.095 m
+horizontal), cloud median 1.37 m from the true surface, 9.9% within 1 m. MapAnything
+fitted f = 1091 px here (truth 1066): 2.3% off, against 33% on the 30 fps test_flight
+encode, and the cloud error follows the focal error.
+
+Scaled to a real 30 fps ten-minute clip: S1 decodes 30 times the frames (+42 s, from
+B4), and S1 would pick up to 600 keyframes rather than 353 (+247 poses at 0.45 to 0.52 s,
+from B5s and B5v, about +120 s). That puts the current defaults near 955 s, R about
+1.59: over the target by about a minute, with the mesh and texture stages (350 s) and the
+mapper the places to take it from.
+
+### Retriangulation off in the global mapper (G1 end to end)
+
+| Run | Mapper s | Error | Sparse on plane | Layered cells | Held-out full size | Camera error against truth (RMS, p95, max) |
+|---|---:|---|---:|---:|---|---|
+| B1 held-out, M0 conditions (G0) | 113.2 | 0.490 px | 0.774 | 0.056 | 22.830 dB, 0.6493 (Q0b) | no truth |
+| B1 held-out, retriangulation off (S1-skipretri) | 84.6 | 0.505 px | 0.751 | 0.056 | 22.849 dB, 0.6483 | no truth |
+| B5s, 600 views, defaults | 191.1 | 0.773 px | 0.884 | 0.010 | not run | 0.663 m, 0.274 m, 10.0 m |
+| B5s, retriangulation off | 96.1 | 0.857 px | 0.861 | 0.011 | not run | 0.310 m, 0.201 m, 4.5 m |
+
+Decision: keep. On 600 views the mapper halves (191 s to 96 s) and the cameras come out
+closer to the true path, not further. The sparse plane share falls 0.023, a hair past the
+0.02 rule; that rule stands in for pose drift, and here the poses are measured directly
+against truth and the dense ground (layered cells, held-out scores) does not move, so the
+fall is the sparse points not being re-triangulated rather than the ground layering.
+
+### New defaults
+
+| Option | Was | Now | Evidence |
+|---|---|---|---|
+| `mapper_retriangulate` (new) | on (COLMAP's default) | off | G1, S1-skipretri and B5s above |
+| `mesh_min_point_distance` | 2.5 | 4.0 | C1 on B1; B2C1 on Nicosia: full-size held-out 22.656 dB, 0.7430 against B2M0's 22.578 dB, 0.7450, mesh and texture 23.4 s against 34.4 s |
+| `texture_decimate` | 0.1 | 0.2 | the same two runs; texture 0.2 on its own (Q12) was 0.19 dB better on B1 but 0.055 dB and 0.013 SSIM worse on Nicosia (B2Q12), so it is not kept alone |
+| `camera_model` (new) | PINHOLE | PINHOLE | lets a run try SIMPLE_PINHOLE with the focal refined (F2 below) |
+| `dense_min_resolution` (new) | OpenMVS's 640 | 320 | T3b |
+
+S3 goes to version 6 so cached runs recompute.

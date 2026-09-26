@@ -49,6 +49,15 @@ DEFAULTS = {
     # of the sparse ground within 3% of one plane, against 45% (research/10).
     "pose_method": "global",
     "global_match_overlap": 30,  # one ground point stays matchable ~30 keyframes apart
+    # The mapper's last pass re-triangulates every track and bundle-adjusts again. On
+    # 600 synthetic views it was 95 of 191 s, and without it the cameras came out
+    # closer to the true path (0.31 m RMS against 0.66); on the demo the held-out
+    # views did not move (research/11).
+    "mapper_retriangulate": False,
+    # PINHOLE holds the fitted focal length fixed. SIMPLE_PINHOLE with
+    # mapper_extra "--GlobalMapper.ba_refine_focal_length 1" lets the mapper refine one
+    # focal length (research/11 section 5).
+    "camera_model": "PINHOLE",
     "pose_window": 0,           # views per MapAnything call; 0 sizes it to the GPU
     "pose_overlap": 8,          # shared views between windows, for the Sim(3) stitch
     "pose_size": 0,             # 0: the model's own 518 mapping; else the longest side
@@ -80,11 +89,13 @@ DEFAULTS = {
     # 90-96% of every view (research/10).
     "dense_fusion_filter": 1,
     # ReconstructMesh's minimum point spacing in pixels (default 1.5): 91 s and 4.0M
-    # faces at 1.5, 60 s and 2.6M at 2.5, on 600 views.
-    "mesh_min_point_distance": 2.5,
+    # faces at 1.5, 60 s and 2.6M at 2.5, on 600 views. 4 with texture_decimate 0.2
+    # below: on the demo mesh and texture took 106 s against 129 s, and on Nicosia
+    # 23 s against 34 s, with the held-out views unchanged at full size (research/11).
+    "mesh_min_point_distance": 4.0,
     "mesh": True,
     "texture": True,            # OpenMVS TextureMesh on the mesh, to a textured OBJ
-    "texture_decimate": 0.1,    # fraction of the mesh's faces kept before texturing
+    "texture_decimate": 0.2,    # fraction of the mesh's faces kept before texturing
     # Extra arguments for one tool, split on spaces and appended last so they win; for
     # an operator or an experiment trying a flag no option above covers yet.
     "mapper_extra": "",
@@ -361,11 +372,13 @@ def global_sparse(r: Runner, colmap: str, img: str, db: str, cam: dict, o: dict)
     ground barely constrains focal length. PINHOLE, so the undistorter hands OpenMVS a
     camera it accepts (a SIMPLE_RADIAL with k = 0 is copied through and refused).
     """
+    model = o["camera_model"]
+    params = ([cam["f"]] if model == "SIMPLE_PINHOLE" else [cam["f"], cam["f"]]) \
+        + [cam["cx"], cam["cy"]]
     r.sh([colmap, "feature_extractor", "--database_path", db, "--image_path", img,
           "--ImageReader.single_camera", "1",
-          "--ImageReader.camera_model", "PINHOLE",
-          "--ImageReader.camera_params",
-          f"{cam['f']},{cam['f']},{cam['cx']},{cam['cy']}",
+          "--ImageReader.camera_model", model,
+          "--ImageReader.camera_params", ",".join(str(x) for x in params),
           "--FeatureExtraction.use_gpu", "1",
           "--SiftExtraction.max_num_features", o["sift_features"]], "feature_extractor")
     # Wide, not exhaustive: exhaustive grows with the square of the view count. On the
@@ -382,7 +395,9 @@ def global_sparse(r: Runner, colmap: str, img: str, db: str, cam: dict, o: dict)
           "--output_path", out,
           "--GlobalMapper.ba_refine_focal_length", "0",
           "--GlobalMapper.ba_refine_principal_point", "0",
-          "--GlobalMapper.ba_refine_extra_params", "0"], o["mapper_extra"]),
+          "--GlobalMapper.ba_refine_extra_params", "0",
+          "--GlobalMapper.skip_retriangulation", "0" if o["mapper_retriangulate"] else "1"],
+         o["mapper_extra"]),
          "global_mapper")
     models = [os.path.join(out, d) for d in os.listdir(out)
               if os.path.exists(os.path.join(out, d, "images.bin"))]
