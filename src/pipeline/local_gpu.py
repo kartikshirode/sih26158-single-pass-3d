@@ -761,6 +761,7 @@ def dense(r: Runner, mvs: dict, colmap: str, img: str, sp_txt: str, names: list,
     """Undistort, densify, mesh and texture on the solved poses in `sp_txt`."""
     from run_mvs_sharded import filter_model
 
+    clear_products(r.work)
     dense_model = sp_txt
     if dense_names and len(dense_names) < len(names):
         dense_model = os.path.join(r.work, "sparse_dense")
@@ -829,6 +830,25 @@ def dense(r: Runner, mvs: dict, colmap: str, img: str, sp_txt: str, names: list,
 # times their size: 376 MB of a 1.24 GB demo run, and S6 exports the cloud again.
 INTERMEDIATE = ("db.db", "dense", "sparse_in", "sparse_tri", "sparse_ba",
                 "sparse_dense", "sparse_g", "sparse_gf", "scene_dense.ply")
+
+
+def clear_products(work: str) -> list[str]:
+    """
+    Delete an earlier run's dense cloud, mesh and textured mesh from `work`.
+
+    S6 exports geometry/scene_tex.obj whenever it exists. A rerun into the same folder
+    whose ReconstructMesh or TextureMesh failed would otherwise leave the previous
+    run's mesh there, made on other poses, and S6 would carry it through the new
+    transform and call R-O5 met.
+    """
+    gone = []
+    for f in sorted(os.listdir(work)):
+        if (f in ("scene_dense.ply", "scene_dense_mesh.ply", "points_fused.npy",
+                  "colors_fused.npy")
+                or (f.startswith("scene_tex") and not os.path.isdir(os.path.join(work, f)))):
+            os.remove(os.path.join(work, f))
+            gone.append(f)
+    return gone
 
 
 def clean_work(work: str) -> list[str]:

@@ -17,8 +17,9 @@ import tempfile
 import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from local_gpu import (DEFAULTS, attitude_spread_deg, SparseError, clean_work, frame_order,  # noqa: E402
-                       read_images_txt, read_ply_points, reuse_sparse, with_extra)
+from local_gpu import (DEFAULTS, SparseError, attitude_spread_deg, clean_work,  # noqa: E402
+                       clear_products, frame_order, read_images_txt, read_ply_points,
+                       reuse_sparse, with_extra)
 
 FAILED: list[str] = []
 
@@ -149,6 +150,20 @@ check("defaults named in the extra are replaced, the rest kept in order",
       got == ["TextureMesh", "scene.mvs", "--decimate", 0.1, "--global-seam-leveling", "1",
               "--cuda-device", "-2", "--sharpness-weight", "0"], str(got))
 check("an empty extra changes nothing", with_extra(base, "") == base)
+
+print("\nT8: a rerun starts without the previous run's mesh")
+with tempfile.TemporaryDirectory() as work:
+    old = ["scene_dense.ply", "scene_dense_mesh.ply", "scene_tex.obj", "scene_tex.mtl",
+           "scene_tex_material_00_map_Kd.jpg", "points_fused.npy", "colors_fused.npy"]
+    kept = ["cameras.npy", "local_gpu_result.json", "scene.mvs"]
+    for f in old + kept:
+        open(os.path.join(work, f), "w").close()
+    os.makedirs(os.path.join(work, "sparse_txt"))
+    gone = clear_products(work)
+    left = sorted(os.listdir(work))
+    check("the old cloud, mesh, textured mesh and atlas are removed",
+          sorted(gone) == sorted(old), str(gone))
+    check("poses and the rest are kept", left == sorted(kept + ["sparse_txt"]), str(left))
 
 print("\nT7: how far the views turn decides whether the mapper refines the focal length")
 rot = Rotation.from_euler("x", 120, degrees=True).as_matrix()     # looking down and ahead
