@@ -567,3 +567,14 @@ Mesh `-d 4` from M0's dense cloud, TextureMesh at 20% unless stated, full-size h
 | TX3 | ReconstructMesh `--close-holes 300` | 47.1 | 15.980 dB, 0.6051 | Reject: the closed holes are wrong surfaces across the views |
 | TX4 | `--empty-color` grey instead of orange | 49.4 | 22.825 dB, 0.6472 | Neutral on the score |
 | TX5 | `--virtual-face-images 3` | 30.2 | 22.618 dB, 0.6244 | Reject: 0.17 dB and 0.023 SSIM worse |
+
+### Last slot (04:31 to 04:47)
+
+| ID | Change | Time | Result | Decision |
+|---|---|---|---|---|
+| RF1 | RefineMesh on the `-d 4` mesh, images at level 1, one scale, CUDA | 76 s refine, 13.9 s texture | full size 22.771 dB, 0.6473, 98.80% (TX0 22.791, 0.6472) | Reject: within noise, 76 s more |
+| RF2 | RefineMesh, level 2, two scales | 59 s refine, 7.1 s texture | 22.550 dB, 0.6322 | Reject: 0.24 dB and 0.015 SSIM worse |
+| codex-b5v-v3 | B5v end to end on the final gate (2ece0fd) | 502.2 s, R 0.84 | turn read 13.1, focal held at 1091 px; S5 corrected it; cameras 0.143 m RMS, cloud 0.346 m median, 98.5% within 1 m; verify PASS | Final B5v figure |
+
+Run pages rebuilt for codex-b1-v2, b2-v2, b3-v2 and b5v-v3, with screenshots in
+`out/codex/codex-*-v*.png` (not committed).

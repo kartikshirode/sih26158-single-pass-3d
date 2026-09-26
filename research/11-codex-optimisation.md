@@ -198,7 +198,9 @@ percentile rotation from the middle view, at 10 degrees, and MapAnything's own p
 saved it. MapAnything's poses drift between its inference windows; averaging each third
 of the clip barely helps (8.9 and 13.1 degrees), while the mapper's poses read 0.1. The
 demo reads 6.5 and Nicosia 111, so the gate is now 30 degrees on that thirds measure, and
-the mapper's own turn is written beside it with a flag if the two disagree. Holding the
+the mapper's own turn is written beside it with a flag if the two disagree. B5v rerun on
+that gate (`codex-b5v-v3`): focal length held at 1091 px, corrected by S5, 502.2 s, cloud
+0.346 m median, 98.5% within 1 m. Holding the
 focal length also made the mapper faster: 56.5 s against 89.2 on the demo.
 
 ## 10. Time
@@ -220,7 +222,7 @@ available.
 
 ## 11. Tried and rejected
 
-Beyond section 5: seam levelling on the CPU (black, like CUDA), and with CUDA with and without decimation (TX1 crashed, TX2 black); closing holes up to 300 edges (TX3, 6.8 dB worse); virtual face images (TX5, 0.17 dB worse); a grey empty colour (TX4, no measurable change); TextureMesh's lens-mask
+Beyond section 5: seam levelling on the CPU (black, like CUDA), and with CUDA with and without decimation (TX1 crashed, TX2 black); closing holes up to 300 edges (TX3, 6.8 dB worse); virtual face images (TX5, 0.17 dB worse); a grey empty colour (TX4, no measurable change); RefineMesh at image level 1 (no better, 76 s more) and level 2 (0.24 dB worse); TextureMesh's lens-mask
 label (it exits after cleaning the mesh); free-space support in the mesh (no change, 13 s
 slower); PINHOLE with the focal refined (fx and fy drifted apart, 1599 and 1146 px on
 test_flight); the focal length refined on straight passes (section 9).

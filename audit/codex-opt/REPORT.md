@@ -8,7 +8,7 @@ and `audit/codex-opt/RUNLOG.md`.
 | Benchmark | Baseline (0340d7e) | Now |
 |---|---|---|
 | B5v, a 600 s clip end to end | not run; 792.3 s on the first defaults (R 1.32) | **502.5 s, R 0.84**, R-O2 met |
-| B5v accuracy (synthetic truth) | cloud 1.37 m median | **0.338 m median, 98.6% within 1 m** |
+| B5v accuracy (synthetic truth) | cloud 1.37 m median | **0.338-0.346 m median, 98.5-98.6% within 1 m** (v2 and v3 runs) |
 | B3 test_flight accuracy | not georeferenced at all | **0.394 m median, 95.3% within 1 m** |
 | B1 demo | 321.9 s, held-out 22.83 dB / 0.649 | 264.5 s, held-out the same (22.822 / 0.647 on b360949) |
 | B2 Nicosia | a bent strip across a hidden edit | the edit cut off; a pan read as a pan |
@@ -31,7 +31,7 @@ and `audit/codex-opt/RUNLOG.md`.
 
 - **The model doesn't look better.** Colour patches, holes and a shredded far edge
   remain. The fix for the patches, TextureMesh's seam levelling, blackens or crashes in
-  this OpenMVS build; nothing else tried beat the noise.
+  this OpenMVS build; nothing else tried beat the noise, RefineMesh included.
 - **The accuracy figures are synthetic and need a gimbal pitch in the SRT.** None of the
   20 real DJI fixtures has one. Without it, heights are only as good as MapAnything's
   focal length: 2% on B5v, 33% on the test_flight encode.
