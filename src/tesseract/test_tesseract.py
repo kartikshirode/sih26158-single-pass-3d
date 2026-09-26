@@ -702,6 +702,12 @@ def t_local_provider():
                                np.load(os.path.join(tmp, "cameras.npy")))
         check("levelling skips the unregistered camera's NaN row",
               np.isfinite(B).all() and abs(abs(B[1] @ [0, 0, 1.0]) - 1) < 0.05, str(B))
+        c0, c1 = ctx("L0"), ctx("L1")
+        for cc in (c0, c1):
+            cc.facts.update(pose_views=600, dense_views=300)
+        est0, est1 = Geometry().estimate(c0), Geometry().estimate(c1)
+        check("the local estimate is lower at L1, whose densify now runs a level lower",
+              est1 < est0, f"L0 {est0:.0f} s, L1 {est1:.0f} s")
         e4 = _raises_as(lambda: Geometry().execute(ctx("L3")))
         check("levels the provider has no mode for are STAGE_UNAVAILABLE",
               e4 is not None and e4.code == Code.STAGE_UNAVAILABLE)

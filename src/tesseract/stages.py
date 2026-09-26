@@ -221,6 +221,7 @@ class Geometry(BaseStage):
     S_PER_VIEW_LOCAL_SPARSE = 0.6
     S_PER_VIEW_LOCAL_DENSE = 0.55
     S_LOCAL_FIXED = 30.0
+    LOCAL_L1_DENSE_FACTOR = 0.65
 
     def estimate(self, ctx: Context) -> float:
         n_pose = int(ctx.facts.get("pose_views") or 0)
@@ -230,8 +231,11 @@ class Geometry(BaseStage):
         if not hasattr(ctx.source, "path"):
             return 0.02 * max(n_pose, 1)
         if ctx.config.get("geometry") == "local":
+            # L1 densifies one level lower: on the demo, densify, mesh and texture
+            # together took 116 s against 184 s at L0 (research/11).
+            k = self.LOCAL_L1_DENSE_FACTOR if ctx.level == "L1" else 1.0
             return (self.S_LOCAL_FIXED + n_pose * self.S_PER_VIEW_LOCAL_SPARSE
-                    + n_dense * self.S_PER_VIEW_LOCAL_DENSE)
+                    + n_dense * self.S_PER_VIEW_LOCAL_DENSE * k)
         cost = n_pose * self.S_PER_VIEW_POSE_GPU
         if ctx.level in ("L0", "L1", "L2"):
             cost += n_dense * self.S_PER_VIEW_DENSE_CPU * (0.25 if ctx.level == "L1" else 1.0)

@@ -68,6 +68,10 @@ DEFAULTS = {
     # the end of the synthetic site used to refuse a 600-view run that placed 554.
     "min_registered": 0.5,
     "dense_resolution_level": 1,
+    # OpenMVS will not scale an image below --min-resolution (640 px by default). The
+    # demo's crops are 1920x596, so levels 1 and 2 both gave 960x298 depth maps and the
+    # L1 ladder step, which raises the level, changed nothing. 320 lets level 2 halve it.
+    "dense_min_resolution": 320,
     "dense_views_fuse": 3,
     "dense_neighbours": 5,      # views per depth map (OpenMVS default 8): 107 s to 96 s
     # OpenMVS fusion filter: 0 merge, 1 fuse, 2 dense-fuse (its default). On the demo's
@@ -626,7 +630,7 @@ def reuse_sparse(src: str, work: str, names: list, o: dict) -> dict:
 
 
 # Options read only after the S3b gate. reuse_sparse checks that the rest match.
-DENSE_OPTIONS = ("dense_resolution_level", "dense_views_fuse", "dense_neighbours",
+DENSE_OPTIONS = ("dense_resolution_level", "dense_min_resolution", "dense_views_fuse", "dense_neighbours",
                  "dense_fusion_filter", "mesh_min_point_distance", "mesh", "texture",
                  "texture_decimate", "keep_intermediate", "densify_extra", "mesh_extra",
                  "texture_extra")
@@ -707,6 +711,7 @@ def dense(r: Runner, mvs: dict, colmap: str, img: str, sp_txt: str, names: list,
     # points to pick neighbours with.
     r.sh(with_extra([mvs["DensifyPointCloud"], "scene.mvs", "-w", r.work,
           "--resolution-level", o["dense_resolution_level"],
+          "--min-resolution", o["dense_min_resolution"],
           "--number-views-fuse", o["dense_views_fuse"],
           "--number-views", o["dense_neighbours"],
           "--fusion-filter", o["dense_fusion_filter"],

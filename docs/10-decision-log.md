@@ -436,7 +436,7 @@ per km per 100 m of height, and the vertical is named in the tags and the manife
 Fewer than 8 usable fixes or a track under 20 m skips the stage with `ING-NOGNSS`.
 **Evidence.** `src/tesseract/test_tesseract.py` T3g: a gauge rotated on all three axes and
 scaled 0.04 comes back to 0.010 m RMS against the truth, with an unposed view and an
-empty fix left out. `audit/codex-opt/RUNLOG.md` row G1 has the test_flight clip.
+empty fix left out. `audit/codex-opt/RUNLOG.md` row R1 has the test_flight clip.
 **Consequences.** A clip with an SRT is in metres, scale status "gnss", with a CRS a GIS
 can place. Heights stay relative until a take-off elevation (a DEM lookup, or the
 operator) is supplied; that is the step to F7.

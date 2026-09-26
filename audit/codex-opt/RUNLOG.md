@@ -235,3 +235,47 @@ points here against 7M). That is R about 1.37 on this proxy: inside 1.5, with li
 margin. The proxy is kind to the mapper in one way (a synthetic scene, no water, no
 repeated texture) and harsh in another (1.5 m between keyframes, tracks 31.8 views
 long). B2's mapper took 329 s for 289 views, so real footage can cost more per view.
+
+### B1 held-out experiments (every tenth keyframe held out, poses reused from M0)
+
+M0 is a full held-out run of B1 that keeps its intermediates; every Q and T run takes
+its poses (`sparse_from`) and changes one dense, mesh or texture setting. Scores are
+over the same 17 held-out views at quarter resolution. Between 22:33 and 22:56 a stale
+copy of the first queue ran alongside the second and both wrote the same experiment
+folders; Q4 to Q7 from that window were deleted and rerun. Timings from this evening
+vary by about 20% with other use of the laptop, so a time claim needs the final idle run.
+
+| ID | Single change | Dense / mesh / texture s | Held-out PSNR, SSIM, coverage | Shape | Decision |
+|---|---|---|---|---|---|
+| M0 | None (full run, intermediates kept) | 83.1 / 132.3 / 101.4 | 21.715 dB, 0.5360, 98.10% | plane 0.774, layered 0.055 | Reference |
+| Q0 | None (dense half rerun on M0's poses) | 84.2 / 134.3 / 106.8 | 21.739 dB, 0.5376, 97.84% | 0.774, 0.055 | Noise floor: 0.02 dB, 0.3 points of coverage |
+| Q1 | TextureMesh on the CPU with both seam levellings on | 81.4 / 137.2 / 110.4 | 9.125 dB, 0.0115, 97.75% | 0.774, 0.054 | Reject. The atlas is black on the CPU too, so it is not a CUDA texturing bug |
+| Q2 | TextureMesh on the CPU, levelling off | 82.2 / 139.1 / 102.4 | 21.665 dB, 0.5368, 97.80% | 0.774, 0.056 | Reject: same result, no faster |
+| Q3 | DensifyPointCloud at resolution level 0 (full size) | 313.0 / 302.6 / 147.8 | 21.674 dB, 0.5328, 98.37% | 0.774, 0.072 | Reject: 21.2M points and 2.3 times the time for no better image, and layered cells up 0.017 |
+| T1 | ReconstructMesh `-d 4` (was 2.5) | 52.6 / 42.4 / 28.9 | quarter 21.725 dB, 0.5449, 98.79%; full size 22.650 dB, 0.6393 | 0.774, 0.055 | Reject as is: 1.05M faces instead of 2.03M and 105k textured, and at full size it loses 0.21 dB and 0.009 SSIM against Q0 (22.858, 0.6483). The quarter-size score hid that, so every later run is also scored at full size |
+| T2 | ReconstructMesh `--target-face-num 200000`, TextureMesh not decimating | 49.9 / 79.5 / 36.1 | quarter 21.755 dB, 0.5390, 97.75%; full 22.849 dB, 0.6480 | 0.774, 0.056 | Candidate: the same image as Q0 at full size; its time needs a baseline run in the same conditions (Q0b) |
+| T3 | DensifyPointCloud resolution level 2 | 53.6 / 65.1 / 54.6 | 21.702 dB, 0.5376, 97.75% | 0.774, 0.055 | No change at all: the depth maps are still 960x298. OpenMVS's `--min-resolution 640` stops the downscale on these 596-pixel-high crops, so the L1 ladder step, which raises the level by one, does nothing on the demo (finding F5). Rerun as T3b with the floor at 320 |
+| T4 | TextureMesh `--resolution-level 1` | 53.3 / 64.8 / 44.7 | quarter 23.169 dB, 0.6094; full 23.448 dB, 0.6309 | 0.774, 0.055 | Not kept on the score alone. It is 0.6 dB better at full size, but the renders (`out/codex/cmp_8.jpg`) show blockier texture. The gain looks like softer texture forgiving small misalignment and fewer seams, which is the check being flattered rather than a better model |
+| T3b | Resolution level 2 with `--min-resolution 320` | 17.6 / 49.9 / 48.6 | quarter 21.664 dB, 0.5377, 97.12%; full 22.296 dB, 0.6128 | 0.774, 0.032 | Keep the floor, not the level: depth maps 480x149, 1.66M points, dense, mesh and texture 116 s against 184 s for Q0b, and 0.53 dB less at full size. That is the trade the L1 step is meant to make, and now it makes it (F5 fix). The local estimate scales the dense term by 0.65 at L1 |
+| Q0b | None (timing baseline run next to C1 and C2) | 54.6 / 68.7 / 60.7 | quarter 21.700 dB, 0.5367, 97.82%; full 22.830 dB, 0.6493 | 0.774, 0.056 | Reference for the rows below |
+| C1 | `-d 4` and texture decimation 0.2 | 56.2 / 43.8 / 62.3 | quarter 21.699 dB, 0.5352, 98.63%; full 22.817 dB, 0.6468 | 0.774, 0.056 | Candidate: mesh and texture 106 s against 129 s, full-size PSNR within the 0.03 dB noise, coverage up 0.8 points |
+| C2 | `-d 4`, ReconstructMesh `--target-face-num 200000`, no texture decimation | 57.5 / 59.8 / 45.2 | quarter 21.700 dB, 0.5362, 98.75%; full 22.804 dB, 0.6475 | 0.774, 0.056 | Candidate: 105 s against 129 s, 0.026 dB lower at full size |
+
+Rendering a held-out view next to the real frame (`out/codex/compare_views.py`) shows
+the main visual fault is colour, not geometry: patches of sand come out blue-white where
+the frame is beige, because each face takes its colour from one photo and the photos
+differ in exposure and sun angle. Seam levelling exists to fix exactly that and is the
+option that blackens the atlas (Q1: 29% of atlas pixels under 8 against 0.2%).
+
+### global_mapper options on B1's kept database
+
+`out/codex/mapexp.py` runs global_mapper on M0's database with one option changed, and
+compares camera centres with M0's after a similarity fit, as a share of the track length.
+
+| ID | Option | Mapper s | Registered, error, track | Sparse on plane | Pose change (RMS, max, of track) | Decision |
+|---|---|---:|---|---|---|---|
+| G0 | None | 113.2 | 177, 0.490 px, 10.76 | 0.774 | 0, 0 | Reference |
+| G1 | `skip_retriangulation 1` | 87.6 | 177, 0.505 px, 10.25 | 0.738 | 5e-5, 1.3e-4 | Candidate: the poses are the same to 1 part in 20,000, so the dense model should not move; the sparse plane share falls 0.036 because the sparse points are not re-triangulated. On 600 views retriangulation was 91 s of 191 s. Run end to end on B1 and B5s before deciding |
+| G2 | `ba_num_iterations 1` (3) | 116.9 | identical | 0.774 | 0, 0 | Reject: no effect |
+| G3 | `keep_max_num_tracks 20000` | 115.4 | 177, 0.490 px, 10.77 | 0.768 | 1e-5, 1e-5 | Reject: no faster at this size |
+| G4 | `gp_max_num_iterations 50` (100) | 119.0 | identical | 0.774 | 0, 0 | Reject: no effect |
