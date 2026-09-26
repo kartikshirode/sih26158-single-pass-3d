@@ -238,9 +238,12 @@ check("FrameCnt keys the lookup, and a dropped block leaves a hole rather than a
 one_hz = [{"t_us": int(i * 1e6), "latitude": float(i), "longitude": 0.0, "height": 1.0,
            "flags": []} for i in range(60)]
 got = telemetry_for_frames(one_hz, [0, 46, 300, 1799, 1800 * 3], fps=30.0)
-check("a one-record-per-second file is looked up by time at the clip's frame rate",
-      [g.get("latitude") for g in got][:4] == [0.0, 2.0, 10.0, 60.0 - 1],
+check("a one-record-per-second file is looked up by time at the clip's frame rate, "
+      "between fixes by interpolation",
+      all(near(a, b) for a, b in zip([g.get("latitude") for g in got][:3], [0.0, 46 / 30, 10.0])),
       str([g.get("latitude") for g in got]))
+check("a frame inside the last record's second keeps that record",
+      got[3].get("latitude") == 59.0, str(got[3].get("latitude")))
 check("a frame past the end of the telemetry gets nothing, not the last record",
       got[4] == {})
 check("frame 300 positional would have been record 300; keyed by time it is record 10",
@@ -255,7 +258,18 @@ check("no records: one empty dict per frame", telemetry_for_frames([], [0, 1, 2]
 # rate; the lookup must use the frame's presentation time when it has one.
 got = telemetry_for_frames(one_hz, [30, 31], fps=30.0, times_s=[3.0, None])
 check("a presentation time keys the lookup; a frame without one falls back to index / fps",
-      [g.get("latitude") for g in got] == [3.0, 1.0], str([g.get("latitude") for g in got]))
+      [g.get("latitude") for g in got] == [3.0, 31 / 30] or
+      all(near(a, b) for a, b in zip([g.get("latitude") for g in got], [3.0, 31 / 30])),
+      str([g.get("latitude") for g in got]))
+yaw = [{"t_us": 0, "latitude": 0.0, "longitude": 0.0, "height": 1.0, "gb_yaw": 170.0,
+        "flags": []},
+       {"t_us": 1_000_000, "latitude": 0.0, "longitude": 0.0, "height": 1.0,
+        "gb_yaw": -170.0, "flags": []}]
+got = telemetry_for_frames(yaw, [15], fps=30.0)
+check("a yaw across +-180 is interpolated the short way round",
+      near(abs(got[0].get("gb_yaw", 0)), 180.0), str(got[0].get("gb_yaw")))
+got = telemetry_for_frames(one_hz, [int(-0.7 * 30)], fps=30.0, times_s=[-0.7])
+check("a frame well before the first fix gets nothing", got == [{}], str(got))
 
 try:
     import av
@@ -287,7 +301,7 @@ else:
     got = telemetry_for_frames(one_hz, [30, 89], fps=rate, times_s=[times[30], times[89]])
     old = telemetry_for_frames(one_hz, [30, 89], fps=rate)
     check("on a variable-frame-rate clip, frame 30 (shown at 3.0 s) gets the 3 s fix",
-          [g.get("latitude") for g in got] == [3.0, 5.0],
+          near(got[0].get("latitude"), 3.0) and near(got[1].get("latitude"), times[89], 1e-3),
           f"times {times[30]}, {times[89]}; got {[g.get('latitude') for g in got]}")
     check("index / declared rate would have given it the 1 s fix",
           old[0].get("latitude") == 1.0, str([g.get("latitude") for g in old]))

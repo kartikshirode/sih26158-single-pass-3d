@@ -185,6 +185,28 @@ def parse_dji_srt(path: str) -> list[dict]:
     return out
 
 
+_LINEAR_FIELDS = ("latitude", "longitude", "height", "rel_alt", "abs_alt", "altitude",
+                  "gb_pitch")
+
+
+def _interpolate_fix(a: dict, b: dict, w: float) -> dict:
+    """Record `a` moved `w` of the way to `b`: position, heights and gimbal angles."""
+    if w <= 0:
+        return a
+    if w >= 1:
+        return b
+    out = dict(a if w < 0.5 else b)
+    for k in _LINEAR_FIELDS:
+        x, y = a.get(k), b.get(k)
+        if isinstance(x, (int, float)) and isinstance(y, (int, float)):
+            out[k] = float(x + w * (y - x))
+    x, y = a.get("gb_yaw"), b.get("gb_yaw")
+    if isinstance(x, (int, float)) and isinstance(y, (int, float)):
+        d = (y - x + 180.0) % 360.0 - 180.0             # the short way round
+        out["gb_yaw"] = float((x + w * d + 180.0) % 360.0 - 180.0)
+    return out
+
+
 def telemetry_for_frames(records: list[dict], frame_idx, fps: float,
                          times_s=None) -> list[dict]:
     """
@@ -196,12 +218,16 @@ def telemetry_for_frames(records: list[dict], frame_idx, fps: float,
     lookup on a 30 fps clip would hand frame 300 the record from five minutes in.
 
       1. FrameCnt / SrtCnt, 1-based, when the records carry it;
-      2. else nearest by time, from the timing line. A frame's time is its
-         presentation timestamp from `times_s` (seconds from the first frame) when
-         the caller has it, and index / fps only when it does not. Phones and some
-         drones record variable frame rate, where index / average rate drifts: a
-         frame shown at 2.0 s after a rate change would be looked up at 1.0 s and
-         handed a plausible but wrong fix;
+      2. else by time, from the timing line. A frame's time is its presentation
+         timestamp from `times_s` (seconds from the first frame) when the caller has
+         it, and index / fps only when it does not. Phones and some drones record
+         variable frame rate, where index / average rate drifts: a frame shown at
+         2.0 s after a rate change would be looked up at 1.0 s and handed a plausible
+         but wrong fix. Between two fixes the position, heights and gimbal angles are
+         interpolated: the legacy files write one fix a second, and the nearest one
+         can be half a second, 5 m at 10 m/s, from where the frame was taken. Each
+         record's time is its block's start, so a frame up to one interval past the
+         last fix keeps it, and one up to half an interval before the first takes it;
       3. else nothing, rather than a guess.
     """
     if not records:
@@ -213,16 +239,26 @@ def telemetry_for_frames(records: list[dict], frame_idx, fps: float,
         ts = np.asarray([r["t_us"] for r in records], np.float64)
         order = np.argsort(ts)
         ts = ts[order]
+        gap = float(np.median(np.diff(ts))) if len(ts) > 1 else 1e6
         out = []
         for i, fi in enumerate(frame_idx):
             t_s = times_s[i] if times_s is not None else None
             t = (t_s if t_s is not None else int(fi) / fps) * 1e6
-            j = int(np.searchsorted(ts, t))
-            cands = [k for k in (j - 1, j) if 0 <= k < len(ts)]
-            k = min(cands, key=lambda k: abs(ts[k] - t))
-            # Half a record interval is as far as "nearest" honestly reaches.
-            gap = np.median(np.diff(ts)) if len(ts) > 1 else 1e6
-            out.append(records[order[k]] if abs(ts[k] - t) <= gap else {})
+            if t < ts[0] - gap / 2 or t > ts[-1] + gap:
+                out.append({})
+            elif t <= ts[0] or t >= ts[-1]:
+                out.append(records[order[0 if t <= ts[0] else -1]])
+            else:
+                j = int(np.searchsorted(ts, t, side="right"))
+                a, b = records[order[j - 1]], records[order[j]]
+                w = (t - ts[j - 1]) / max(ts[j] - ts[j - 1], 1e-9)
+                # Two fixes further apart than two intervals bracket a dropout: no
+                # interpolating across it, the nearer one within an interval or nothing.
+                if ts[j] - ts[j - 1] > 2 * gap:
+                    near = a if w <= 0.5 else b
+                    out.append(near if min(t - ts[j - 1], ts[j] - t) <= gap else {})
+                else:
+                    out.append(_interpolate_fix(a, b, w))
         return out
     return [{} for _ in frame_idx]
 
