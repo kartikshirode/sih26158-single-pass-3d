@@ -513,7 +513,7 @@ class Georeference(BaseStage):
     """
 
     id: str = "S5-georef"
-    version: str = "4"          # a real clip's SRT track, to F6 (GAP C-3)
+    version: str = "5"          # SRT track to F6; the gimbal pitch corrects the depth
     needs: tuple = ("points", "cameras")
     produces: tuple = ("points_geo", "georef_transform")
     levels: tuple = ("L0", "L1", "L2", "L3", "L4")
@@ -623,25 +623,46 @@ class Georeference(BaseStage):
         if track < self.SRT_MIN_TRACK_M:
             return skip(f"the GNSS track spans {track:.1f} m, too short to fix a heading")
 
-        B, grav, _ = _level_basis(P, cam)
-        origin = P.mean(0)
-        src = _level(cam[ok][:, :3, 3], B, origin)
-        Rg, tg, sg, inl = robust_track_sim3(src, gps, thresh="auto",
-                                            rng=np.random.default_rng(5))
-        fit = np.linalg.norm(apply_transform(src, Rg, tg, sg) - gps, axis=1)
-        rms = float(np.sqrt(np.mean(fit[inl] ** 2))) if inl.any() else float("nan")
-        P_enu = apply_transform(_level(P, B, origin), Rg, tg, sg)
+        def fit(P, cam):
+            B, grav, _ = _level_basis(P, cam)
+            origin = P.mean(0)
+            src = _level(cam[ok][:, :3, 3], B, origin)
+            Rg, tg, sg, inl = robust_track_sim3(src, gps, thresh="auto",
+                                                rng=np.random.default_rng(5))
+            res = np.linalg.norm(apply_transform(src, Rg, tg, sg) - gps, axis=1)
+            rms = float(np.sqrt(np.mean(res[inl] ** 2))) if inl.any() else float("nan")
+            return {"basis_rows": B.tolist(), "origin": origin.tolist(), "scale": 1.0,
+                    "sim3": {"R": Rg.tolist(), "t": np.asarray(tg).tolist(),
+                             "s": float(sg)}}, grav, inl, rms
+
+        P0 = P
+        tf, grav, inl, rms = fit(P, cam)
+        f_used = ((ctx.facts.get("local_gpu") or {}).get("focal_after_mapper_px")
+                  or ctx.facts.get("focal_after_mapper_px") or [None])[0]
+        focal = _focal_from_pitch(cam, ok, tel, tf, f_used)
+        if focal.get("applied"):
+            # Undo the stretch in F4 and fit again: the level and the track fit both
+            # moved with it.
+            st = focal.pop("stretch")
+            P = _stretch(P, st)
+            cam = cam.copy()
+            cam[ok, :3, 3] = _stretch(cam[ok][:, :3, 3], st)
+            tf, grav, inl, rms = fit(P, cam)
+            after = _focal_from_pitch(cam, ok, tel, tf, None)
+            focal["pitch_model_deg_after"] = after.get("pitch_model_deg")
+            tf = {"stretch": st, **tf}
+        sg = tf["sim3"]["s"]
+        P_enu = _apply_frame_json(P0, tf)
         art = _save_npy(ctx, "points_geo", P_enu, frame=Frame.F6_ENU,
                         units=Units.METRES, kind="point-cloud")
         ref = {"latitude": lat0, "longitude": lon0,
                "height": "take-off point (SRT height 0); its absolute height is unknown"}
         with io.open(ctx.path("georef.json"), "w", encoding="utf-8") as f:
-            json.dump({"from": Frame.F4_REFINED_WORLD, "to": Frame.F6_ENU,
-                       "basis_rows": B.tolist(), "origin": origin.tolist(), "scale": 1.0,
-                       "sim3": {"R": Rg.tolist(), "t": np.asarray(tg).tolist(),
-                                "s": float(sg)},
+            json.dump({"from": Frame.F4_REFINED_WORLD, "to": Frame.F6_ENU, **tf,
                        "enu_reference": ref, "gnss_fit_rms_m": rms,
-                       "apply": "sim3(((X - origin) @ basis_rows.T)[:, [0, 2, 1]])"},
+                       "apply": ("sim3(((stretch(X) - origin) @ basis_rows.T)[:, [0, 2, 1]]), "
+                                 "stretch(X) = X + (factor - 1) * ((X - at) . axis) axis, "
+                                 "identity without one")},
                       f, indent=2)
         tf = Artefact("georef.json", "transform", frame=Frame.F6_ENU).stamp(ctx.workdir)
         cal = scale_svc.from_gnss(sg, rtk=False, residual_m=rms)
@@ -657,8 +678,88 @@ class Georeference(BaseStage):
                    "rotation_from": {"gnss": ["yaw", "track slope"],
                                      "gravity": ["roll about the track"]},
                    "gravity": _gravity_lengths(grav, sg, Units.METRES),
+                   "focal_from_pitch": focal,
                    "scale": scale_svc.for_page(cal)},
-            note=f"SRT track, {len(ok)} fixes, fit {rms:.2f} m RMS; heights above take-off")
+            note=f"SRT track, {len(ok)} fixes, fit {rms:.2f} m RMS; heights above take-off"
+                 + (f"; depth rescaled {1 / focal['k']:.4f} from the gimbal pitch"
+                    if focal.get("applied") else ""))
+
+
+# The gimbal pitch fixes the focal length only where it is sensitive to it: tan(pitch)
+# moves by (k - 1) for a focal length k times off, which vanishes looking straight down
+# (where it is a pure height scale) and straight ahead.
+PITCH_RANGE_DEG = (15.0, 75.0)
+# Past this spread of view directions the mapper's error is no longer one stretch along
+# one axis, and its focal length is observable anyway.
+PITCH_MAX_ATTITUDE_SPREAD_DEG = 10.0
+PITCH_MIN_CHANGE = 0.005       # 0.5%: smaller corrections are within the pitch's noise
+PITCH_K_RANGE = (0.6, 1.6)     # beyond this something else is wrong, not the focal length
+
+
+def _stretch(X: np.ndarray, st: dict) -> np.ndarray:
+    """Scale X by st["factor"] along the unit st["axis"] about st["at"]."""
+    ax, at = np.asarray(st["axis"], np.float64), np.asarray(st["at"], np.float64)
+    X = np.asarray(X, np.float64)
+    return X + (float(st["factor"]) - 1.0) * ((X - at) @ ax)[:, None] * ax
+
+
+def _focal_from_pitch(cam: np.ndarray, ok: list, tel: list, tf: dict,
+                      f_used: float | None) -> dict:
+    """
+    The focal length's error from the gimbal pitch in the SRT, and the stretch that
+    undoes it (research/11 section 9).
+
+    A straight pass at one attitude cannot tell focal length f from k f: the model made
+    with k f is the true one stretched k times along the view axis, and reprojects
+    identically. The mapper's refinement wanders along that line (the synthetic pass
+    went from 1091 to 1160 px against a true 1066) and the GNSS fit cannot see it, so
+    the ground ends up (k - 1) times about half the flying height too low. What the
+    stretch does change is the view's angle to the track: tan(pitch) becomes
+    tan(true pitch) / k. So a recorded gimbal pitch gives k, and the stretch by 1 / k
+    along the mean view axis puts the ground back. Consumer DJI files mostly carry no
+    gimbal pitch; then nothing is applied and the reason is recorded.
+    """
+    out: dict = {"applied": False}
+    pairs = [(i, -float(tel[i]["gb_pitch"])) for i in ok
+             if isinstance(tel[i].get("gb_pitch"), (int, float))
+             and np.isfinite(tel[i]["gb_pitch"])]
+    axes = cam[ok][:, :3, 2]
+    axes = axes / np.linalg.norm(axes, axis=1, keepdims=True)
+    mean_ax = axes.mean(0) / np.linalg.norm(axes.mean(0))
+    spread = float(np.percentile(np.degrees(np.arccos(np.clip(axes @ mean_ax, -1, 1))), 95))
+    lev = (axes @ np.asarray(tf["basis_rows"]).T)[:, [0, 2, 1]] @ np.asarray(tf["sim3"]["R"]).T
+    model = np.degrees(np.arcsin(np.clip(-lev[:, 2], -1, 1)))
+    out.update(pitch_model_deg=round(float(np.median(model)), 3),
+               attitude_spread_deg=round(spread, 2))
+    if len(pairs) < Georeference.SRT_MIN_FIXES:
+        out["reason"] = f"{len(pairs)} keyframes with a gimbal pitch in the SRT"
+        return out
+    by_cam = {i: j for j, i in enumerate(ok)}
+    srt = np.array([p for _, p in pairs])
+    mod = np.array([model[by_cam[i]] for i, _ in pairs])
+    out["pitch_srt_deg"] = round(float(np.median(srt)), 3)
+    lo, hi = PITCH_RANGE_DEG
+    if not (lo <= np.median(srt) <= hi) or not (lo <= np.median(mod) <= hi):
+        out["reason"] = f"pitch outside {lo:g}-{hi:g} degrees below the horizon"
+        return out
+    if spread > PITCH_MAX_ATTITUDE_SPREAD_DEG:
+        out["reason"] = f"view directions spread {spread:.1f} degrees; not one stretch"
+        return out
+    k = float(np.median(np.tan(np.radians(srt)) / np.tan(np.radians(mod))))
+    out["k"] = round(k, 5)
+    if f_used:
+        out["focal_used_px"] = round(float(f_used), 2)
+        out["focal_implied_px"] = round(float(f_used) / k, 2)
+    if not (PITCH_K_RANGE[0] <= k <= PITCH_K_RANGE[1]):
+        out["reason"] = f"k = {k:.3f} is implausible for a focal-length error"
+        return out
+    if abs(k - 1) < PITCH_MIN_CHANGE:
+        out["reason"] = "within 0.5%; left as it is"
+        return out
+    out.update(applied=True, stretch={"axis": mean_ax.tolist(),
+                                      "at": cam[ok][:, :3, 3].mean(0).tolist(),
+                                      "factor": 1.0 / k})
+    return out
 
 
 def _utm_epsg(lon: float, lat: float) -> int:
@@ -761,7 +862,12 @@ def _level(X: np.ndarray, B: np.ndarray, origin: np.ndarray) -> np.ndarray:
 
 
 def _apply_frame_json(X: np.ndarray, tf: dict) -> np.ndarray:
-    """F4 points through level.json or georef.json: level, scale, then any GNSS fit."""
+    """
+    F4 points through level.json or georef.json: any depth stretch from the gimbal
+    pitch, level, scale, then any GNSS fit.
+    """
+    if "stretch" in tf:
+        X = _stretch(X, tf["stretch"])
     L = _level(X, np.asarray(tf["basis_rows"]), np.asarray(tf["origin"]))
     L = L * float(tf.get("scale", 1.0))
     if "sim3" in tf:

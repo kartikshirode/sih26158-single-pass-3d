@@ -796,6 +796,84 @@ def t_srt_georef():
         shutil.rmtree(tmp, ignore_errors=True)
 
 
+def t_srt_pitch_focal():
+    section("T3h: the gimbal pitch undoes a focal length the mapper got wrong")
+    from eval3d.gnss import geodetic_to_enu
+    from eval3d.metrics import apply_transform
+    from tesseract.stages import Georeference, _apply_frame_json, _enu_to_geodetic
+
+    rng = np.random.default_rng(12)
+    n, hd, pitch, k = 60, np.radians(30), np.radians(60), 1.12
+    fwd = np.array([np.sin(hd), np.cos(hd), 0.0])
+    up = np.array([0, 0, 1.0])
+    view = np.cos(pitch) * fwd - np.sin(pitch) * up
+    right = np.cross(view, up)
+    right /= np.linalg.norm(right)
+    R_cam = np.stack([right, np.cross(view, right), view], axis=1)   # x right, y down
+    cams_enu = np.linspace(0, 500, n)[:, None] * fwd + [0, 0, 110.0]
+    ground = np.column_stack([rng.uniform(-200, 700, 6000), rng.uniform(-200, 700, 6000),
+                              rng.uniform(0, 3, 6000)])
+    # A straight pass at one attitude cannot tell a focal length k times too long from
+    # a scene stretched k times along the view axis: both reproject the same. This is
+    # the model a mapper leaves with that focal length, in its own gauge.
+    o = ground.mean(0)
+
+    def stretch(X):
+        return X + (k - 1) * ((X - o) @ view)[:, None] * view
+
+    a = np.radians([-20, 35, 110])
+    Rx = np.array([[1, 0, 0], [0, np.cos(a[0]), -np.sin(a[0])], [0, np.sin(a[0]), np.cos(a[0])]])
+    Rz = np.array([[np.cos(a[2]), -np.sin(a[2]), 0], [np.sin(a[2]), np.cos(a[2]), 0], [0, 0, 1]])
+    Ry = np.array([[np.cos(a[1]), 0, np.sin(a[1])], [0, 1, 0], [-np.sin(a[1]), 0, np.cos(a[1])]])
+    Rf, tf_, sf = Rz @ Ry @ Rx, np.array([-4.0, 2, 9]), 0.03
+    cams = np.repeat(np.eye(4)[None], n, 0)
+    cams[:, :3, :3] = Rf @ R_cam
+    cams[:, :3, 3] = apply_transform(stretch(cams_enu), Rf, tf_, sf)
+    lat, lon, h = _enu_to_geodetic(cams_enu, 28.6, 77.2, 0.0)
+    gl = _enu_to_geodetic(ground, 28.6, 77.2, 0.0)
+    want = np.asarray(geodetic_to_enu(*gl, float(lat[0]), float(lon[0]), 0.0))
+
+    def run(with_pitch):
+        tel = [{"latitude": float(la), "longitude": float(lo), "height": float(z),
+                "flags": [], **({"gb_pitch": -60.0} if with_pitch else {})}
+               for la, lo, z in zip(lat, lon, cams_enu[:, 2])]
+        tmp = tempfile.mkdtemp(prefix="tess-")
+        try:
+            with io.open(os.path.join(tmp, "ingest.json"), "w", encoding="utf-8") as f:
+                json.dump({"stats": {}, "telemetry": tel}, f)
+            np.save(os.path.join(tmp, "points.npy"),
+                    apply_transform(stretch(ground), Rf, tf_, sf))
+            np.save(os.path.join(tmp, "cameras.npy"), cams)
+            c = ctx_for(tmp, source=_Clip(),
+                        facts={"has_telemetry": True,
+                               "local_gpu": {"focal_after_mapper_px": [1194.0]}})
+            c.artefacts["points"] = Artefact("points.npy", "point-cloud")
+            c.artefacts["cameras"] = Artefact("cameras.npy", "array")
+            r = Georeference().execute(c)
+            got = np.load(os.path.join(tmp, "points_geo.npy"))
+            tf = json.load(io.open(os.path.join(tmp, "georef.json"), encoding="utf-8"))
+            again = _apply_frame_json(np.load(os.path.join(tmp, "points.npy")), tf)
+            return r, got, float(np.abs(again - got).max())
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+    r, got, drift = run(with_pitch=False)
+    dz = float(np.median(got[:, 2] - want[:, 2]))
+    fp = r.facts.get("focal_from_pitch") or {}
+    check("without a gimbal pitch the stretch stays in and is not corrected",
+          abs(dz) > 3 and not fp.get("applied"), f"ground {dz:+.2f} m, {fp.get('reason')}")
+    r, got, drift = run(with_pitch=True)
+    fp = r.facts.get("focal_from_pitch") or {}
+    rms = float(np.sqrt(np.mean(np.sum((got - want) ** 2, axis=1))))
+    check("the gimbal pitch finds the focal length's error",
+          fp.get("applied") and abs(fp.get("k", 0) - k) < 0.005, str(fp))
+    check("and the ground lands where it is, to centimetres", rms < 0.1,
+          f"{rms:.3f} m RMS over {len(got)} points")
+    check("the implied focal length is the true one",
+          abs(fp.get("focal_implied_px", 0) - 1194.0 / k) < 3, str(fp.get("focal_implied_px")))
+    check("georef.json reproduces points_geo, stretch included", drift < 1e-6, f"{drift:.2e}")
+
+
 def t_ingest_failure_manifest():
     section("T3f: an ingest rejection leaves a manifest")
     from unittest.mock import patch
@@ -837,6 +915,7 @@ if __name__ == "__main__":
     t_local_provider()
     t_ingest_failure_manifest()
     t_srt_georef()
+    t_srt_pitch_focal()
     t_end_to_end()
     t_real_run()
     print("\n" + "=" * 62)
