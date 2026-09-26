@@ -874,6 +874,23 @@ def t_srt_pitch_focal():
     check("georef.json reproduces points_geo, stretch included", drift < 1e-6, f"{drift:.2e}")
 
 
+def t_unexpected_failure_manifest():
+    section("T3i: an unexpected exception in a stage still leaves a manifest")
+    with tempfile.TemporaryDirectory() as tmp:
+        stages = [Toy("A", produces=["a"]),
+                  Toy("B", needs=["a"], produces=["b"], fail=ValueError("empty cloud"),
+                      levels=("L0",))]
+        Pipeline(stages).run(ctx_for(tmp), resume=False)
+        path = os.path.join(tmp, "run_manifest.json")
+        check("the run still writes its manifest", os.path.isfile(path))
+        if os.path.isfile(path):
+            man = json.load(open(path, encoding="utf-8"))
+            check("the failure is named with its exception",
+                  any(s["id"] == "B" and "ValueError: empty cloud" in s.get("note", "")
+                      for s in man["stages"]), str([s.get("note") for s in man["stages"]]))
+            check("and carries a code", Code.STAGE_UNAVAILABLE in man["codes"])
+
+
 def t_ingest_failure_manifest():
     section("T3f: an ingest rejection leaves a manifest")
     from unittest.mock import patch
@@ -914,6 +931,7 @@ if __name__ == "__main__":
     t_georef_fit()
     t_local_provider()
     t_ingest_failure_manifest()
+    t_unexpected_failure_manifest()
     t_srt_georef()
     t_srt_pitch_focal()
     t_end_to_end()

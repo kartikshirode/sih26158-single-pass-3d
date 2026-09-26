@@ -276,6 +276,19 @@ class Pipeline:
                     break
                 i = 0
                 continue
+            except Exception as e:
+                # Anything else (a ValueError from a file reader, an empty cloud reaching
+                # the DSM) used to end the process with no manifest at all. A finale clip
+                # must leave a labelled result, so it is a failed stage like any other,
+                # and the ladder may still find a level that works.
+                msg = f"unexpected {type(e).__name__}: {e}"[:800]
+                ctx.log(f"  {st.id:<12} {msg}")
+                man.add(StageResult(stage=st.id, seconds=0.0, codes=[Code.STAGE_UNAVAILABLE],
+                                    skipped=True, note=msg))
+                if not self._degrade(ctx, man, Code.STAGE_UNAVAILABLE, msg):
+                    break
+                i = 0
+                continue
 
             ctx.log(f"  {st.id:<12} {res.seconds:6.2f}s"
                     + (f"  [{' '.join(res.codes)}]" if res.codes else ""))
