@@ -62,9 +62,12 @@ DEFAULTS = {
     # (1091 to 1160 px, 1414 to 1179, truth 1066). Nicosia pans through 63 degrees, and
     # there it went from 751 to 1400 px and the strip became the fan a pan sees
     # (research/11 section 9). S5 corrects a straight pass from the SRT's gimbal pitch.
+    # The turn is read from MapAnything's 60 views before mapping (attitude_turn_deg).
+    # Its poses drift between inference windows: 8.9 and 13.1 degrees on synthetic
+    # passes that turn 0.1, the demo 6.5, Nicosia 111. Hence 30, well clear of both.
     "camera_model": "SIMPLE_PINHOLE",
     "refine_focal": True,
-    "refine_focal_min_turn_deg": 10.0,   # 95th percentile of MapAnything's view turns
+    "refine_focal_min_turn_deg": 30.0,
     "pose_window": 0,           # views per MapAnything call; 0 sizes it to the GPU
     "pose_overlap": 8,          # shared views between windows, for the Sim(3) stitch
     "pose_size": 0,             # 0: the model's own 518 mapping; else the longest side
@@ -335,6 +338,32 @@ def pose_window_for(H: int, W: int, total_bytes: int) -> int:
     tokens = max((H // 14) * (W // 14), 1)
     budget = (total_bytes / 2**30 - WEIGHTS_GIB - HEADROOM_GIB) / GIB_PER_TOKEN
     return int(max(12, min(64, budget // tokens, TARGET_TOKENS // tokens)))
+
+
+def _mean_rotation(R: np.ndarray) -> np.ndarray:
+    """The rotation nearest the average of a stack of rotations (chordal mean)."""
+    U, _, Vt = np.linalg.svd(R.sum(0))
+    D = np.diag([1.0, 1.0, np.sign(np.linalg.det(U @ Vt))])
+    return U @ D @ Vt
+
+
+def attitude_turn_deg(cams: np.ndarray) -> float:
+    """
+    How far the views turn over the clip, robust to per-view pose noise: the largest
+    angle between the mean rotations of its first, middle and last thirds. A pan grows
+    it; noise averages out of each third. The 95th percentile of each view's angle to
+    the middle one (attitude_spread_deg) read MapAnything's noise as a turn: 9.6 and
+    14.2 degrees on synthetic passes that turn 0.1.
+    """
+    R = np.asarray(cams, np.float64)[:, :3, :3]
+    R = R / np.linalg.norm(R, axis=1, keepdims=True)
+    R = R[np.isfinite(R.reshape(len(R), -1)).all(1)]
+    if len(R) < 3:
+        return 0.0
+    parts = [_mean_rotation(p) for p in np.array_split(R, 3)]
+    ang = [np.degrees(np.arccos(np.clip((np.trace(a.T @ b) - 1) / 2, -1, 1)))
+           for i, a in enumerate(parts) for b in parts[i + 1:]]
+    return float(max(ang))
 
 
 def attitude_spread_deg(cams: np.ndarray) -> float:
@@ -636,6 +665,17 @@ def run(images_dir: str, work: str, *, crop_trbl=None, dense_names: list | None 
                                            cam_line[4:5 if cam_line[1] == "SIMPLE_PINHOLE" else 6]]
         log(f"  focal length: MapAnything {result['camera']['f']} px, after the mapper "
             f"{result['focal_after_mapper_px']} px")
+        # The mapper's own poses measure the turn far better than MapAnything's (0.1
+        # degrees on the synthetic passes against 9-13). Recorded, and flagged when it
+        # says the gate chose wrong, so a run that needed the other choice is visible.
+        mturn = attitude_turn_deg(np.stack([poses[n] for n in names if n in poses]))
+        result["views_turn_mapper_deg"] = round(mturn, 2)
+        thr = o["refine_focal_min_turn_deg"]
+        result["focal_gate_doubtful"] = bool(
+            o["refine_focal"] and (mturn >= thr) != result["focal_refined"])
+        if result["focal_gate_doubtful"]:
+            log(f"  WARNING: the mapper's views turn {mturn:.1f} deg, so the focal length "
+                f"should have been {'refined' if mturn >= thr else 'held'}")
     result["options"] = o
     # A view the mapper could not place has no pose to densify from; its row in
     # cameras.npy is NaN, so consumers keep their index into the keyframes.
@@ -654,7 +694,8 @@ SPARSE_KEYS = ("n_views", "keyframe_size", "pose_method", "mapanything_views", "
                "intrinsics_fit_residual_px", "stitch", "mapanything_s",
                "mapanything_peak_gib", "sparse_after_triangulation",
                "sparse_after_bundle_adjustment", "ba_gate", "unregistered",
-               "camera_model", "focal_after_mapper_px", "views_turn_deg", "focal_refined")
+               "camera_model", "focal_after_mapper_px", "views_turn_deg", "focal_refined",
+               "views_turn_mapper_deg", "focal_gate_doubtful")
 
 
 def reuse_sparse(src: str, work: str, names: list, o: dict) -> dict:
@@ -723,9 +764,9 @@ def sparse(r: Runner, colmap: str, img: str, names: list, h0: int, w0: int, crop
                              views=o["intrinsics_views"], log=log)
         cams_ma = ma.pop("cams")
         stitch, ma_load, ma_peak = ma["windows"], ma["split_s"], ma["peak_gib"]
-        turn = attitude_spread_deg(cams_ma)
+        turn = attitude_turn_deg(cams_ma)
         refine = bool(o["refine_focal"]) and turn >= o["refine_focal_min_turn_deg"]
-        log(f"  views turn {turn:.1f} deg (95th percentile): focal length "
+        log(f"  views turn {turn:.1f} deg (MapAnything, between thirds): focal length "
             + ("refined by the mapper" if refine else "held at MapAnything's"))
         del ma
 

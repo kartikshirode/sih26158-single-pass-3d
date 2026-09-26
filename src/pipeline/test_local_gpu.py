@@ -17,8 +17,8 @@ import tempfile
 import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from local_gpu import (DEFAULTS, SparseError, attitude_spread_deg, clean_work,  # noqa: E402
-                       clear_products, frame_order, read_images_txt, read_ply_points,
+from local_gpu import (DEFAULTS, SparseError, attitude_spread_deg, attitude_turn_deg,  # noqa: E402
+                       clean_work, clear_products, frame_order, read_images_txt, read_ply_points,
                        reuse_sparse, with_extra)
 
 FAILED: list[str] = []
@@ -184,6 +184,21 @@ check("a window's scale in the rotation block does not count as turning",
 lost = pan.copy()
 lost[5] = np.nan
 check("a view with no pose is ignored", np.isfinite(attitude_spread_deg(lost)))
+noisy = straight.copy()
+nrng = np.random.default_rng(9)
+for i in range(60):
+    noisy[i, :3, :3] = Rotation.from_rotvec(nrng.normal(0, np.radians(5), 3)).as_matrix() @ rot
+check("per-view noise of 5 degrees reads as a turn to the percentile measure",
+      attitude_spread_deg(noisy) > 10, f"{attitude_spread_deg(noisy):.1f}")
+check("but not to the thirds measure", attitude_turn_deg(noisy) < 4,
+      f"{attitude_turn_deg(noisy):.1f}")
+noisy_pan = pan.copy()
+for i in range(60):
+    noisy_pan[i, :3, :3] = Rotation.from_rotvec(nrng.normal(0, np.radians(5), 3)).as_matrix() \
+        @ pan[i, :3, :3]
+check("a noisy 60 degree pan still turns about 40 degrees between its outer thirds",
+      35 < attitude_turn_deg(noisy_pan) < 45, f"{attitude_turn_deg(noisy_pan):.1f}")
+check("the thirds measure ignores a lost view too", np.isfinite(attitude_turn_deg(lost)))
 
 print()
 if FAILED:
