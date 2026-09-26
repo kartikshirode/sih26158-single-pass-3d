@@ -495,3 +495,75 @@ final runs give 37-57 s fixed, 0.29-0.90 s per pose view and 0.22-1.25 s per den
 Set to 57 s, 0.5 and 1.1 (425a027): B5v 563 s estimated, demo 341 against 302, Nicosia
 392 against 270, and a 600-keyframe clip about 690 s, which leaves it at L0 inside the
 840 s that remain after S0 and S1.
+
+### Audit, line by line
+
+A read-only pass over `local_gpu.py`, the S3 to S6 stages, `mesh_export.py`, the keyframe
+selector and the three tools. Findings fixed on the branch, each with a test that failed
+first:
+
+| ID | Severity | Finding | Fix |
+|---|---|---|---|
+| F10 | S1 | On a long clip S1 met its 600-keyframe target early and stopped: the ten-minute loop's keyframes ended at frame 12,604 of 18,000 (`out/runs/codex-b4-ingest`). T3d: 7,272 of 9,000 before, 8,997 after | 2358c7e |
+| F11 | S2 | The run page fitted a similarity to carry the mesh into the export frame, which cannot hold S5's stretch | 1b9e609 |
+| F12 | S2 | A rerun into the same folder whose mesh or texture failed exported the previous run's mesh | d547b90 |
+| F13 | S2 | A mesh split over several atlases exported only the last | 8adf3ed |
+| F14 | S3 | An exception other than StageError ended the run with no manifest | 02cdb45 |
+| F15 | S3 | `view_check` stopped on an unplaced held-out view | 1b9e609 |
+| F16 | S4 | The DSM's 5 cm floor applied in model units | 11116da |
+| F17 | S4 | 1 Hz SRT fixes taken by nearest rather than interpolated (up to 5 m at 10 m/s) | b9fdd49 |
+
+Left open (S3 and S4): MapAnything running out of GPU memory is reported as GEO-REPROJ and
+replayed; a missing file in S3 is labelled "tools missing" and L1 solves the poses again;
+on the non-default pose path `focal_after_mapper_px` holds [f, cx]; local S3 has no
+`key_extra`, so a DEFAULTS change needs a version bump by hand.
+
+B4 no longer tests S1 at length: since F1 the loop points of the looped demo read as cuts,
+and S1 keeps one 19 s loop (177 keyframes, frames 0 to 564, 32.9 s). F10 is covered by the
+unit test only.
+
+### End to end on the new code (codex-*-v2, 03:17 to 03:41, laptop otherwise idle)
+
+Clean runs, verify PASS on all four. Commits up to b9fdd49; the focal gate was then at
+10 degrees on the percentile measure.
+
+| Run | Wall | R | S3 sparse, dense | Mapper | Focal, MapAnything to used | Result |
+|---|---:|---:|---|---:|---|---|
+| codex-b1-v2 | 264.5 s | 14.0 | 104 s, 143 s | 56.5 s | 1098, held | 177/177, 0.490 px, 7.08M points |
+| codex-b2-v2 | 282.6 s | 7.1 | 230 s, 41 s | 181.6 s | 751 to 1400, refined | 209/209, 0.344 px, 1.53M points |
+| codex-b3-v2 | 318.1 s | 15.9 | 93 s, 196 s | 21.9 s | 1414, held; S5 k 1.325, implied 1067.4 | cameras 0.127 m RMS, cloud 0.394 m median, 95.3% within 1 m |
+| codex-b5v-v2 | 502.5 s | 0.84 | 141 s, 321 s | 53.2 s | 1091 to 1179, refined; S5 corrected | cameras 0.136 m, cloud 0.338 m median, 98.6% within 1 m; R-O2 met |
+
+Holding the focal length also shortened the mapper: 56.5 s against 89.2 s on the demo,
+21.9 against 33.3 on test_flight.
+
+### F18: MapAnything's poses cannot gate the focal refinement at 10 degrees
+
+B5v was refined because MapAnything's views read a 14.2 degree turn on a pass that turns
+0.1; test_flight read 9.6. `out/codex/ma_turn.py` ran MapAnything on the same 60 views of
+each clip:
+
+| Clip | MapAnything, 95th percentile | MapAnything, between thirds | Mapper, between thirds |
+|---|---:|---:|---:|
+| demo | 5.39 | 6.46 | 2.14 |
+| Nicosia | 96.94 | 111.02 | 86.00 |
+| test_flight | 9.63 | 8.90 | 0.13 |
+| B5v | 14.19 | 13.11 | 0.10 |
+
+The straight passes' reading is drift between MapAnything's two inference windows, not
+per-view noise, so averaging within thirds barely helps. The gate is now the thirds
+measure at 30 degrees, and the mapper's own turn is recorded with a flag when it disagrees
+(2ece0fd).
+
+### Mesh and texture on the demo's kept dense scene (`out/codex/tex_exp.py`)
+
+Mesh `-d 4` from M0's dense cloud, TextureMesh at 20% unless stated, full-size held-out.
+
+| ID | Change | Texture s | PSNR, SSIM, coverage | Decision |
+|---|---|---:|---|---|
+| TX0 | None (current defaults) | 46.4 | 22.791 dB, 0.6472, 98.81% | Reference |
+| TX1 | Both seam levellings | crashed | access violation (0xC0000005) | Reject |
+| TX2 | Both seam levellings, no decimation | 188.1 | 9.117 dB, 0.0161; atlas 10.8% black | Reject: decimation is not what blackens it |
+| TX3 | ReconstructMesh `--close-holes 300` | 47.1 | 15.980 dB, 0.6051 | Reject: the closed holes are wrong surfaces across the views |
+| TX4 | `--empty-color` grey instead of orange | 49.4 | 22.825 dB, 0.6472 | Neutral on the score |
+| TX5 | `--virtual-face-images 3` | 30.2 | 22.618 dB, 0.6244 | Reject: 0.17 dB and 0.023 SSIM worse |

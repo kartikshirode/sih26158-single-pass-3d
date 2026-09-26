@@ -473,10 +473,15 @@ a focal length k times too long and the scene stretched k times along the view a
 reproject identically, so refinement has nothing to go on and drifted 6-9% long from
 either side. On Nicosia, a pan through 63 degrees, it went from 751 to 1400 px (+86%),
 and the model changed from a curved strip to the fan a pan sees. The mapper now refines
-the focal length only when MapAnything's views turn at least 10 degrees (95th
-percentile rotation from the middle view, `refine_focal_min_turn_deg`) and otherwise
-holds MapAnything's value; `views_turn_deg` and `focal_refined` are recorded. A straight
-pass is corrected afterwards from the gimbal pitch when the SRT has one (ADR-032).
+the focal length only when MapAnything's views turn at least 30 degrees (the largest
+angle between the mean rotations of the clip's thirds, `refine_focal_min_turn_deg`) and
+otherwise holds MapAnything's value. A first gate at 10 degrees on the 95th percentile
+turn misfired: MapAnything's poses drift between its inference windows and read 9-14
+degrees on passes that turn 0.1, against 111 on Nicosia. `views_turn_deg`,
+`focal_refined` and the mapper's own turn (`views_turn_mapper_deg`, 0.1 on those passes)
+are recorded, with `focal_gate_doubtful` when the two disagree. Holding the focal length
+also shortened the mapper (56.5 s against 89.2 on the demo). A straight pass is corrected
+afterwards from the gimbal pitch when the SRT has one (ADR-032).
 
 ## ADR-032 · S5 corrects a straight pass's depth from the SRT's gimbal pitch
 
@@ -497,6 +502,8 @@ in the manifest records k, the implied focal length, or why nothing was applied.
 focal lengths were 1091-1414 px, the implied focal length was 1066.6-1067.3 px against
 1066, and the cloud went from 1.4-12.6 m median error to 0.34-0.40 m, 95-99% within 1 m.
 `src/tesseract/test_tesseract.py` T3h checks a 12% error on a rotated, scaled gauge.
+End to end on the branch (`codex-b3-v2`, `codex-b5v-v2`): 0.394 and 0.338 m median,
+95.3% and 98.6% within 1 m, cameras 0.13 m RMS.
 **Consequences.** On a clip with the pitch, heights no longer depend on MapAnything's
 reading of the frames. None of the 20 real DJI SRT fixtures has a gimbal pitch, so on
 most consumer clips nothing changes and the error stays at whatever MapAnything's focal
