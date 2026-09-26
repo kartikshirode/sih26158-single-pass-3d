@@ -808,6 +808,10 @@ The local GPU pipeline (2026-09-25): every change made to the laptop and whether
 ### research/10-reconstruction-quality.md
 Why the demo model came out as stacked ground sheets and the fix (2026-09-25): keyframe gate holes (bridged now), MapAnything window drift the short BA never saw (poses now from COLMAP global_mapper with the camera fixed), OpenMVS dense-fuse and ROI dropping depth maps (fuse filter 1, no ROI), TextureMesh seam levelling blackening the atlas (off). Every experiment E1-E5 with numbers, before/after table, what is still wrong, the time cost, and nothing installed.
 
+### research/11-codex-optimisation.md
+The local GPU optimisation write-up for branch codex-opt: benchmarks B1-B5v and the held-out, shape, truth and time checks; before and after; audit findings F1-F18; poses (retriangulation off, point filtering); dense, mesh and texture experiments; mesh exports; SRT georeferencing; the 600 s clip; the focal length (the straight-pass ambiguity, the turn gate, the gimbal-pitch correction); time rates and the ten-minute projection; what was rejected and what is still wrong; machine changes; how to reproduce.
+Gotcha: its numbers come from audit/codex-opt/RUNLOG.md; accuracy figures are synthetic, and the ten-minute 30 fps time is a prediction. Code comments cite its sections 9 and 10.
+
 ### research/08-web-upload.md
 Design of the upload feature (one Cloud Run job per upload, preview before final, status.json contract, limits, uploads kept off curated pages) and two defects it exposed: packing scripts pinned to one laptop, and S1 retaining every full-res frame (~112 GB for a 10-min clip) now fixed with a two-pass decode. A 10-minute clip was first ingested on 2026-09-25 (402 s as the code stood, 55 s after research/09). A 2026-09-24 addendum records the start claim, daily slots and signed byte bound (audit F-04, F-05) and the CORS dependency.
 
