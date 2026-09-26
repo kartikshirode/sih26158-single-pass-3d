@@ -54,10 +54,13 @@ DEFAULTS = {
     # closer to the true path (0.31 m RMS against 0.66); on the demo the held-out
     # views did not move (research/11).
     "mapper_retriangulate": False,
-    # PINHOLE holds the fitted focal length fixed. SIMPLE_PINHOLE with
-    # mapper_extra "--GlobalMapper.ba_refine_focal_length 1" lets the mapper refine one
-    # focal length (research/11 section 5).
-    "camera_model": "PINHOLE",
+    # MapAnything's focal length starts the mapper, which then refines it as one value
+    # (SIMPLE_PINHOLE). On the test_flight encode MapAnything fitted 1414 px against a
+    # true 1066 px, and held fixed that left the ground 10-17 m low; refined it came to
+    # 1135 px. On the demo it stayed at 1095 against 1098, with no curl (research/11).
+    # PINHOLE with refinement would move fx and fy apart (1599 and 1146 px there).
+    "camera_model": "SIMPLE_PINHOLE",
+    "refine_focal": True,
     "pose_window": 0,           # views per MapAnything call; 0 sizes it to the GPU
     "pose_overlap": 8,          # shared views between windows, for the Sim(3) stitch
     "pose_size": 0,             # 0: the model's own 518 mapping; else the longest side
@@ -364,13 +367,19 @@ def analyze(r: Runner, colmap: str, model: str, label: str) -> dict:
 
 def global_sparse(r: Runner, colmap: str, img: str, db: str, cam: dict, o: dict) -> str:
     """
-    Poses from COLMAP's global mapper over long feature tracks, the camera held fixed.
+    Poses from COLMAP's global mapper over long feature tracks.
 
-    The camera is fixed because it cannot be recovered here. Self-calibrating, the
-    incremental mapper put the demo's focal length at 576 px against the 1100 px
-    MapAnything fits, and the ground curled into a bowl: a forward flight over flat
-    ground barely constrains focal length. PINHOLE, so the undistorter hands OpenMVS a
-    camera it accepts (a SIMPLE_RADIAL with k = 0 is copied through and refused).
+    The camera starts at MapAnything's fit, with the principal point and distortion
+    held. Self-calibrating from scratch, the incremental mapper put the demo's focal
+    length at 576 px against 1100 and curled the ground into a bowl, so the focal length
+    is only refined from that start (refine_focal), never searched for. A pinhole
+    model, so the undistorter hands OpenMVS a camera it accepts (a SIMPLE_RADIAL with
+    k = 0 is copied through and refused).
+
+    Without the mapper's retriangulation its model keeps the observations that pass
+    were meant to drop, and the mean reprojection error that the S3b gate reads rose by
+    about 10% (test_flight 0.90 to 1.00 px). point_filtering drops them, as the
+    mapanything path does, before the model is measured; the poses do not change.
     """
     model = o["camera_model"]
     params = ([cam["f"]] if model == "SIMPLE_PINHOLE" else [cam["f"], cam["f"]]) \
@@ -393,7 +402,7 @@ def global_sparse(r: Runner, colmap: str, img: str, db: str, cam: dict, o: dict)
     os.makedirs(out)
     r.sh(with_extra([colmap, "global_mapper", "--database_path", db, "--image_path", img,
           "--output_path", out,
-          "--GlobalMapper.ba_refine_focal_length", "0",
+          "--GlobalMapper.ba_refine_focal_length", "1" if o["refine_focal"] else "0",
           "--GlobalMapper.ba_refine_principal_point", "0",
           "--GlobalMapper.ba_refine_extra_params", "0",
           "--GlobalMapper.skip_retriangulation", "0" if o["mapper_retriangulate"] else "1"],
@@ -405,7 +414,15 @@ def global_sparse(r: Runner, colmap: str, img: str, db: str, cam: dict, o: dict)
         raise RuntimeError("global_mapper wrote no model")
     # Several models mean the views split into groups with no shared tracks; the
     # largest is kept and the S3b gate then refuses the run for the views it lacks.
-    return max(models, key=lambda m: os.path.getsize(os.path.join(m, "images.bin")))
+    best = max(models, key=lambda m: os.path.getsize(os.path.join(m, "images.bin")))
+    if o["mapper_retriangulate"]:
+        return best
+    filt = os.path.join(r.work, "sparse_gf")
+    shutil.rmtree(filt, ignore_errors=True)
+    os.makedirs(filt)
+    r.sh([colmap, "point_filtering", "--input_path", best, "--output_path", filt,
+          "--max_reproj_error", "4", "--min_tri_angle", "1.5"], "point_filtering")
+    return filt
 
 
 def mapanything_sparse(r: Runner, colmap: str, img: str, db: str, names: list,
@@ -591,6 +608,13 @@ def run(images_dir: str, work: str, *, crop_trbl=None, dense_names: list | None 
         np.save(os.path.join(r.work, "cameras.npy"),
                 np.stack([poses.get(n, np.full((4, 4), np.nan)) for n in names]))
         result["unregistered"] = [n for n in names if n not in poses]
+        cam_line = next(ln for ln in open(os.path.join(sp_txt, "cameras.txt"), encoding="utf-8")
+                        if ln.strip() and not ln.startswith("#")).split()
+        result["camera_model"] = cam_line[1]
+        result["focal_after_mapper_px"] = [round(float(x), 2) for x in
+                                           cam_line[4:5 if cam_line[1] == "SIMPLE_PINHOLE" else 6]]
+        log(f"  focal length: MapAnything {result['camera']['f']} px, after the mapper "
+            f"{result['focal_after_mapper_px']} px")
     result["options"] = o
     # A view the mapper could not place has no pose to densify from; its row in
     # cameras.npy is NaN, so consumers keep their index into the keyframes.
@@ -608,7 +632,8 @@ def run(images_dir: str, work: str, *, crop_trbl=None, dense_names: list | None 
 SPARSE_KEYS = ("n_views", "keyframe_size", "pose_method", "mapanything_views", "camera",
                "intrinsics_fit_residual_px", "stitch", "mapanything_s",
                "mapanything_peak_gib", "sparse_after_triangulation",
-               "sparse_after_bundle_adjustment", "ba_gate", "unregistered")
+               "sparse_after_bundle_adjustment", "ba_gate", "unregistered",
+               "camera_model", "focal_after_mapper_px")
 
 
 def reuse_sparse(src: str, work: str, names: list, o: dict) -> dict:
@@ -776,7 +801,7 @@ def dense(r: Runner, mvs: dict, colmap: str, img: str, sp_txt: str, names: list,
 # as points_fused.npy plus colors_fused.npy with OpenMVS's per-point view lists, 3.7
 # times their size: 376 MB of a 1.24 GB demo run, and S6 exports the cloud again.
 INTERMEDIATE = ("db.db", "dense", "sparse_in", "sparse_tri", "sparse_ba",
-                "sparse_dense", "sparse_g", "scene_dense.ply")
+                "sparse_dense", "sparse_g", "sparse_gf", "scene_dense.ply")
 
 
 def clean_work(work: str) -> list[str]:

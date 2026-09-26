@@ -384,3 +384,25 @@ fall is the sparse points not being re-triangulated rather than the ground layer
 | `dense_min_resolution` (new) | OpenMVS's 640 | 320 | T3b |
 
 S3 goes to version 6 so cached runs recompute.
+
+### F1 and F2: letting the mapper refine the focal length
+
+| Run | Camera | Focal after the mapper (truth 1066) | Error | Cameras against truth | Cloud against truth (median, within 1 m) |
+|---|---|---|---:|---|---|
+| R1, test_flight, focal fixed | PINHOLE | 1414 (MapAnything's) | 0.898 px | 0.135 m | 12.59 m, 1.0% |
+| F1, refined | PINHOLE | fx 1599.5, fy 1146.2 | 0.892 px | 0.136 m | 3.79 m, 3.5% |
+| F2, refined as one value, retriangulation off | SIMPLE_PINHOLE | 1134.6 | 0.995 px | 0.144 m | 3.23 m, 4.6% |
+| F2n, focal fixed, retriangulation off | PINHOLE | 1414 | 1.002 px | refused | refused |
+
+On the demo (F1b and F2b, held-out runs): PINHOLE refinement moved fx and fy apart
+(1113 and 1298 against 1098); SIMPLE_PINHOLE kept 1095 against MapAnything's 1098,
+sparse on plane 0.749, layered cells 0.056 and held-out 22.799 dB, 0.6467 at full size
+(Q0b 22.830 dB, 0.6493), so no bowl and no loss. Refining one focal length is kept
+(ADR-031): it takes test_flight's cloud error from 12.6 m to 3.2 m and leaves the demo
+where it was.
+
+F2n found a regression in the retriangulation change: without that pass the mean
+reprojection error rises about 10% (test_flight 0.898 to 1.002 px) and the 1 px gate
+refused the run. The mapper's model now goes through `point_filtering` (4 px, 1.5
+degrees, as on the mapanything path) before the gate measures it; the poses are
+untouched.

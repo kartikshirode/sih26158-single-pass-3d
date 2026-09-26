@@ -43,8 +43,11 @@ def read_camera(path: str):
         if line.startswith("#") or not line.strip():
             continue
         parts = line.split()
+        if parts[1] == "SIMPLE_PINHOLE":        # one focal length, refined by the mapper
+            f, cx, cy = map(float, parts[4:7])
+            return int(parts[2]), int(parts[3]), (f, f, cx, cy)
         if parts[1] != "PINHOLE":
-            raise ValueError(f"Expected PINHOLE camera, got {parts[1]}")
+            raise ValueError(f"Expected a pinhole camera, got {parts[1]}")
         return int(parts[2]), int(parts[3]), tuple(map(float, parts[4:8]))
     raise ValueError(f"No camera in {path}")
 

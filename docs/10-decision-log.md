@@ -443,3 +443,26 @@ operator) is supplied; that is the step to F7.
 **Status.** Accepted.
 **Revisit when.** A take-off elevation source is available, or an SRT family writes an
 RTK flag, which would let the scale status say "gnss+rtk".
+
+## ADR-031 · The global mapper refines one focal length, starting from MapAnything's
+
+**Context.** ADR-028 fixed the camera at MapAnything's fit because self-calibration from
+scratch curled the demo's ground into a bowl. On the synthetic test_flight clip, whose
+true focal length is known (1066 px), MapAnything fitted 1414 px. The same 60 frames as
+sharp renders gave 1058 px, so the H.264 encoding alone moved it by a third. Held fixed,
+that left the georeferenced cloud 12.6 m (median) from the true surface while the
+cameras sat within 14 cm of their true path.
+**Decision.** The camera is SIMPLE_PINHOLE, starting at MapAnything's focal length, and
+the global mapper refines that one value (`refine_focal`); principal point and
+distortion stay fixed. The value it settles on is recorded as `focal_after_mapper_px`.
+**Evidence.** `audit/codex-opt/RUNLOG.md` F1 and F2: test_flight's focal came to 1135 px
+and the cloud error to 3.2 m. On the demo the focal stayed at 1095 px against 1098, with
+the ground as flat as before and the held-out views unchanged. PINHOLE with refinement
+split fx and fy (1599 and 1146 px), so it is not used.
+**Consequences.** The metric model depends less on one network's reading of the frames.
+The refined focal is still 6% long on test_flight, so heights are not yet at 1 m. A
+clip that gives the mapper little parallax could still pull the focal length far; the
+recorded value is there to catch it.
+**Status.** Accepted. Amends ADR-028's fixed camera.
+**Revisit when.** A clip with ground truth other than the synthetic one is available, or
+a refined focal length moves more than about 20% from MapAnything's.
