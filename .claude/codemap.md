@@ -878,6 +878,9 @@ Exports: machine table, experiment table, per-benchmark measurements
 Used by: audit/codex-opt/REPORT.md and research/11-codex-optimisation.md
 Gotcha: B5 as a 30 fps render is absent; B5v is a genuine 600 s file at 1 fps, so S1 decodes 1/30 of a real clip's frames. Timings after 02:14 on 2026-09-27 shared the laptop with a simulator in WSL and are marked.
 
+### audit/codex-opt/REPORT.md
+The owner's one-screen summary of the codex-opt run: before and after on B1, B2, B3 and B5v, the three biggest wins, the open problems, phase 3 findings F1-F22 with severity and fixing commit, and the machine changes with their undo.
+
 ### audit/codex-opt/RESEARCH.md
 Stage-by-stage options for keyframes, cameras, dense reconstruction, mesh, models, throughput and missing outputs on the 8 GiB Windows laptop, with licence and source links, risks and ranked experiments.
 Exports: ranked experiment list and per-option cost, licence, risk and test
