@@ -99,7 +99,7 @@ class Screen(BaseStage):
 @dataclass
 class Ingest(BaseStage):
     id: str = "S1-ingest"
-    version: str = "4"          # high-flow edits between similar scenes split shots
+    version: str = "5"          # a long clip's keyframes span the whole shot
     needs: tuple = ()
     produces: tuple = ("keyframes",)
     levels: tuple = ("L0", "L1", "L2", "L3", "L4")

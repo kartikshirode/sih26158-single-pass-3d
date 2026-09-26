@@ -564,6 +564,46 @@ def select_keyframes(ok, usable, flows, scores, flow_budget: float, target: int,
     return np.asarray(selected), bridged
 
 
+def keyframe_budget(ok, usable, flows, scores, target: int, *, floor: float,
+                    bridge: float = 1.5) -> tuple[float, np.ndarray, int]:
+    """
+    The smallest flow budget, at least `floor`, whose `target` keyframes reach the end
+    of the clip; returns (budget, keyframes, bridged).
+
+    The budget used to be the median flow of the gated frames times their count over
+    the target, which assumes keyframes land on gated frames spaced by the median. The
+    gap is summed over every frame, though, and each keyframe overshoots its budget, so
+    a long clip met the target early and the loop stopped: the 10-minute loop's 600
+    keyframes ended at frame 12,604 of 18,000, and the last 30% of the flight was never
+    reconstructed. A clip that fits under the target keeps `floor`, and the selection
+    it always had.
+    """
+    flows = np.asarray(flows, float)
+    usable = np.asarray(usable, bool)
+    cum = np.cumsum(flows)
+    tail = int(np.flatnonzero(usable)[-1]) if usable.any() else len(flows) - 1
+
+    def cut(budget):
+        sel, br = select_keyframes(ok, usable, flows, scores, budget, target, bridge=bridge)
+        # Stopped by the target with at least one more budget of flight left.
+        return (len(sel) >= target and cum[tail] - cum[sel[-1]] >= budget), sel, br
+
+    short, sel, br = cut(floor)
+    if not short:
+        return float(floor), sel, br
+    lo, hi = float(floor), max(float(cum[tail] - cum[0]), float(floor))
+    for _ in range(40):
+        if hi - lo <= 1e-3 * lo:
+            break
+        mid = (lo + hi) / 2
+        if cut(mid)[0]:
+            lo = mid
+        else:
+            hi = mid
+    _, sel, br = cut(hi)
+    return hi, sel, br
+
+
 def ingest_video(path: str, *, target_keyframes: int = 600,
                  blur_reject_pct: float = 25.0, max_sky: float = 0.15,
                  horizon_policy: str = "reject", single_shot: bool = True,
@@ -710,11 +750,12 @@ def ingest_video(path: str, *, target_keyframes: int = 600,
     #    poses on either side came out as separate pieces. Now a gated frame is only
     #    preferred: once the flow since the last keyframe passes `bridge` budgets with no
     #    frame passing the gates, the sharpest frame past one budget is taken instead.
-    need = max(len(idx_ok) / max(target_keyframes, 1), 1.0)
-    flow_budget = max(np.median(flows[idx_ok]) * need, min_flow_px)
+    #    The budget starts at the median flow of a gated frame and grows only as far as
+    #    it must for the target to span the whole shot (keyframe_budget).
     usable = in_shot & ~slates & (skies <= max(bridge_max_sky, max_sky))
-    selected, bridged = select_keyframes(ok, usable, np.where(in_shot, flows, 0.0), scores,
-                                         flow_budget, target_keyframes, bridge=bridge)
+    flow_budget, selected, bridged = keyframe_budget(
+        ok, usable, np.where(in_shot, flows, 0.0), scores, target_keyframes,
+        floor=max(float(np.median(flows[idx_ok])), min_flow_px), bridge=bridge)
 
     srt = srt_path or (os.path.splitext(path)[0] + ".SRT")
     tel_all = parse_dji_srt(srt)

@@ -113,6 +113,30 @@ sel1, _ = select_keyframes(np.ones(n, bool), bad, flows, scores, 4.0, 1000)
 check("a frame that is not usable (a slate, or all sky) is never taken",
       not any(100 <= s < 200 for s in sel1))
 
+print("\nT3d: a long clip's keyframes reach the end of the flight")
+from ingest.video_ingest import keyframe_budget  # noqa: E402
+rng = np.random.default_rng(4)
+n = 9000                                                 # 10 min scored at 15 fps
+flows = rng.uniform(0.8, 1.2, n)
+scores = rng.uniform(900, 1000, n)
+ok = scores >= np.percentile(scores, 25)                  # the blur gate drops a quarter
+usable = np.ones(n, bool)
+old = max(np.median(flows[ok]) * ok.sum() / 600, 1.0)     # the budget S1 used to take
+sel_old, _ = select_keyframes(ok, usable, flows, scores, old, 600)
+check("the old budget stops at 600 keyframes short of the end",
+      len(sel_old) == 600 and sel_old[-1] < 0.9 * n, f"last keyframe {sel_old[-1]} of {n}")
+budget, sel, _ = keyframe_budget(ok, usable, flows, scores, 600,
+                                 floor=max(np.median(flows[ok]), 1.0))
+check("the fitted budget spans the flight", sel[-1] >= n - 2 * budget - 1,
+      f"last keyframe {sel[-1]} of {n}, budget {budget:.2f}")
+check("with nearly the keyframes it may have", 560 <= len(sel) <= 600, f"{len(sel)}")
+short_ok = ok[:300]
+b_s, sel_s, _ = keyframe_budget(short_ok, usable[:300], flows[:300], scores[:300], 600,
+                                floor=1.0)
+sel_s0, _ = select_keyframes(short_ok, usable[:300], flows[:300], scores[:300], 1.0, 600)
+check("a clip under the cap keeps the selection it had", b_s == 1.0
+      and np.array_equal(sel_s, sel_s0), f"budget {b_s}")
+
 print("\nT3c: a high-flow edit is a shot boundary")
 before = np.array([1, 2, 3, 4], np.float32)
 after = np.array([1, 2, 4, 3], np.float32)
