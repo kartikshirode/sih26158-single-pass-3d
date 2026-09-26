@@ -1007,7 +1007,11 @@ class Export(BaseStage):
         # ~25% of cells filled on the corridor and the surface rendered as spikes.
         e0, n0 = P[:, 0].min(), P[:, 1].min()
         span = max(float(np.ptp(P[:, 0]) * np.ptp(P[:, 1])), 1.0)
-        res = float(max(0.05, round(np.sqrt(span / max(len(P), 1)) * 1.6, 2)))
+        raw = float(np.sqrt(span / max(len(P), 1)) * 1.6)
+        # 5 cm is a floor in metres. A run in model units has no metre to floor at: the
+        # demo spans 22 units, where 0.05 is a coarse cell, not a fine one.
+        res = (max(0.05, round(raw, 2)) if units == Units.METRES
+               else max(float(f"{raw:.3g}"), 1e-9))
         nx = int(np.ptp(P[:, 0]) / res) + 1
         ny = int(np.ptp(P[:, 1]) / res) + 1
         ix = np.clip(((P[:, 0] - e0) / res).astype(int), 0, nx - 1)

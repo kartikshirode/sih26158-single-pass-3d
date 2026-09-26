@@ -891,6 +891,26 @@ def t_unexpected_failure_manifest():
             check("and carries a code", Code.STAGE_UNAVAILABLE in man["codes"])
 
 
+def t_dsm_model_units():
+    section("T3j: the DSM's 5 cm floor applies only to metres")
+    from tesseract.stages import Export
+    rng = np.random.default_rng(3)
+    P = np.column_stack([rng.uniform(0, 22, 1_500_000), rng.uniform(0, 22, 1_500_000),
+                         rng.uniform(0, 0.5, 1_500_000)])
+    for units, want in ((Units.MODEL, lambda g: g < 0.05), (Units.METRES, lambda g: g == 0.05)):
+        with tempfile.TemporaryDirectory() as tmp:
+            np.save(os.path.join(tmp, "points.npy"), P)
+            np.save(os.path.join(tmp, "points_llf.npy"), P)
+            c = ctx_for(tmp, source=_Clip(), facts={"units": units})
+            c.artefacts["points"] = Artefact("points.npy", "point-cloud")
+            c.artefacts["points_llf"] = Artefact("points_llf.npy", "point-cloud",
+                                                 frame=Frame.F5_LLF)
+            gsd = Export().execute(c).facts["dsm"]["gsd"]
+            check(f"a 22-unit scene in {units} gets the cell its density asks for"
+                  if units == Units.MODEL else "a metric scene keeps the 5 cm floor",
+                  want(gsd), f"gsd {gsd}")
+
+
 def t_ingest_failure_manifest():
     section("T3f: an ingest rejection leaves a manifest")
     from unittest.mock import patch
@@ -932,6 +952,7 @@ if __name__ == "__main__":
     t_local_provider()
     t_ingest_failure_manifest()
     t_unexpected_failure_manifest()
+    t_dsm_model_units()
     t_srt_georef()
     t_srt_pitch_focal()
     t_end_to_end()
