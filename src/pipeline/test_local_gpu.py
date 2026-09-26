@@ -17,7 +17,7 @@ import tempfile
 import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from local_gpu import frame_order, read_images_txt, read_ply_points  # noqa: E402
+from local_gpu import clean_work, frame_order, read_images_txt, read_ply_points  # noqa: E402
 
 FAILED: list[str] = []
 
@@ -81,6 +81,23 @@ check("past 999 keyframes the order is numeric, not by string",
       sorted(names, key=frame_order) ==
       ["kf_001_f00030.jpg", "kf_100_f03000.jpg", "kf_999_f29970.jpg", "kf_1000_f30000.jpg"],
       str(sorted(names, key=frame_order)))
+
+print("\nT4: S3 keeps its products and drops its intermediates")
+with tempfile.TemporaryDirectory() as tmp:
+    for d in ("dense", "sparse_g", "sparse_txt", "logs", "images"):
+        os.makedirs(os.path.join(tmp, d))
+    for f in ("db.db", "depth0000.dmap", "scene_dense.ply", "points_fused.npy",
+              "colors_fused.npy", "cameras.npy", "scene_dense_mesh.ply", "scene_tex.obj",
+              "local_gpu_result.json"):
+        open(os.path.join(tmp, f), "wb").close()
+    gone = clean_work(tmp)
+    left = sorted(os.listdir(tmp))
+    check("bulky intermediates are removed",
+          gone == ["db.db", "dense", "depth0000.dmap", "scene_dense.ply", "sparse_g"], str(gone))
+    check("the cloud, cameras, mesh, sparse model, logs and images stay",
+          left == ["cameras.npy", "colors_fused.npy", "images", "local_gpu_result.json", "logs",
+                   "points_fused.npy", "scene_dense_mesh.ply", "scene_tex.obj", "sparse_txt"],
+          str(left))
 
 print()
 if FAILED:

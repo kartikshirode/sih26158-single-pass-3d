@@ -634,14 +634,28 @@ def run(images_dir: str, work: str, *, crop_trbl=None, dense_names: list | None 
             result["texture_error"] = str(e)[-500:]
             log("  TextureMesh failed; continuing with the untextured mesh")
     if not o["keep_intermediate"]:
-        for f in os.listdir(r.work):
-            p = os.path.join(r.work, f)
-            if f.endswith(".dmap") or f in ("db.db", "dense", "sparse_in", "sparse_tri",
-                                              "sparse_ba", "sparse_dense", "sparse_g"):
-                shutil.rmtree(p, ignore_errors=True) if os.path.isdir(p) else os.remove(p)
+        clean_work(r.work)
         if img == os.path.join(r.work, "images"):
             shutil.rmtree(img, ignore_errors=True)
     return finish()
+
+
+# Rebuilt by any rerun and read by nothing after S3. scene_dense.ply is the same cloud
+# as points_fused.npy plus colors_fused.npy with OpenMVS's per-point view lists, 3.7
+# times their size: 376 MB of a 1.24 GB demo run, and S6 exports the cloud again.
+INTERMEDIATE = ("db.db", "dense", "sparse_in", "sparse_tri", "sparse_ba",
+                "sparse_dense", "sparse_g", "scene_dense.ply")
+
+
+def clean_work(work: str) -> list[str]:
+    """Delete S3's bulky intermediates from `work`; returns the names removed."""
+    gone = []
+    for f in sorted(os.listdir(work)):
+        p = os.path.join(work, f)
+        if f.endswith(".dmap") or f in INTERMEDIATE:
+            shutil.rmtree(p, ignore_errors=True) if os.path.isdir(p) else os.remove(p)
+            gone.append(f)
+    return gone
 
 
 if __name__ == "__main__":
