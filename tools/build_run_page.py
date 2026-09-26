@@ -154,6 +154,7 @@ def pack(run: str, tri_budget: int, pt_budget: int, log=print):
     to5 = lambda X: s * X @ R.T + t
 
     cams = np.load(os.path.join(run, "cameras.npy"))
+    cams = cams[np.isfinite(cams.reshape(len(cams), -1)).all(1)]   # unregistered views
     K5 = to5(cams[:, :3, 3])
     # Robust box over the cloud, widened to hold every camera so the flight path
     # stays one unbroken line.

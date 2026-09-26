@@ -145,7 +145,7 @@ The stage numbers follow `docs/02` §3, with S3b added for bundle adjustment.
 |---|---|
 | In | S3 cameras + intrinsics fit + keyframes at F0 resolution |
 | Out | COLMAP sparse model (`cameras/images/points3D`); `mvs_result.json.sparse_after_triangulation`, `.sparse_after_bundle_adjustment` = `{Registered images, Points, Observations, Mean track length, Mean reprojection error}` |
-| Gate | registered = N; mean reprojection error after BA ≤ 1.0 px (Kolu: 0.366, Short: 0.414) |
+| Gate | registered = N; mean reprojection error after BA ≤ 1.0 px (Kolu: 0.366, Short: 0.414). The local GPU path (global mapper, ADR-029) needs registered ≥ 50% of N and drops the rest under `GEO-UNREG` |
 | Rule | intrinsics are aggregated by **median**, never mean (`docs/05` §9) |
 
 ### S4 · Dense geometry and surface (OpenMVS, CPU; COLMAP PatchMatch on GPU)

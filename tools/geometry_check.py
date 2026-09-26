@@ -1,4 +1,4 @@
-﻿"""
+"""
 Shape checks for a local GPU reconstruction of mostly flat ground, with pictures.
 
 Run:  python tools/geometry_check.py out/runs/<run>/geometry [--out prefix]
@@ -59,6 +59,7 @@ def check(geo: str, out: str | None = None) -> dict:
     P = np.load(os.path.join(geo, "points_fused.npy")).astype(float)
     C = np.load(os.path.join(geo, "colors_fused.npy"))
     cams = np.load(os.path.join(geo, "cameras.npy"))[:, :3, 3]
+    cams = cams[np.isfinite(cams).all(1)]        # unregistered views are NaN rows
     S = read_sparse(os.path.join(geo, "sparse_txt"))
     c, n = ground_frame(S, cams)
     alt = float(np.median((cams - c) @ n))

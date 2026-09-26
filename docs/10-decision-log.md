@@ -393,3 +393,27 @@ exposure, and the far field, seen only at grazing angles, is smeared.
 **Status.** Accepted for the local path. Partly supersedes ADR-027 (its pose step).
 **Revisit when.** The global mapper is timed on 600 views, or a clip with GPS gives a
 metric check of the shape.
+
+## ADR-029 · The local S3b gate needs half the views registered, not all of them
+
+**Context.** On the cloud path poses come from MapAnything and every view is triangulated
+against its own pose, so "registered = N" held by construction. ADR-028 moved the local
+path to COLMAP's global mapper, which can fail to place a view. On a 600-view synthetic
+flight it placed 554: the last 46 frames look past the end of the site and hold 0 to 36
+features each. The gate refused the whole run for them, and a finale clip with a stretch
+of water or a few blank frames would have been refused the same way. `docs/09` already
+listed `GEO-UNREG` as "drop unregistered views; warn if < 80%", so the code and the
+contract disagreed.
+**Decision.** On the local path the gate passes when at least `min_registered` (50%) of
+the views are placed and reprojection error is at most 1.0 px. Unplaced views are listed
+in `local_gpu_result.json`, left out of the dense set and kept as NaN rows in
+`cameras.npy`, so the file still lines up with the keyframes. S3 adds `GEO-UNREG` and
+`registered_views`, with a note when under 80%.
+**Evidence.** `audit/codex-opt/RUNLOG.md` rows L1 and F3: the 600-view set now runs to a
+textured mesh. The demo, Nicosia and test_flight baselines placed every view, so the change leaves them as they were.
+**Consequences.** A partial model is delivered where there used to be none, with the
+missing share in the manifest. Levelling, the shape check and the run page skip NaN
+cameras. The cloud path keeps its 100% gate.
+**Status.** Accepted for the local path.
+**Revisit when.** A real clip shows the mapper splitting into two large models; keeping
+only the largest then drops a real part of the flight, and merging would be the fix.

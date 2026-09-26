@@ -185,3 +185,53 @@ render preparation time alone, before ingest or geometry. I deleted the probe
 MP4 and SRT after recording the timing. The existing `out/smoke/tf_all` has
 600 consecutive 1080p synthetic frames; it will exercise mapper size, though
 its camera spacing is unlike a 600 s flight.
+
+## Second session, 2026-09-26 night
+
+The first session stopped at its usage limit with F2 staged; that was committed as
+b97ac13 after its tests passed. This section carries on from phase 3.
+
+### Machine changes, second session
+
+| When | What | Where | Size | Undo |
+|---|---|---|---:|---|
+| Start | Deleted duplicate `scene_dense.ply` files from the Codex baseline runs (the same cloud is in `points_fused.npy`) | `out/runs/codex-b*` | 1.43 GB | Rerun the benchmark |
+| Start | Deleted dense PLYs, databases and depth maps from the held-out folders, keeping their scores, sparse models and textured meshes | `out/codex/*-heldout` | 2.21 GB | Rerun `tools/view_check.py --build` |
+| Start | Deleted the aborted first B1 run, five Chrome profiles and two research-09 work folders (`g568o2`, `t600o2`) | `out/` | 1.2 GB | Regenerable; nothing refers to them |
+| Start | `python -m pip cache purge` | `%LOCALAPPDATA%\pip\cache` | 3.68 GB | None needed; pip downloads again on demand |
+| Phase 4 | assimp 6.0.5 Windows x64 library (BSD-3), from the official GitHub release, SHA-256 1AB3AC83...7C41; the .pdb debug file deleted | `C:\Users\Kartik\gpu-tools\assimp\Release\assimp-vc143-mt.dll` | 5.8 MB | Delete the folder |
+| Phase 4 | `pip install pyassimp==5.2.5` (BSD-3, pure Python) | global Python 3.12 | 0.1 MB | `pip uninstall pyassimp` |
+| Phase 4 | Rendered 600 sharp keyframes of the synthetic pass (`out/codex/render_b5s.py`, 8 processes, 157 s) | `out/codex/b5s` | 262 MB | Delete the folder |
+
+Free space on C: went from 134.1 GB to 141.7 GB before any new run.
+
+### Why the 600-view run failed, and B5s
+
+B5 as a 600 s render would take about 7 h. It would not be a better test anyway:
+`single_pass` spreads its frames over the same 920 m line whatever the duration, so a
+600 s render gives S1 the same ground at 30 times the frame density, and S1 caps the
+keyframes at 600. The S3 question for a 10-minute clip is "600 keyframes", so B5s is 600
+sharp keyframes rendered straight to JPEG at 1920x1080, with S3 run on them with the
+production settings (dense set 300, as S2 plans it).
+
+The first B5s run failed the gate at 554 of 600, like L0 (553). The database says why:
+the missing 46 are the last 46 frames, kf_554 to kf_599, with 36, 22, 3 and then 0
+SIFT features. The pass flies 15% past the edge of the synthetic site and those frames
+see nothing. So L0's failure was not the mapper or the blurred frames; it was frames
+with no content, and the 100% gate refusing the whole run for them (finding F3).
+
+### Experiments, second session
+
+| ID | Hypothesis | Single change | Benchmark | Time | Quality | Decision | Commit |
+|---|---|---|---|---|---|---|---|
+| F3 | A few views the mapper cannot place should not refuse the run | Local gate needs 50% registered (ADR-029); unplaced views listed, dropped from dense, NaN in cameras.npy, GEO-UNREG in the manifest | B5s | See L1 | See L1 | Keep: S1 finding, the whole-run refusal on a finale clip with a blank stretch | f51f038 and the stages commit |
+| F4 | A dense failure need not redo the poses | local_gpu split into sparse() and dense(); sparse_from reuses a gated run; S3 at L1/L2 after MVS_RC reuses the poses on disk | Unit tests (T5 in test_local_gpu, T3e in test_tesseract) | Saves MapAnything, matching and the mapper: 130 of B1's 314 s | Unchanged by construction; reuse refuses changed pose options | Keep: S2 finding, the ladder redid a correct sparse stage | f51f038 |
+| L1 | Measure S3 on 600 keyframes end to end | None beyond F3 | B5s, 600 views, 554 placed, 277 densified | S3 747.8 s: MapAnything 42.1, SIFT 19.3, matching 56.3, mapper 191.1, densify 125.9, mesh 144.2, texture 153.4 | 554/600 registered, 0.773 px, mean track 31.8, 23.2M dense points; sparse on plane 0.884, layered cells 0.010, step ratio 4.4 (the largest steps are the last five placed frames at the site edge) | Baseline for the 10-minute estimate | Not applicable |
+| X1 | The textured mesh can be exported in the cloud's frame | mesh_export: OBJ, GLB, FBX from scene_tex.obj with S5b's transform | B1 baseline mesh, 208,147 faces | 8.8 s for all three | Transform matches points_llf.npy to 4.8e-7; GLB keeps its atlas; FBX reloads with 208,147 faces and its texture file | Keep: R-O5 from 3 of 6 to 6 of 6 on local runs | 670c2af |
+
+**The 10-minute estimate from L1.** S0 10.2 s and S1 51.5 s (B4) plus S3 747.8 s is
+809.5 s before S5b and S6, which B1 put at 2.4 s but which grow with the cloud (23M
+points here against 7M). That is R about 1.37 on this proxy: inside 1.5, with little
+margin. The proxy is kind to the mapper in one way (a synthetic scene, no water, no
+repeated texture) and harsh in another (1.5 m between keyframes, tracks 31.8 views
+long). B2's mapper took 329 s for 289 views, so real footage can cost more per view.

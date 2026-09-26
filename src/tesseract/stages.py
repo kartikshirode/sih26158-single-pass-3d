@@ -321,9 +321,22 @@ class Geometry(BaseStage):
         opts = dict(ctx.config.get("local_gpu") or {})
         if ctx.level == "L1":
             opts["dense_resolution_level"] = int(opts.get("dense_resolution_level", 1)) + 1
+        # After a dense failure the poses on disk passed the S3b gate, and L1 and L2
+        # change only the dense half, so they are reused rather than solved again
+        # (130 of the demo's 314 s).
+        g = ctx.path("geometry")
+        reuse = None
+        if getattr(self, "_dense_failed", None) == (ctx.run_id, ctx.workdir):
+            try:
+                with io.open(os.path.join(g, "local_gpu_result.json"), encoding="utf-8") as f:
+                    prev = json.load(f)
+                if prev.get("n_views") == len(names) and prev["ba_gate"]["passed"]:
+                    reuse = g
+            except (OSError, ValueError, KeyError, TypeError):
+                pass
         try:
-            res = run_local(kf, ctx.path("geometry"), crop_trbl=crop, dense_names=dense,
-                            options=opts, log=ctx.log)
+            res = run_local(kf, g, crop_trbl=crop, dense_names=dense,
+                            options=opts, sparse_from=reuse, log=ctx.log)
         except FileNotFoundError as e:
             raise StageError(Code.STAGE_UNAVAILABLE, str(e))
         except SparseError as e:
@@ -332,20 +345,31 @@ class Geometry(BaseStage):
             self._sparse_failed = ((ctx.run_id, ctx.workdir), code, str(e)[-800:])
             raise StageError(code, str(e)[-800:])
         except (RuntimeError, SystemExit) as e:
+            self._dense_failed = (ctx.run_id, ctx.workdir)
             raise StageError(Code.MVS_RC, str(e)[-800:])
-        g = ctx.path("geometry")
         colors = os.path.join(g, "colors_fused.npy")
-        return self._load(ctx, os.path.join(g, "points_fused.npy"),
-                          colors if os.path.exists(colors) else None,
-                          os.path.join(g, "cameras.npy"),
-                          {"geometry_provider": "local",
-                           "local_gpu": {k: res[k] for k in
-                                         ("n_views", "pose_method", "dense_points",
-                                          "total_seconds",
-                                          "sparse_after_bundle_adjustment", "stages",
-                                          "mesh_error", "textured_mesh", "texture_error")
-                                         if k in res}},
-                          f"local GPU, {res.get('total_seconds')} s")
+        lost = res.get("unregistered") or []
+        out = self._load(ctx, os.path.join(g, "points_fused.npy"),
+                         colors if os.path.exists(colors) else None,
+                         os.path.join(g, "cameras.npy"),
+                         {"geometry_provider": "local",
+                          "registered_views": len(names) - len(lost),
+                          "local_gpu": {k: res[k] for k in
+                                        ("n_views", "pose_method", "dense_points",
+                                         "total_seconds",
+                                         "sparse_after_bundle_adjustment", "sparse_from",
+                                         "stages", "unregistered", "mesh_error",
+                                         "textured_mesh", "texture_error")
+                                        if k in res}},
+                         f"local GPU, {res.get('total_seconds')} s")
+        if lost:
+            # docs/09: drop unregistered views, warn under 80%. The run goes on with the
+            # views the mapper placed; the part of the flight the rest saw is missing.
+            out.codes.append(Code.GEO_UNREG)
+            frac = 1 - len(lost) / max(len(names), 1)
+            out.note += (f"; {len(lost)} of {len(names)} views unregistered"
+                         + (" (under 80%: coverage is partial)" if frac < 0.8 else ""))
+        return out
 
     def _load(self, ctx: Context, pts_p, colors_p, cams_p, facts: dict,
               note: str) -> StageResult:
@@ -619,6 +643,10 @@ def _level_basis(P: np.ndarray, cam_array: np.ndarray | None):
 
     cams, centres = None, None
     if cam_array is not None and len(cam_array):
+        # A view the mapper could not register keeps a NaN row (local_gpu), so the
+        # file still lines up with the keyframes; it has no pose to level with.
+        cam_array = cam_array[np.isfinite(cam_array.reshape(len(cam_array), -1)).all(1)]
+    if cam_array is not None and len(cam_array):
         full = cam_array.ndim == 3 and cam_array.shape[-2:] == (4, 4)
         cams = cam_array if full else None
         centres = cam_array[:, :3, 3] if full else cam_array
@@ -666,9 +694,9 @@ class Level(BaseStage):
     """
 
     id: str = "S5b-level"
-    version: str = "2"          # length facts named by their unit, not always `_m`
+    version: str = "3"          # writes its transform for S6's mesh exports
     needs: tuple = ("points",)
-    produces: tuple = ("points_llf",)
+    produces: tuple = ("points_llf", "level_transform")
     levels: tuple = ("L0", "L1", "L2", "L3", "L4")
 
     def execute(self, ctx: Context) -> StageResult:
@@ -683,16 +711,25 @@ class Level(BaseStage):
 
         k = float((ctx.facts.get("scale") or {}).get("factor", 1.0))
         units = ctx.facts.get("units", Units.MODEL)
-        L = _level(P, B, P.mean(0)) * k                   # [e1, e2, up], then scaled
+        origin = P.mean(0)
+        L = _level(P, B, origin) * k                      # [e1, e2, up], then scaled
         art = _save_npy(ctx, "points_llf", L.astype(np.float32), frame=Frame.F5_LLF,
                         units=units, kind="point-cloud")
+        # The transform itself, so S6 can carry the textured mesh into the same frame
+        # as the cloud rather than refitting one from the points.
+        with io.open(ctx.path("level.json"), "w", encoding="utf-8") as f:
+            json.dump({"from": Frame.F4_REFINED_WORLD, "to": Frame.F5_LLF,
+                       "basis_rows": B.tolist(), "origin": origin.tolist(), "scale": k,
+                       "apply": "((X - origin) @ basis_rows.T)[:, [0, 2, 1]] * scale"},
+                      f, indent=2)
+        lt = Artefact("level.json", "transform", frame=Frame.F5_LLF).stamp(ctx.workdir)
         # `extent_m` too was published on unvalidated runs (audit F-06).
         sfx = "_m" if units == Units.METRES else "_model"
         _gravity_lengths(facts.get("gravity", {}), k, units)
         facts["frame"] = Frame.F5_LLF
         facts["extent" + sfx] = [round(float(x), 2) for x in np.ptp(L, axis=0)]
-        return StageResult(self.id, 0.0, outputs={"points_llf": art}, facts=facts,
-                           note=f"levelled and scaled x{k:.2f}")
+        return StageResult(self.id, 0.0, outputs={"points_llf": art, "level_transform": lt},
+                           facts=facts, note=f"levelled and scaled x{k:.2f}")
 
 
 # ------------------------------------------------------------------ S6 · export
@@ -706,7 +743,7 @@ class Export(BaseStage):
     """
 
     id: str = "S6-export"
-    version: str = "2"          # PLY in doubles, in the same frame and origin as the LAS
+    version: str = "3"          # the textured mesh too, as OBJ, GLB and FBX
     needs: tuple = ("points", "points_llf")
     produces: tuple = ("exports",)
     levels: tuple = ("L0", "L1", "L2", "L3", "L4")
@@ -779,6 +816,24 @@ class Export(BaseStage):
                            GSD=str(res))
         paths["geotiff"] = p
 
+        # The textured mesh, when S3 made one, in the same frame as the cloud: OBJ,
+        # GLB and FBX (R-O5). Only the levelled frame has its transform on disk; a
+        # georeferenced run would need S5's, so its mesh is not exported yet.
+        notes = []
+        tex = ctx.path("geometry", "scene_tex.obj")
+        if os.path.isfile(tex) and not geo and "level_transform" in ctx.artefacts:
+            with io.open(os.path.join(ctx.workdir, ctx.artefacts["level_transform"].path),
+                         encoding="utf-8") as f:
+                lt = json.load(f)
+            sys.path.insert(0, os.path.join(K.ROOT, "src", "pipeline"))
+            from mesh_export import export_textured
+            got, why = export_textured(tex, ctx.path("export"), np.asarray(lt["basis_rows"]),
+                                       np.asarray(lt["origin"]), float(lt["scale"]))
+            paths.update(got)
+            notes += why
+        elif os.path.isfile(tex):
+            notes.append("textured mesh not exported: no levelled-frame transform")
+
         arts = {}
         for fmt, path in paths.items():
             rel = os.path.relpath(path, ctx.workdir).replace(os.sep, "/")
@@ -790,7 +845,8 @@ class Export(BaseStage):
                                   "exports": sorted(paths),
                                   "dsm": {"width": nx, "height": ny, "gsd": res,
                                           "filled_fraction": round(filled, 4),
-                                          "crs": str(crs) if crs else None}})
+                                          "crs": str(crs) if crs else None}},
+                           note="; ".join(notes))
 
 
 # ------------------------------------------------------------------ S7 · score

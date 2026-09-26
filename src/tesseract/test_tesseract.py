@@ -644,6 +644,64 @@ def t_local_provider():
         e3 = _raises_as(lambda: g2.execute(ctx("L0")))
         check("a SystemExit from colmap_export becomes a StageError, not an exit",
               e3 is not None and e3.code == Code.MVS_RC, repr(e3))
+        reused = []
+
+        def dense_fails(images, work, **kw):
+            reused.append(kw.get("sparse_from"))
+            os.makedirs(work, exist_ok=True)
+            with io.open(os.path.join(work, "local_gpu_result.json"), "w",
+                         encoding="utf-8") as f:
+                json.dump({"n_views": 4, "ba_gate": {"passed": True}}, f)
+            raise RuntimeError("DensifyPointCloud exited 3221225477")
+        g3 = Geometry()
+        sys.modules["local_gpu"] = make(RuntimeError())
+        sys.modules["local_gpu"].run = dense_fails
+        e5 = _raises_as(lambda: g3.execute(ctx("L0")))
+        e6 = _raises_as(lambda: g3.execute(ctx("L1")))
+        check("a dense failure is MVS_RC and L1 reuses the poses that passed the gate",
+              e5 is not None and e5.code == Code.MVS_RC and e6 is not None
+              and reused[0] is None and reused[1] is not None
+              and os.path.samefile(reused[1], os.path.join(tmp, "geometry")), str(reused))
+        reused = []
+
+        def dense_fails(images, work, **kw):
+            reused.append(kw.get("sparse_from"))
+            os.makedirs(work, exist_ok=True)
+            with io.open(os.path.join(work, "local_gpu_result.json"), "w",
+                         encoding="utf-8") as f:
+                json.dump({"n_views": 4, "ba_gate": {"passed": True}}, f)
+            raise RuntimeError("DensifyPointCloud exited 3221225477")
+        g3 = Geometry()
+        sys.modules["local_gpu"] = make(RuntimeError())
+        sys.modules["local_gpu"].run = dense_fails
+        e5 = _raises_as(lambda: g3.execute(ctx("L0")))
+        e6 = _raises_as(lambda: g3.execute(ctx("L1")))
+        check("a dense failure is MVS_RC and L1 reuses the poses that passed the gate",
+              e5 is not None and e5.code == Code.MVS_RC and e6 is not None
+              and reused[0] is None and reused[1] is not None
+              and os.path.samefile(reused[1], os.path.join(tmp, "geometry")), str(reused))
+        def some_unregistered(images, work, **kw):
+            os.makedirs(work, exist_ok=True)
+            rng = np.random.default_rng(3)
+            P = np.column_stack([rng.uniform(-50, 50, (2000, 2)), rng.normal(0, 0.2, 2000)])
+            np.save(os.path.join(work, "points_fused.npy"), P.astype(np.float32))
+            cams = np.repeat(np.eye(4)[None], 4, 0)
+            cams[:, :3, :3] = np.diag([1.0, -1.0, -1.0])      # looking straight down
+            cams[:, :3, 3] = [[x, 0.0, 60.0] for x in (-30, -10, 10, 30)]
+            cams[2] = np.nan
+            np.save(os.path.join(work, "cameras.npy"), cams)
+            return {"n_views": 4, "unregistered": ["kf_002_f00002.jpg"], "total_seconds": 1}
+        sys.modules["local_gpu"] = make(RuntimeError())
+        sys.modules["local_gpu"].run = some_unregistered
+        r7 = Geometry().execute(ctx("L0"))
+        check("views the mapper could not place are flagged GEO_UNREG, not a failure",
+              Code.GEO_UNREG in r7.codes and r7.facts.get("registered_views") == 3,
+              f"{r7.codes} {r7.facts.get('registered_views')}")
+        from tesseract.stages import _level_basis
+        B, _, _ = _level_basis(np.load(os.path.join(tmp, "points.npy")),
+                               np.load(os.path.join(tmp, "cameras.npy")))
+        check("levelling skips the unregistered camera's NaN row",
+              np.isfinite(B).all() and abs(abs(B[1] @ [0, 0, 1.0]) - 1) < 0.05, str(B))
         e4 = _raises_as(lambda: Geometry().execute(ctx("L3")))
         check("levels the provider has no mode for are STAGE_UNAVAILABLE",
               e4 is not None and e4.code == Code.STAGE_UNAVAILABLE)
