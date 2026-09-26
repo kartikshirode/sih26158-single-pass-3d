@@ -17,7 +17,8 @@ import tempfile
 import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from local_gpu import clean_work, frame_order, read_images_txt, read_ply_points  # noqa: E402
+from local_gpu import (DEFAULTS, SparseError, clean_work, frame_order,  # noqa: E402
+                       read_images_txt, read_ply_points, reuse_sparse, with_extra)
 
 FAILED: list[str] = []
 
@@ -98,6 +99,56 @@ with tempfile.TemporaryDirectory() as tmp:
           left == ["cameras.npy", "colors_fused.npy", "images", "local_gpu_result.json", "logs",
                    "points_fused.npy", "scene_dense_mesh.ply", "scene_tex.obj", "sparse_txt"],
           str(left))
+
+print("\nT5: a dense-only rerun takes the poses of a finished run")
+import json  # noqa: E402
+
+
+def refused(fn):
+    try:
+        fn()
+    except SparseError as e:
+        return str(e)
+    return None
+
+
+with tempfile.TemporaryDirectory() as tmp:
+    src, work = os.path.join(tmp, "src"), os.path.join(tmp, "work")
+    os.makedirs(os.path.join(src, "sparse_txt"))
+    os.makedirs(work)
+    open(os.path.join(src, "sparse_txt", "images.txt"), "w").write("# poses\n")
+    np.save(os.path.join(src, "cameras.npy"), np.eye(4)[None].repeat(3, 0))
+    prev = {"n_views": 3, "options": dict(DEFAULTS), "ba_gate": {"passed": True},
+            "camera": {"f": 1100.0}, "dense_points": 7, "stages": []}
+    json.dump(prev, open(os.path.join(src, "local_gpu_result.json"), "w"))
+    names = ["kf_0.jpg", "kf_1.jpg", "kf_2.jpg"]
+    dense_change = dict(DEFAULTS, dense_resolution_level=0, texture_decimate=0.2)
+    got = reuse_sparse(src, work, names, dense_change)
+    check("the sparse model and cameras are copied",
+          os.path.isfile(os.path.join(work, "sparse_txt", "images.txt"))
+          and os.path.isfile(os.path.join(work, "cameras.npy")))
+    check("only the poses half of the result is carried over",
+          got.get("camera") == {"f": 1100.0} and "dense_points" not in got
+          and "stages" not in got, str(sorted(got)))
+    check("a pose option change is refused",
+          refused(lambda: reuse_sparse(src, work, names,
+                                       dict(DEFAULTS, global_match_overlap=10)))
+          is not None)
+    check("a different view count is refused",
+          refused(lambda: reuse_sparse(src, work, names[:2], dict(DEFAULTS))) is not None)
+    prev["ba_gate"] = {"passed": False}
+    json.dump(prev, open(os.path.join(src, "local_gpu_result.json"), "w"))
+    check("poses that failed the S3b gate are refused",
+          refused(lambda: reuse_sparse(src, work, names, dict(DEFAULTS))) is not None)
+
+print("\nT6: an extra flag replaces the default rather than repeating it")
+base = ["TextureMesh", "scene.mvs", "--decimate", 0.1, "--global-seam-leveling", "0",
+        "--cuda-device", "0"]
+got = with_extra(base, "--global-seam-leveling 1 --cuda-device -2 --sharpness-weight 0")
+check("defaults named in the extra are replaced, the rest kept in order",
+      got == ["TextureMesh", "scene.mvs", "--decimate", 0.1, "--global-seam-leveling", "1",
+              "--cuda-device", "-2", "--sharpness-weight", "0"], str(got))
+check("an empty extra changes nothing", with_extra(base, "") == base)
 
 print()
 if FAILED:

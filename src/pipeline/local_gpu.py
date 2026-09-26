@@ -63,6 +63,10 @@ DEFAULTS = {
     "tri_refinements": 1,
     "tri_ba_iterations": 3,
     "ba_iterations": 10,        # the cost is flat after 10 (0.3587 px; 0.3582 at 100)
+    # Share of the views the mapper must place for the run to go on. The rest are left
+    # out of the dense set and flagged GEO-UNREG (docs/09): 46 featureless frames past
+    # the end of the synthetic site used to refuse a 600-view run that placed 554.
+    "min_registered": 0.5,
     "dense_resolution_level": 1,
     "dense_views_fuse": 3,
     "dense_neighbours": 5,      # views per depth map (OpenMVS default 8): 107 s to 96 s
@@ -77,6 +81,12 @@ DEFAULTS = {
     "mesh": True,
     "texture": True,            # OpenMVS TextureMesh on the mesh, to a textured OBJ
     "texture_decimate": 0.1,    # fraction of the mesh's faces kept before texturing
+    # Extra arguments for one tool, split on spaces and appended last so they win; for
+    # an operator or an experiment trying a flag no option above covers yet.
+    "mapper_extra": "",
+    "densify_extra": "",
+    "mesh_extra": "",
+    "texture_extra": "",
     # Depth maps (6.6 MB each at 967x297), undistorted images, the matches database and
     # the intermediate sparse models were 1.4 of the 1.5 GB a 134-view demo run left.
     "keep_intermediate": False,
@@ -105,6 +115,30 @@ def find_tools() -> dict:
             raise FileNotFoundError(f"python module {mod} is not installed "
                                     "(research/09-gpu-pipeline.md section 1)")
     return {"colmap": colmap, "openmvs": tools}
+
+
+def with_extra(args: list, extra: str) -> list:
+    """
+    `args` with the flags in `extra` in place of their own. The tools refuse an option
+    given twice, so an extra flag has to replace the default rather than follow it.
+    """
+    flag = re.compile(r"-+[A-Za-z]")
+    toks, pairs, i = extra.split(), [], 0
+    while i < len(toks):
+        val = toks[i + 1] if i + 1 < len(toks) and not flag.match(toks[i + 1]) else None
+        pairs.append((toks[i], val))
+        i += 1 if val is None else 2
+    drop, out, j = {f for f, _ in pairs}, [], 0
+    while j < len(args):
+        a = str(args[j])
+        if a in drop:
+            j += 2 if j + 1 < len(args) and not flag.match(str(args[j + 1])) else 1
+            continue
+        out.append(args[j])
+        j += 1
+    for f, v in pairs:
+        out += [f] if v is None else [f, v]
+    return out
 
 
 class SparseError(RuntimeError):
@@ -340,11 +374,12 @@ def global_sparse(r: Runner, colmap: str, img: str, db: str, cam: dict, o: dict)
     out = os.path.join(r.work, "sparse_g")
     shutil.rmtree(out, ignore_errors=True)
     os.makedirs(out)
-    r.sh([colmap, "global_mapper", "--database_path", db, "--image_path", img,
+    r.sh(with_extra([colmap, "global_mapper", "--database_path", db, "--image_path", img,
           "--output_path", out,
           "--GlobalMapper.ba_refine_focal_length", "0",
           "--GlobalMapper.ba_refine_principal_point", "0",
-          "--GlobalMapper.ba_refine_extra_params", "0"], "global_mapper")
+          "--GlobalMapper.ba_refine_extra_params", "0"], o["mapper_extra"]),
+         "global_mapper")
     models = [os.path.join(out, d) for d in os.listdir(out)
               if os.path.exists(os.path.join(out, d, "images.bin"))]
     if not models:
@@ -485,14 +520,13 @@ def read_ply_points(path: str) -> tuple[np.ndarray, np.ndarray | None]:
 
 # ---------------------------------------------------------------------- pipeline
 def run(images_dir: str, work: str, *, crop_trbl=None, dense_names: list | None = None,
-        options: dict | None = None, log=print) -> dict:
+        options: dict | None = None, sparse_from: str | None = None, log=print) -> dict:
     """
     Keyframes in, geometry out. `dense_names` limits densification to the dense view
     set (docs/13 section 3.2: poses want every view, density an even subset).
+    `sparse_from` is a finished work folder whose poses are reused (reuse_sparse).
     """
     import cv2
-    from run_mvs import ba_gate
-    from run_mvs_sharded import filter_model
 
     o = dict(DEFAULTS, **(options or {}))
     tools = find_tools()
@@ -512,6 +546,96 @@ def run(images_dir: str, work: str, *, crop_trbl=None, dense_names: list | None 
         shutil.rmtree(img, ignore_errors=True)
         shutil.copytree(images_dir, img, ignore=shutil.ignore_patterns("*.json"))
     h0, w0 = cv2.imread(os.path.join(img, names[0])).shape[:2]
+
+    def finish():
+        result["stages"] = r.times
+        result["total_seconds"] = round(time.perf_counter() - t_all, 1)
+        with open(os.path.join(r.work, "local_gpu_result.json"), "w",
+                  encoding="utf-8") as f:
+            json.dump(result, f, indent=2)
+        return result
+
+    sp_txt = os.path.join(r.work, "sparse_txt")
+    if sparse_from:
+        result = reuse_sparse(sparse_from, r.work, names, o)
+    else:
+        result = sparse(r, colmap, img, names, h0, w0, crop_trbl, o, log)
+        if not result["ba_gate"]["passed"]:
+            finish()
+            raise SparseError("S3b gate failed: " + "; ".join(result["ba_gate"]["problems"]))
+        sp_f = result.pop("model")
+        shutil.rmtree(sp_txt, ignore_errors=True)
+        os.makedirs(sp_txt)
+        r.sh([colmap, "model_converter", "--input_path", sp_f, "--output_path", sp_txt,
+              "--output_type", "TXT"], "model_converter")
+        poses = read_images_txt(os.path.join(sp_txt, "images.txt"))
+        np.save(os.path.join(r.work, "cameras.npy"),
+                np.stack([poses.get(n, np.full((4, 4), np.nan)) for n in names]))
+        result["unregistered"] = [n for n in names if n not in poses]
+    result["options"] = o
+    # A view the mapper could not place has no pose to densify from; its row in
+    # cameras.npy is NaN, so consumers keep their index into the keyframes.
+    lost = set(result.get("unregistered") or ())
+    if lost:
+        log(f"  {len(lost)} of {len(names)} views unregistered; densifying the rest")
+        dense_names = [n for n in (dense_names or names) if n not in lost]
+    # Written now as well as at the end, so a run that fails in the dense half leaves
+    # poses that a rerun at the next ladder level can take (reuse_sparse).
+    finish()
+    return dense(r, mvs, colmap, img, sp_txt, names, dense_names, o, result, finish, log)
+
+
+# The poses half of a result, which a dense-only rerun copies from the run it reuses.
+SPARSE_KEYS = ("n_views", "keyframe_size", "pose_method", "mapanything_views", "camera",
+               "intrinsics_fit_residual_px", "stitch", "mapanything_s",
+               "mapanything_peak_gib", "sparse_after_triangulation",
+               "sparse_after_bundle_adjustment", "ba_gate", "unregistered")
+
+
+def reuse_sparse(src: str, work: str, names: list, o: dict) -> dict:
+    """
+    Take the poses of a finished run in `src` instead of solving them again.
+
+    Everything up to the S3b gate depends only on the keyframes and the pose options,
+    so a dense-only change (a ladder step after a densify failure, or an experiment on
+    the dense settings) need not pay for MapAnything, matching and the mapper again:
+    on the demo that is 130 of 314 s.
+    """
+    with open(os.path.join(src, "local_gpu_result.json"), encoding="utf-8") as f:
+        prev = json.load(f)
+    if prev.get("n_views") != len(names):
+        raise SparseError(f"{src} solved {prev.get('n_views')} views, not {len(names)}")
+    if not (prev.get("ba_gate") or {}).get("passed"):
+        raise SparseError(f"{src} did not pass the S3b gate")
+    pose_opts = [k for k in DEFAULTS if k not in DENSE_OPTIONS]
+    changed = [k for k in pose_opts if (prev.get("options") or {}).get(k) != o.get(k)]
+    if changed:
+        raise SparseError(f"pose options differ from {src}: {', '.join(changed)}")
+    for f in ("sparse_txt", "cameras.npy"):
+        a, b = os.path.join(src, f), os.path.join(work, f)
+        if os.path.abspath(a) == os.path.abspath(b):
+            continue
+        if os.path.isdir(a):
+            shutil.rmtree(b, ignore_errors=True)
+            shutil.copytree(a, b)
+        else:
+            shutil.copyfile(a, b)
+    out = {k: prev[k] for k in SPARSE_KEYS if k in prev}
+    out["sparse_from"] = os.path.abspath(src)
+    return out
+
+
+# Options read only after the S3b gate. reuse_sparse checks that the rest match.
+DENSE_OPTIONS = ("dense_resolution_level", "dense_views_fuse", "dense_neighbours",
+                 "dense_fusion_filter", "mesh_min_point_distance", "mesh", "texture",
+                 "texture_decimate", "keep_intermediate", "densify_extra", "mesh_extra",
+                 "texture_extra")
+
+
+def sparse(r: Runner, colmap: str, img: str, names: list, h0: int, w0: int, crop_trbl,
+           o: dict, log=print) -> dict:
+    """Camera, matches and poses up to the S3b gate; the solved model is in "model"."""
+    from run_mvs import ba_gate
 
     # Everything up to the S3b gate depends on the poses and the matches, not on the
     # ladder level, so a failure here is a SparseError: tesseract does not rerun it
@@ -549,60 +673,46 @@ def run(images_dir: str, work: str, *, crop_trbl=None, dense_names: list | None 
         raise SparseError(str(e)) from None
     except RuntimeError as e:
         raise SparseError(str(e)) from e
-    problems = ba_gate(after, len(names))
-    result = {"n_views": len(names), "keyframe_size": [w0, h0], "options": o,
-              "pose_method": o["pose_method"], "mapanything_views": len(ma_names),
-              "camera": {k: (round(v, 3) if isinstance(v, float) else v)
-                         for k, v in cam.items() if k != "crop_span_full"},
-              "intrinsics_fit_residual_px": round(resid, 4), "stitch": stitch,
-              "mapanything_s": ma_load, "mapanything_peak_gib": ma_peak,
-              "sparse_after_triangulation": before,
-              "sparse_after_bundle_adjustment": after,
-              "ba_gate": {"passed": not problems, "problems": problems}}
+    problems = ba_gate(after, len(names), min_registered=o["min_registered"])
+    return {"n_views": len(names), "keyframe_size": [w0, h0],
+            "pose_method": o["pose_method"], "mapanything_views": len(ma_names),
+            "camera": {k: (round(v, 3) if isinstance(v, float) else v)
+                       for k, v in cam.items() if k != "crop_span_full"},
+            "intrinsics_fit_residual_px": round(resid, 4), "stitch": stitch,
+            "mapanything_s": ma_load, "mapanything_peak_gib": ma_peak,
+            "sparse_after_triangulation": before,
+            "sparse_after_bundle_adjustment": after,
+            "ba_gate": {"passed": not problems, "problems": problems}, "model": sp_f}
 
-    def finish():
-        result["stages"] = r.times
-        result["total_seconds"] = round(time.perf_counter() - t_all, 1)
-        with open(os.path.join(r.work, "local_gpu_result.json"), "w",
-                  encoding="utf-8") as f:
-            json.dump(result, f, indent=2)
-        return result
 
-    if problems:
-        finish()
-        raise SparseError("S3b gate failed: " + "; ".join(problems))
-
-    sp_txt = os.path.join(r.work, "sparse_txt")
-    shutil.rmtree(sp_txt, ignore_errors=True)
-    os.makedirs(sp_txt)
-    r.sh([colmap, "model_converter", "--input_path", sp_f, "--output_path", sp_txt,
-          "--output_type", "TXT"], "model_converter")
-    poses = read_images_txt(os.path.join(sp_txt, "images.txt"))
-    np.save(os.path.join(r.work, "cameras.npy"),
-            np.stack([poses.get(n, np.full((4, 4), np.nan)) for n in names]))
+def dense(r: Runner, mvs: dict, colmap: str, img: str, sp_txt: str, names: list,
+          dense_names: list | None, o: dict, result: dict, finish, log=print) -> dict:
+    """Undistort, densify, mesh and texture on the solved poses in `sp_txt`."""
+    from run_mvs_sharded import filter_model
 
     dense_model = sp_txt
     if dense_names and len(dense_names) < len(names):
         dense_model = os.path.join(r.work, "sparse_dense")
         shutil.rmtree(dense_model, ignore_errors=True)
         r.timed("dense subset", filter_model, sp_txt, dense_model, set(dense_names))
-    dense = os.path.join(r.work, "dense")
-    shutil.rmtree(dense, ignore_errors=True)
+    undist = os.path.join(r.work, "dense")
+    shutil.rmtree(undist, ignore_errors=True)
     r.sh([colmap, "image_undistorter", "--image_path", img, "--input_path", dense_model,
-          "--output_path", dense, "--output_type", "COLMAP"], "image_undistorter")
-    r.sh([mvs["InterfaceCOLMAP"], "-i", dense, "-o", "scene.mvs", "-w", r.work],
+          "--output_path", undist, "--output_type", "COLMAP"], "image_undistorter")
+    r.sh([mvs["InterfaceCOLMAP"], "-i", undist, "-o", "scene.mvs", "-w", r.work],
          "InterfaceCOLMAP")
     # No region of interest: OpenMVS estimates one assuming a Z-up scene and trims the
     # cloud to it, which cut the far field of this oblique, forward-looking footage.
     # Tower mode is for orbits around a vertical structure and would add a cylinder of
     # points to pick neighbours with.
-    r.sh([mvs["DensifyPointCloud"], "scene.mvs", "-w", r.work,
+    r.sh(with_extra([mvs["DensifyPointCloud"], "scene.mvs", "-w", r.work,
           "--resolution-level", o["dense_resolution_level"],
           "--number-views-fuse", o["dense_views_fuse"],
           "--number-views", o["dense_neighbours"],
           "--fusion-filter", o["dense_fusion_filter"],
           "--estimate-roi", "0", "--crop-to-roi", "0", "--tower-mode", "0",
-          "--cuda-device", "0", "--max-threads", "0"], "DensifyPointCloud")
+          "--cuda-device", "0", "--max-threads", "0"], o["densify_extra"]),
+         "DensifyPointCloud")
     P, C = read_ply_points(os.path.join(r.work, "scene_dense.ply"))
     np.save(os.path.join(r.work, "points_fused.npy"), P)
     if C is not None:
@@ -612,8 +722,9 @@ def run(images_dir: str, work: str, *, crop_trbl=None, dense_names: list | None 
         # The mesh is a product, not an input: tesseract loads the dense cloud. A
         # meshing failure is recorded rather than failing the stage (audit 1).
         try:
-            r.sh([mvs["ReconstructMesh"], "scene_dense.mvs", "-w", r.work,
-                  "-d", o["mesh_min_point_distance"]], "ReconstructMesh")
+            r.sh(with_extra([mvs["ReconstructMesh"], "scene_dense.mvs", "-w", r.work,
+                  "-d", o["mesh_min_point_distance"]], o["mesh_extra"]),
+                 "ReconstructMesh")
         except RuntimeError as e:
             result["mesh_error"] = str(e)[-500:]
             log("  ReconstructMesh failed; continuing without a mesh")
@@ -625,10 +736,11 @@ def run(images_dir: str, work: str, *, crop_trbl=None, dense_names: list | None 
         # with it on, 73% of the demo's faces sampled black from the atlas (95% with
         # the global pass alone, 66% with the local one), and 0.2% with both off.
         try:
-            r.sh([mvs["TextureMesh"], "scene.mvs", "-m", "scene_dense_mesh.ply",
+            r.sh(with_extra([mvs["TextureMesh"], "scene.mvs", "-m", "scene_dense_mesh.ply",
                   "-w", r.work, "--decimate", o["texture_decimate"],
                   "--global-seam-leveling", "0", "--local-seam-leveling", "0",
-                  "--export-type", "obj", "-o", "scene_tex.mvs"], "TextureMesh")
+                  "--export-type", "obj", "-o", "scene_tex.mvs"], o["texture_extra"]),
+                 "TextureMesh")
             result["textured_mesh"] = "scene_tex.obj"
         except RuntimeError as e:
             result["texture_error"] = str(e)[-500:]
@@ -666,6 +778,7 @@ if __name__ == "__main__":
     ap.add_argument("--dense-every", type=int, default=1,
                     help="densify every Nth keyframe (1 = all)")
     ap.add_argument("--no-mesh", action="store_true")
+    ap.add_argument("--sparse-from", help="a finished work folder whose poses to reuse")
     ap.add_argument("--set", action="append", default=[],
                     help="option=value, any key of DEFAULTS")
     a = ap.parse_args()
@@ -680,6 +793,6 @@ if __name__ == "__main__":
     kfs = sorted((f for f in os.listdir(a.keyframes) if f.lower().endswith(".jpg")),
                  key=frame_order)
     res = run(a.keyframes, a.work, crop_trbl=crop, dense_names=kfs[::a.dense_every],
-              options=opts)
+              options=opts, sparse_from=a.sparse_from)
     print(json.dumps({k: res[k] for k in ("n_views", "dense_points", "total_seconds",
                                           "ba_gate", "stages") if k in res}, indent=2))
