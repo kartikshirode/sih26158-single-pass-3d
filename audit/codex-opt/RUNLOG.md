@@ -406,3 +406,92 @@ reprojection error rises about 10% (test_flight 0.898 to 1.002 px) and the 1 px 
 refused the run. The mapper's model now goes through `point_filtering` (4 px, 1.5
 degrees, as on the mapanything path) before the gate measures it; the poses are
 untouched.
+
+## Third session, 2026-09-27 night
+
+Picked up after the final suite on commit b360949. From 02:14 a second Claude session
+on this laptop ran a PX4 and Gazebo simulator in WSL (about 1.3 cores, 1.8 GB, no GPU).
+From 02:20 the two sessions took turns on heavy work. Timings from runs that overlapped
+it carry a note.
+
+### Final suite on b360949
+
+Clean runs (`--no-resume`), `tesseract.py verify` PASS on all four.
+
+| Run | Wall | R | S3 sparse | S3 dense, mesh, texture | Registered, error | Dense points | Focal, MapAnything to mapper |
+|---|---:|---:|---:|---:|---|---:|---|
+| codex-b1-final | 318.5 s | 16.9 | 139 s | 160 s | 177/177, 0.490 px | 7.08M | 1098 to 1095 |
+| codex-b2-final | 283.9 s | 7.1 | 223 s (mapper 163.5) | 45 s | 209/209, 0.345 px | 1.66M | 751 to 1400 |
+| codex-b3-final | 352.7 s | 17.6 | 112 s | 211 s | 173/173, 0.885 px | 10.17M | 1414 to 1179 |
+| codex-b5v-final | 576.1 s | 0.96 | 158 s | 376 s | 353/353, 0.804 px | 22.51M | 1091 to 1160 |
+
+B5v came in at R 0.96 against 1.32 on the old defaults (792.3 s). Against the synthetic
+truth its cameras stayed at 0.136 m RMS, but the cloud went from 1.37 m median error to
+4.54 m (1.4% within 1 m). B3: cameras 0.133 m, cloud 5.15 m median.
+
+Held-out, full size, against the references:
+
+| Run | PSNR, SSIM | Coverage | Dense / mesh / texture s | Decision |
+|---|---|---:|---|---|
+| FINAL-B1 | 22.822 dB, 0.6470 | 98.79% | 51.9 / 43.5 / 55.8 | Same image as Q0b (22.830, 0.6493) within the 0.03 dB noise; mesh and texture 99 s against 129 s |
+| FINAL-B2 | 25.566 dB, 0.8273 | 72.40% | 16.9 / 7.8 / 13.5 | Coverage 25 points under B2M0 (22.578 dB, 0.7450, 97.12%); see F7 |
+
+### F7: refining the focal length on a straight pass makes it worse
+
+The cloud error on both synthetic runs is one vertical offset, the same at every
+distance from the track (`out/codex/err_decomp.py`):
+
+| Run | Focal (truth 1066 px) | Ground offset | Median cloud error |
+|---|---|---:|---:|
+| codex-b3-geo, fixed | 1414 | -12.66 m | 12.59 m |
+| codex-b3-final, refined | 1179 | -5.18 m | 5.16 m |
+| codex-b5v, fixed | 1091 | -1.34 m | 1.39 m |
+| codex-b5v-final, refined | 1160 | -4.55 m | 4.54 m |
+
+On a straight pass at one attitude, focal length f with the true scene and k f with the
+scene stretched k times along the view axis reproject identically, so no image evidence
+can separate them. The refinement moved 6-9% long from either side. How far the views
+turn (95th percentile rotation from the middle view) separates the cases: B3 and B5v
+0.07 and 0.06 degrees, the demo 2.0, Nicosia 52.5. Nicosia's keyframes are a long-lens
+pan across the city from one spot, where the focal length is observable; there the
+refined 1400 px turned a thin curved strip (`out/codex/b2_compare.jpg`) into the fan a
+pan sees. Its coverage fell because a correct focal length leaves a far scene with
+little parallax to densify.
+
+Fix (5c479ae): MapAnything's 60 views give the turn before mapping; the mapper refines
+the focal length only at 10 degrees or more, otherwise it holds MapAnything's value.
+
+### F8: the synthetic SRT had the gimbal pitch wrong
+
+`make_test_video.py` wrote gb_pitch as -(90 - pitch): -30 for a camera 60 degrees down.
+DJI writes -60. gb_yaw was 0 for a pass flying east; DJI writes 90. Nothing read either
+value before S5 started reading the pitch. Fixed in the generator, and the 600 records of
+`data/test_flight.SRT` and `out/codex/b5v.SRT` were rewritten to the same two values
+(39bde63).
+
+### P1: the gimbal pitch gives the focal length back
+
+The stretch that hides the focal length error changes one thing the GNSS fit does see:
+the view's angle to the track, tan(model pitch) = tan(true pitch) / k. With the pitch in
+the SRT, k and the stretch that undoes it follow (78bc9ac, ADR-032). Replayed on the
+saved outputs of the four synthetic runs with the true pitch (`out/codex/replay_s5.py`,
+then `b3_truth.py`):
+
+| Run | Model pitch | k | Implied focal | Cloud median, within 1 m, before | After |
+|---|---:|---:|---:|---|---|
+| codex-b3-geo | 52.582 | 1.32511 | 1067.33 | 12.59 m, 1.0% | 0.394 m, 95.2% |
+| codex-b3-final | 57.462 | 1.10505 | 1067.18 | 5.15 m, 1.1% | 0.397 m, 95.0% |
+| codex-b5v | 59.435 | 1.02290 | 1066.57 | 1.37 m, 9.9% | 0.342 m, 98.6% |
+| codex-b5v-final | 57.876 | 1.08753 | 1066.59 | 4.54 m, 1.4% | 0.338 m, 98.6% |
+
+None of the 20 real DJI fixtures in `src/ingest/fixtures/dji_srt/` carries a gimbal
+pitch, so on most consumer clips this does not apply and the run records why.
+
+### Ladder rates
+
+Geometry's local estimate was still on the old pose path's rates (0.6 s per pose view,
+0.55 per dense view, 30 s fixed) and put B5v's S3 at 407 s against 543 s measured. The
+final runs give 37-57 s fixed, 0.29-0.90 s per pose view and 0.22-1.25 s per dense view.
+Set to 57 s, 0.5 and 1.1 (425a027): B5v 563 s estimated, demo 341 against 302, Nicosia
+392 against 270, and a 600-keyframe clip about 690 s, which leaves it at L0 inside the
+840 s that remain after S0 and S1.

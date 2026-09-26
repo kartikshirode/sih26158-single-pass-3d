@@ -463,6 +463,46 @@ split fx and fy (1599 and 1146 px), so it is not used.
 The refined focal is still 6% long on test_flight, so heights are not yet at 1 m. A
 clip that gives the mapper little parallax could still pull the focal length far; the
 recorded value is there to catch it.
-**Status.** Accepted. Amends ADR-028's fixed camera.
-**Revisit when.** A clip with ground truth other than the synthetic one is available, or
-a refined focal length moves more than about 20% from MapAnything's.
+**Status.** Superseded in part, 2026-09-27: the mapper now refines only when the views
+turn (see the amendment below). Amends ADR-028's fixed camera.
+**Revisit when.** A clip with ground truth other than the synthetic one is available.
+**Amendment, 2026-09-27.** The revisit condition came up on the final runs. On B5v, a
+second straight synthetic pass, refinement moved MapAnything's 1091 px (2.3% long) to
+1160 px, and the cloud error went from 1.4 to 4.5 m. On a straight pass at one attitude
+a focal length k times too long and the scene stretched k times along the view axis
+reproject identically, so refinement has nothing to go on and drifted 6-9% long from
+either side. On Nicosia, a pan through 63 degrees, it went from 751 to 1400 px (+86%),
+and the model changed from a curved strip to the fan a pan sees. The mapper now refines
+the focal length only when MapAnything's views turn at least 10 degrees (95th
+percentile rotation from the middle view, `refine_focal_min_turn_deg`) and otherwise
+holds MapAnything's value; `views_turn_deg` and `focal_refined` are recorded. A straight
+pass is corrected afterwards from the gimbal pitch when the SRT has one (ADR-032).
+
+## ADR-032 · S5 corrects a straight pass's depth from the SRT's gimbal pitch
+
+**Context.** On a straight pass at one attitude the images cannot separate focal length f
+from k f with the scene stretched k times along the view axis, and the GNSS track fit
+cannot either: both solutions put the cameras on the same track. What remains is a
+vertical error of about (k - 1) times half the flying height at a 60 degree pitch. On the
+synthetic clips a 2-33% focal error left the ground 1.3-12.7 m low, one offset across the
+whole cloud, while the cameras were within 14 cm. R-O3 asks for 1 m.
+**Decision.** The stretch does change the view's angle to the track: tan(model pitch) =
+tan(true pitch) / k. When at least 8 fixes carry a gimbal pitch between 15 and 75
+degrees down, the views turn under 10 degrees, and k lands between 0.6 and 1.6 and more
+than 0.5% from 1, S5 stretches the F4 model by 1 / k along the mean view axis and fits
+the track again. The stretch goes into `georef.json` ahead of the level and the fit, so
+the cloud, the LAS and GeoTIFF and the mesh exports all carry it. `focal_from_pitch`
+in the manifest records k, the implied focal length, or why nothing was applied.
+**Evidence.** `audit/codex-opt/RUNLOG.md` P1: replayed on four synthetic runs whose
+focal lengths were 1091-1414 px, the implied focal length was 1066.6-1067.3 px against
+1066, and the cloud went from 1.4-12.6 m median error to 0.34-0.40 m, 95-99% within 1 m.
+`src/tesseract/test_tesseract.py` T3h checks a 12% error on a rotated, scaled gauge.
+**Consequences.** On a clip with the pitch, heights no longer depend on MapAnything's
+reading of the frames. None of the 20 real DJI SRT fixtures has a gimbal pitch, so on
+most consumer clips nothing changes and the error stays at whatever MapAnything's focal
+length leaves (2% on B5v, 1.4 m). A gimbal whose pitch reading is off by 0.5 degrees
+moves k by about 2% at a 60 degree pitch. The correction is exact only for one
+attitude, which is why a turning clip is excluded.
+**Status.** Accepted.
+**Revisit when.** A real clip with a gimbal pitch and surveyed ground is available, or a
+flight log (not the SRT) is offered as the pitch source.
