@@ -139,23 +139,38 @@ def pack(run: str, tri_budget: int, pt_budget: int, log=print):
     from scipy.spatial import cKDTree
 
     P4 = np.load(os.path.join(run, "points.npy")).astype(np.float64)
-    # The export frame: levelled (F5), or georeferenced (F6/F7) when S5 ran and S5b
-    # skipped. Either way the same points as points.npy, in the same order.
-    p5 = os.path.join(run, "points_llf.npy")
-    P5 = np.load(p5 if os.path.exists(p5) else os.path.join(run, "points_geo.npy"))
+    # The export frame: georeferenced (F6/F7) when the manifest says S5 placed it,
+    # else levelled (F5). The manifest decides, not which file exists: a folder rerun
+    # with an SRT can still hold an earlier run's points_llf.npy.
+    man_path = os.path.join(run, "run_manifest.json")
+    geo = os.path.exists(man_path) and bool(
+        json.load(open(man_path, encoding="utf-8")).get("georeferenced"))
+    if not geo and not os.path.exists(os.path.join(run, "points_llf.npy")):
+        geo = os.path.exists(os.path.join(run, "points_geo.npy"))
+    P5 = np.load(os.path.join(run, "points_geo.npy" if geo else "points_llf.npy"))
     P5 = P5.astype(np.float64)
     C = np.load(os.path.join(run, "colors.npy"))
     if C.dtype != np.uint8:
         C = (np.clip(C, 0, 1) * 255).astype(np.uint8) if C.max() <= 1.0 else C.astype(np.uint8)
 
     # The mesh and the cameras are in the geometry frame (F4); the page shows the
-    # levelled frame (F5). points.npy and points_llf.npy are the same points in the
-    # two frames, so the map between them is fitted rather than re-derived.
+    # export frame. They go through the transform S5 or S5b wrote, as S6 carries the
+    # mesh: a similarity fitted between the two clouds cannot hold S5's depth stretch
+    # (ADR-032), which left the mesh metres off the cloud. Runs without the file fall
+    # back to the fit.
     rng = np.random.default_rng(0)
     sel = rng.choice(len(P4), min(len(P4), 50_000), replace=False)
-    s, R, t = similarity(P4[sel], P5[sel])
-    fit = float(np.abs(s * P4[sel] @ R.T + t - P5[sel]).max())
-    to5 = lambda X: s * X @ R.T + t
+    tf_path = os.path.join(run, "georef.json" if geo else "level.json")
+    if os.path.exists(tf_path):
+        sys.path.insert(0, os.path.join(os.path.dirname(HERE), "src"))
+        from tesseract.stages import _apply_frame_json
+        tf = json.load(open(tf_path, encoding="utf-8"))
+        to5 = lambda X: _apply_frame_json(X, tf)
+        s = float(tf.get("scale", 1.0)) * float((tf.get("sim3") or {}).get("s", 1.0))
+    else:
+        s, R, t = similarity(P4[sel], P5[sel])
+        to5 = lambda X: s * X @ R.T + t
+    fit = float(np.abs(to5(P4[sel]) - P5[sel]).max())
 
     cams = np.load(os.path.join(run, "cameras.npy"))
     cams = cams[np.isfinite(cams.reshape(len(cams), -1)).all(1)]   # unregistered views

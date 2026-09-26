@@ -533,16 +533,16 @@ Gotcha: check_numbers() greps about 64 literal figures in their cited files (out
 Writes <run>/index.html for one tesseract run from run_page_template.html: the textured mesh (geometry/scene_tex.obj, per-corner int16 positions and uint16 UVs, atlas re-encoded as a 4096 px JPEG) or else a thinned vertex-coloured mesh, points and camera path in the levelled F5 frame, plus stages, S3 breakdown, verdicts, codes, screen/ingest/level/DSM facts, file links and keyframe thumbnails.
 Exports: read_mesh_ply(path) -> (V, F); read_obj(path) -> (V, T, F, FT, texture path); similarity(src, dst) -> (s, R, t); cluster_decimate(V, F, target) -> (V, F); pack(run, tri_budget, pt_budget); describe(run) -> dict; main(argv) (CLI `<run> --out --tris --points`)
 Used by: tools/view_check.py and run manually; not in build_all
-Gotcha: no open3d. Faces whose UV centroid samples TextureMesh's orange empty colour (0xFF7F27) are dropped. F4->F5 map is fitted from points.npy vs points_llf.npy, or points_geo.npy on a georeferenced run (same order). File and keyframe links are relative, so the page must stay in its run folder. ING_REJECT has a readable label. NaN camera rows (unregistered views) are skipped. A textured demo page is about 17 MB.
+Gotcha: no open3d. Faces whose UV centroid samples TextureMesh's orange empty colour (0xFF7F27) are dropped. The mesh and cameras go F4 to the export frame through georef.json (when the manifest says georeferenced) or level.json via stages._apply_frame_json, so S5's depth stretch is carried; only a run without either file falls back to a similarity fitted between points.npy and points_llf/points_geo. File and keyframe links are relative, so the page must stay in its run folder. ING_REJECT has a readable label. NaN camera rows (unregistered views) are skipped. A textured demo page is about 17 MB.
 
 ### tools/view_check.py
-Reads PINHOLE or SIMPLE_PINHOLE cameras. Builds held-out geometry by excluding every tenth keyframe from the OpenMVS dense and texture model, then renders its textured OBJ into each held-out registered camera at quarter resolution. Reports covered-pixel PSNR and SSIM with coverage separately in JSON.
+Reads PINHOLE or SIMPLE_PINHOLE cameras. Builds held-out geometry by excluding every tenth keyframe from the OpenMVS dense and texture model, then renders its textured OBJ into each held-out registered camera at quarter resolution. Reports covered-pixel PSNR and SSIM with coverage separately in JSON. A held-out view the mapper did not place is listed under "unposed", counts as zero coverage and is left out of PSNR/SSIM; only no posed view at all raises.
 Exports: project_points(vertices, camera, intrinsics) -> (uv, depth); rasterize(...); score(run_dir, geometry_dir, holdout_names, scale=4) -> dict; main() (CLI `<run> --build --geometry <dir> --out <json>`)
 Used by: tools/test_view_check.py and local audit runs
 Gotcha: imports numba and skimage, plus src/pipeline/local_gpu.py and tools/build_run_page.py. Use identical keyframe sets when comparing runs; poses are fitted on all keyframes but dense and texture inputs exclude held-out views.
 
 ### tools/test_view_check.py
-Projection test for one camera and point with known pixel (370, 360). Run `python tools/test_view_check.py`.
+Projection test for one camera and point with known pixel (370, 360), and score() on a two-view scene where one held-out view is unplaced (counted uncovered, not a crash). Run `python tools/test_view_check.py`.
 Used by: local audit runs
 Gotcha: plain-script test; fails with exit code 1 on a projection mismatch.
 

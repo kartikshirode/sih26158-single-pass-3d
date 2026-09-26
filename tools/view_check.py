@@ -114,10 +114,13 @@ def score(run_dir: str, geometry_dir: str, holdout_names: list[str], scale: int 
         raise ValueError("Textured mesh has no readable atlas")
     target = (max(1, width // scale), max(1, height // scale))
     K = tuple(x / scale for x in intrinsics)
-    views = []
+    views, unposed = [], []
     for name in holdout_names:
         if name not in poses:
-            raise ValueError(f"Held-out view has no registered pose: {name}")
+            # The local gate lets up to half the views go unplaced (ADR-029). Such a view
+            # cannot be rendered; it counts as uncovered and is left out of PSNR/SSIM.
+            unposed.append(name)
+            continue
         truth = cv2.imread(os.path.join(keyframes, name))
         if truth is None or truth.shape[:2] != (height, width):
             raise ValueError(f"Held-out image has wrong size: {name}")
@@ -136,8 +139,12 @@ def score(run_dir: str, geometry_dir: str, holdout_names: list[str], scale: int 
         ssim = float(ssim_map[mask].mean())
         views.append({"name": name, "coverage": round(coverage, 5),
                       "psnr_db": round(psnr, 3), "ssim": round(ssim, 5)})
+    if not views:
+        raise ValueError("No held-out view has a registered pose")
     return {"render_scale": scale, "held_out": holdout_names, "views": views,
-            "mean_coverage": round(float(np.mean([v["coverage"] for v in views])), 5),
+            "unposed": unposed,
+            "mean_coverage": round(float(np.sum([v["coverage"] for v in views]))
+                                   / len(holdout_names), 5),
             "mean_psnr_db": round(float(np.mean([v["psnr_db"] for v in views])), 3),
             "mean_ssim": round(float(np.mean([v["ssim"] for v in views])), 5)}
 
