@@ -203,7 +203,7 @@ class PlanKeyframes(BaseStage):
 @dataclass
 class Geometry(BaseStage):
     id: str = "S3-geometry"
-    version: str = "7"          # local GPU: focal refined, no retriangulation, -d 4, 20%
+    version: str = "8"          # local GPU: focal refined only when the views turn
     needs: tuple = ("plan",)
     # S3 on a synthetic source also reads the scene straight from ctx.source; the
     # orchestrator keys every stage on the source's fingerprint, which covers that.
@@ -363,7 +363,7 @@ class Geometry(BaseStage):
                                          "total_seconds",
                                          "sparse_after_bundle_adjustment", "sparse_from",
                                          "stages", "unregistered", "focal_after_mapper_px",
-                                         "mesh_error",
+                                         "views_turn_deg", "focal_refined", "mesh_error",
                                          "textured_mesh", "texture_error")
                                         if k in res}},
                          f"local GPU, {res.get('total_seconds')} s")

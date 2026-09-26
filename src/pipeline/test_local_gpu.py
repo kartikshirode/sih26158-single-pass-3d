@@ -17,7 +17,7 @@ import tempfile
 import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from local_gpu import (DEFAULTS, SparseError, clean_work, frame_order,  # noqa: E402
+from local_gpu import (DEFAULTS, attitude_spread_deg, SparseError, clean_work, frame_order,  # noqa: E402
                        read_images_txt, read_ply_points, reuse_sparse, with_extra)
 
 FAILED: list[str] = []
@@ -149,6 +149,26 @@ check("defaults named in the extra are replaced, the rest kept in order",
       got == ["TextureMesh", "scene.mvs", "--decimate", 0.1, "--global-seam-leveling", "1",
               "--cuda-device", "-2", "--sharpness-weight", "0"], str(got))
 check("an empty extra changes nothing", with_extra(base, "") == base)
+
+print("\nT7: how far the views turn decides whether the mapper refines the focal length")
+rot = Rotation.from_euler("x", 120, degrees=True).as_matrix()     # looking down and ahead
+straight = np.repeat(np.eye(4)[None], 60, 0)
+straight[:, :3, :3] = rot
+straight[:, :3, 3] = np.linspace(0, 1, 60)[:, None] * [1.0, 0, 0]
+check("a straight pass at one attitude does not turn",
+      attitude_spread_deg(straight) < 1e-6, f"{attitude_spread_deg(straight):.2e}")
+pan = straight.copy()
+for i, a in enumerate(np.linspace(-30, 30, 60)):
+    pan[i, :3, :3] = Rotation.from_euler("z", a, degrees=True).as_matrix() @ rot
+check("a 60 degree pan turns about 28 degrees either side of its middle view",
+      25 < attitude_spread_deg(pan) < 30, f"{attitude_spread_deg(pan):.1f}")
+scaled = pan.copy()
+scaled[:, :3, :3] *= 0.37                          # a stitched window's scale
+check("a window's scale in the rotation block does not count as turning",
+      abs(attitude_spread_deg(scaled) - attitude_spread_deg(pan)) < 1e-6)
+lost = pan.copy()
+lost[5] = np.nan
+check("a view with no pose is ignored", np.isfinite(attitude_spread_deg(lost)))
 
 print()
 if FAILED:

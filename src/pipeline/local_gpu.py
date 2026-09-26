@@ -54,13 +54,17 @@ DEFAULTS = {
     # closer to the true path (0.31 m RMS against 0.66); on the demo the held-out
     # views did not move (research/11).
     "mapper_retriangulate": False,
-    # MapAnything's focal length starts the mapper, which then refines it as one value
-    # (SIMPLE_PINHOLE). On the test_flight encode MapAnything fitted 1414 px against a
-    # true 1066 px, and held fixed that left the ground 10-17 m low; refined it came to
-    # 1135 px. On the demo it stayed at 1095 against 1098, with no curl (research/11).
-    # PINHOLE with refinement would move fx and fy apart (1599 and 1146 px there).
+    # MapAnything's focal length starts the mapper as one value (SIMPLE_PINHOLE; PINHOLE
+    # with refinement moved fx and fy apart, 1599 and 1146 px on test_flight). The mapper
+    # refines it only when the views turn enough to show it: a straight pass at one
+    # attitude cannot tell focal length f from k f with the scene stretched k times along
+    # the view axis, and there the refinement wandered 6-9% long on both synthetic passes
+    # (1091 to 1160 px, 1414 to 1179, truth 1066). Nicosia pans through 63 degrees, and
+    # there it went from 751 to 1400 px and the strip became the fan a pan sees
+    # (research/11 section 9). S5 corrects a straight pass from the SRT's gimbal pitch.
     "camera_model": "SIMPLE_PINHOLE",
     "refine_focal": True,
+    "refine_focal_min_turn_deg": 10.0,   # 95th percentile of MapAnything's view turns
     "pose_window": 0,           # views per MapAnything call; 0 sizes it to the GPU
     "pose_overlap": 8,          # shared views between windows, for the Sim(3) stitch
     "pose_size": 0,             # 0: the model's own 518 mapping; else the longest side
@@ -331,6 +335,23 @@ def pose_window_for(H: int, W: int, total_bytes: int) -> int:
     tokens = max((H // 14) * (W // 14), 1)
     budget = (total_bytes / 2**30 - WEIGHTS_GIB - HEADROOM_GIB) / GIB_PER_TOKEN
     return int(max(12, min(64, budget // tokens, TARGET_TOKENS // tokens)))
+
+
+def attitude_spread_deg(cams: np.ndarray) -> float:
+    """
+    How far the views turn: the 95th percentile of each camera's rotation away from
+    the middle one, in degrees. A stitched pose can carry its window's scale in the
+    rotation block, so columns are normalised first.
+    """
+    R = np.asarray(cams, np.float64)[:, :3, :3]
+    R = R / np.linalg.norm(R, axis=1, keepdims=True)
+    ok = np.isfinite(R.reshape(len(R), -1)).all(1)
+    R = R[ok]
+    if len(R) < 2:
+        return 0.0
+    rel = np.einsum("ji,njk->nik", R[len(R) // 2], R)
+    cos = np.clip((np.trace(rel, axis1=1, axis2=2) - 1) / 2, -1, 1)
+    return float(np.percentile(np.degrees(np.arccos(cos)), 95))
 
 
 def fit_camera(ma: dict, h0: int, w0: int, crop, *, views: int, log=print) -> tuple:
@@ -633,7 +654,7 @@ SPARSE_KEYS = ("n_views", "keyframe_size", "pose_method", "mapanything_views", "
                "intrinsics_fit_residual_px", "stitch", "mapanything_s",
                "mapanything_peak_gib", "sparse_after_triangulation",
                "sparse_after_bundle_adjustment", "ba_gate", "unregistered",
-               "camera_model", "focal_after_mapper_px")
+               "camera_model", "focal_after_mapper_px", "views_turn_deg", "focal_refined")
 
 
 def reuse_sparse(src: str, work: str, names: list, o: dict) -> dict:
@@ -702,13 +723,18 @@ def sparse(r: Runner, colmap: str, img: str, names: list, h0: int, w0: int, crop
                              views=o["intrinsics_views"], log=log)
         cams_ma = ma.pop("cams")
         stitch, ma_load, ma_peak = ma["windows"], ma["split_s"], ma["peak_gib"]
+        turn = attitude_spread_deg(cams_ma)
+        refine = bool(o["refine_focal"]) and turn >= o["refine_focal_min_turn_deg"]
+        log(f"  views turn {turn:.1f} deg (95th percentile): focal length "
+            + ("refined by the mapper" if refine else "held at MapAnything's"))
         del ma
 
         db = os.path.join(r.work, "db.db")
         if os.path.exists(db):
             os.remove(db)
         if glob_poses:
-            before, sp_f = None, global_sparse(r, colmap, img, db, cam, o)
+            before, sp_f = None, global_sparse(r, colmap, img, db, cam,
+                                               dict(o, refine_focal=refine))
         else:
             before, sp_f = mapanything_sparse(r, colmap, img, db, names, cams_ma, cam, o,
                                               log=log)
@@ -723,6 +749,7 @@ def sparse(r: Runner, colmap: str, img: str, names: list, h0: int, w0: int, crop
             "camera": {k: (round(v, 3) if isinstance(v, float) else v)
                        for k, v in cam.items() if k != "crop_span_full"},
             "intrinsics_fit_residual_px": round(resid, 4), "stitch": stitch,
+            "views_turn_deg": round(turn, 2), "focal_refined": refine,
             "mapanything_s": ma_load, "mapanything_peak_gib": ma_peak,
             "sparse_after_triangulation": before,
             "sparse_after_bundle_adjustment": after,
