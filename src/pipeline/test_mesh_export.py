@@ -66,6 +66,35 @@ with tempfile.TemporaryDirectory() as tmp:
     check("FBX is written, or its absence is named",
           "fbx" in paths or any(n.startswith("fbx") for n in notes), str(notes))
 
+print("T2: a mesh TextureMesh split over two atlases keeps both")
+with tempfile.TemporaryDirectory() as tmp:
+    V = np.array([[0.0, 0, 0], [1, 0, 0], [0, 1, 0], [5, 0, 0], [6, 0, 0], [5, 1, 0]])
+    with open(os.path.join(tmp, "scene_tex.obj"), "w") as f:
+        f.write("mtllib scene_tex.mtl\n")
+        f.writelines(f"v {x} {y} {z}\n" for x, y, z in V)
+        f.write("vt 0 0\nvt 1 0\nvt 0 1\nusemtl material_00\nf 1/1 2/2 3/3\n"
+                "usemtl material_01\nf 4/1 5/2 6/3\n")
+    with open(os.path.join(tmp, "scene_tex.mtl"), "w") as f:
+        f.write("newmtl material_00\nmap_Kd a0.jpg\nnewmtl material_01\nmap_Kd a1.jpg\n")
+    cv2.imwrite(os.path.join(tmp, "a0.jpg"), np.full((8, 8, 3), (0, 0, 255), np.uint8))
+    cv2.imwrite(os.path.join(tmp, "a1.jpg"), np.full((8, 8, 3), (255, 0, 0), np.uint8))
+    out = os.path.join(tmp, "export")
+    paths, notes = export_textured(os.path.join(tmp, "scene_tex.obj"), out, lambda X: X)
+    mtl = open(os.path.join(out, "model.mtl")).read()
+    maps = [ln.split()[1] for ln in mtl.splitlines() if ln.startswith("map_Kd")]
+    names = [ln.split()[1] for ln in mtl.splitlines() if ln.startswith("newmtl")]
+    check("both materials are in the MTL, each with its own atlas",
+          names == ["material_00", "material_01"] and len(set(maps)) == 2
+          and all(os.path.isfile(os.path.join(out, m)) for m in maps), mtl)
+    import trimesh
+    g = trimesh.load(paths["glb"])
+    geoms = list(g.geometry.values()) if hasattr(g, "geometry") else [g]
+    cols = sorted(tuple(int(x) for x in np.asarray(m.visual.material.baseColorTexture)
+                        .reshape(-1, np.asarray(m.visual.material.baseColorTexture).shape[-1])[0][:3])
+                  for m in geoms if m.visual.kind == "texture")
+    check("the GLB carries both textures", len(geoms) == 2 and len(cols) == 2
+          and cols[0] != cols[1], str(cols))
+
 print()
 if FAILED:
     print(f"{len(FAILED)} TEST(S) FAILED: {FAILED}")

@@ -210,13 +210,13 @@ Gotcha: mapper_extra, densify_extra, mesh_extra and texture_extra are appended t
 Plain-script test of local_gpu's GPU-free parts: OpenMVS-style PLY with variable-length view lists read back exactly, a COLMAP images.txt pose read back to cam2world, keyframe time order past 999, clean_work removing intermediates while keeping the cloud, cameras, mesh, sparse model, logs and images, reuse_sparse copying poses and refusing changed pose options, a different view count or a failed gate, with_extra replacing default flags, clear_products removing an earlier run's cloud, mesh and textured mesh while keeping poses (T8), and attitude_spread_deg (T7: zero for a straight pass, about 28 degrees for a 60 degree pan, unchanged by a window's scale in the rotation block, NaN views ignored). Run `python src/pipeline/test_local_gpu.py`.
 
 ### src/pipeline/mesh_export.py
-S6's textured mesh exports: geometry/scene_tex.obj carried F4 to F5 or F6 with the transform S5b (level.json) or S5 (georef.json) wrote and written as model.obj/.mtl/model_Kd.jpg, model.glb (trimesh, Y-up, atlas embedded) and model.fbx (assimp through pyassimp, from a Y-up copy).
+S6's textured mesh exports: geometry/scene_tex.obj carried F4 to F5 or F6 with the transform S5b (level.json) or S5 (georef.json) wrote and written as model.obj/.mtl/model_Kd.jpg, model.glb (trimesh, Y-up, atlas embedded) and model.fbx (assimp through pyassimp, from a Y-up copy). A mesh TextureMesh split over several atlases keeps every material: model_Kd_<i>.jpg, one MTL block each, and a GLB with one mesh per material.
 Exports: to_frame(V, basis_rows, origin, scale) -> F5 vertices; z_up_to_y_up(V); export_textured(obj, out, transform) -> (paths {obj, glb, fbx}, notes)
 Used by: src/tesseract/stages.py (Export), src/pipeline/test_mesh_export.py
 Gotcha: FBX needs the assimp library: SIH_ASSIMP names its folder or DLL (C:\Users\Kartik\gpu-tools\assimp\Release on the laptop), else PATH; without it FBX is skipped with a note. pyassimp's AssimpError is a BaseException, hence the broad catch. OpenMVS writes `Tr 1` in its MTL, which some readers take as transparent, so the MTL is rewritten.
 
 ### src/pipeline/test_mesh_export.py
-Plain-script test of mesh_export on a two-triangle textured OBJ: vertices transformed as S5b transforms the cloud, UVs and faces unchanged, a clean MTL beside the copied atlas, a Y-up textured GLB, and FBX written or its absence named. Run `python src/pipeline/test_mesh_export.py`.
+Plain-script test of mesh_export on a two-triangle textured OBJ: vertices transformed as S5b transforms the cloud, UVs and faces unchanged, a clean MTL beside the copied atlas, a Y-up textured GLB, and FBX written or its absence named; T2 a mesh over two atlases keeps both materials in the MTL and both textures in the GLB. Run `python src/pipeline/test_mesh_export.py`.
 
 ### src/pipeline/window_fuse.py
 S2-SCALE: plans overlapping view windows for long passes and brings them into one frame. stitch chains a Umeyama Sim(3) on shared-view correspondences window to window; stitch_gnss anchors each window's camera centres to GNSS independently.
@@ -531,7 +531,7 @@ Gotcha: check_numbers() greps about 64 literal figures in their cited files (out
 
 ### tools/build_run_page.py
 Writes <run>/index.html for one tesseract run from run_page_template.html: the textured mesh (geometry/scene_tex.obj, per-corner int16 positions and uint16 UVs, atlas re-encoded as a 4096 px JPEG) or else a thinned vertex-coloured mesh, points and camera path in the levelled F5 frame, plus stages, S3 breakdown, verdicts, codes, screen/ingest/level/DSM facts, file links and keyframe thumbnails.
-Exports: read_mesh_ply(path) -> (V, F); read_obj(path) -> (V, T, F, FT, texture path); similarity(src, dst) -> (s, R, t); cluster_decimate(V, F, target) -> (V, F); pack(run, tri_budget, pt_budget); describe(run) -> dict; main(argv) (CLI `<run> --out --tris --points`)
+Exports: read_mesh_ply(path) -> (V, F); read_obj(path) -> (V, T, F, FT, texture path) (several atlases are placed side by side in one temp JPEG and each face's UVs moved into its strip); similarity(src, dst) -> (s, R, t); cluster_decimate(V, F, target) -> (V, F); pack(run, tri_budget, pt_budget); describe(run) -> dict; main(argv) (CLI `<run> --out --tris --points`)
 Used by: tools/view_check.py and run manually; not in build_all
 Gotcha: no open3d. Faces whose UV centroid samples TextureMesh's orange empty colour (0xFF7F27) are dropped. The mesh and cameras go F4 to the export frame through georef.json (when the manifest says georeferenced) or level.json via stages._apply_frame_json, so S5's depth stretch is carried; only a run without either file falls back to a similarity fitted between points.npy and points_llf/points_geo. File and keyframe links are relative, so the page must stay in its run folder. ING_REJECT has a readable label. NaN camera rows (unregistered views) are skipped. A textured demo page is about 17 MB.
 
@@ -542,7 +542,7 @@ Used by: tools/test_view_check.py and local audit runs
 Gotcha: imports numba and skimage, plus src/pipeline/local_gpu.py and tools/build_run_page.py. Use identical keyframe sets when comparing runs; poses are fitted on all keyframes but dense and texture inputs exclude held-out views.
 
 ### tools/test_view_check.py
-Projection test for one camera and point with known pixel (370, 360), and score() on a two-view scene where one held-out view is unplaced (counted uncovered, not a crash). Run `python tools/test_view_check.py`.
+Projection test for one camera and point with known pixel (370, 360), score() on a two-view scene where one held-out view is unplaced (counted uncovered, not a crash), and build_run_page.read_obj on a mesh over two atlases. Run `python tools/test_view_check.py`.
 Used by: local audit runs
 Gotcha: plain-script test; fails with exit code 1 on a projection mismatch.
 

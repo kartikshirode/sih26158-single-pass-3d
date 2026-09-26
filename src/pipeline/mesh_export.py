@@ -32,17 +32,26 @@ def z_up_to_y_up(V: np.ndarray) -> np.ndarray:
 
 
 def _read(obj: str):
+    """
+    The OBJ's lines, vertex line numbers, vertices, and its materials in MTL order as
+    [(name, atlas path or None)]. TextureMesh splits a large mesh over several atlases,
+    one material each, past --max-texture-size (8192 px); B3 and B5v already fill one.
+    """
     lines = open(obj, encoding="utf-8", errors="replace").read().splitlines()
     vi = [i for i, ln in enumerate(lines) if ln.startswith("v ")]
     V = np.array([ln.split()[1:4] for ln in (lines[i] for i in vi)], np.float64)
     mtl = next((ln.split(None, 1)[1].strip() for ln in lines if ln.startswith("mtllib")),
                None)
-    tex = None
+    mats: list = []
     if mtl and os.path.isfile(os.path.join(os.path.dirname(obj), mtl)):
         for ln in open(os.path.join(os.path.dirname(obj), mtl), encoding="utf-8"):
-            if ln.strip().startswith("map_Kd"):
+            ln = ln.strip()
+            if ln.startswith("newmtl"):
+                mats.append([ln.split(None, 1)[1].strip(), None])
+            elif ln.startswith("map_Kd") and mats:
                 tex = os.path.join(os.path.dirname(obj), ln.split(None, 1)[1].strip())
-    return lines, vi, V, tex
+                mats[-1][1] = tex if os.path.isfile(tex) else None
+    return lines, vi, V, [tuple(m) for m in mats]
 
 
 def _write(path: str, lines: list, vi: list, V: np.ndarray, mtl: str | None):
@@ -81,17 +90,23 @@ def export_textured(obj: str, out: str, transform) -> tuple[dict, list]:
     maps the OBJ's F4 vertices (N, 3) into the export frame, Z up.
     """
     os.makedirs(out, exist_ok=True)
-    lines, vi, V, tex = _read(obj)
+    lines, vi, V, mats = _read(obj)
     F5 = np.asarray(transform(V), np.float64)
     paths, notes = {}, []
 
     mtl = None
-    if tex and os.path.isfile(tex):
-        shutil.copyfile(tex, os.path.join(out, "model_Kd" + os.path.splitext(tex)[1]))
+    textured = [(n, t) for n, t in mats if t]
+    if textured:
         mtl = "model.mtl"
         with open(os.path.join(out, mtl), "w", encoding="utf-8", newline="\n") as f:
-            f.write("newmtl material_00\nKa 1 1 1\nKd 1 1 1\nKs 0 0 0\nd 1\nillum 1\n"
-                    f"map_Kd model_Kd{os.path.splitext(tex)[1]}\n")
+            for i, (name, tex) in enumerate(mats):
+                f.write(f"newmtl {name}\nKa 1 1 1\nKd 1 1 1\nKs 0 0 0\nd 1\nillum 1\n")
+                if tex:
+                    # One atlas keeps the name it always had; several are numbered.
+                    dst = ("model_Kd" + ("" if len(textured) == 1 else f"_{i}")
+                           + os.path.splitext(tex)[1])
+                    shutil.copyfile(tex, os.path.join(out, dst))
+                    f.write(f"map_Kd {dst}\n")
     else:
         notes.append("mesh has no texture atlas; exported untextured")
     _write(os.path.join(out, "model.obj"), lines, vi, F5, mtl)
@@ -99,8 +114,11 @@ def export_textured(obj: str, out: str, transform) -> tuple[dict, list]:
 
     try:
         import trimesh
-        m = trimesh.load(paths["obj"], force="mesh", process=False)
-        m.vertices = z_up_to_y_up(np.asarray(m.vertices))
+        # One material loads as one mesh; several load as a scene with a mesh per
+        # material, which keeps each atlas (force="mesh" would merge them into one).
+        m = trimesh.load(paths["obj"], process=False)
+        for g in (m.geometry.values() if hasattr(m, "geometry") else [m]):
+            g.vertices = z_up_to_y_up(np.asarray(g.vertices))
         m.export(os.path.join(out, "model.glb"))
         paths["glb"] = os.path.join(out, "model.glb")
     except Exception as e:

@@ -75,9 +75,16 @@ def read_mesh_ply(path: str):
 
 
 def read_obj(path: str):
-    """Vertices, texture coordinates, face corners as (vertex, uv) indices, texture file."""
-    V, T, F, tex = [], [], [], None
+    """
+    Vertices, texture coordinates, face corners as (vertex, uv) indices, texture file.
+
+    TextureMesh splits a large mesh over several atlases, one material each. Those are
+    put side by side in one image (written to the temp folder) and each face's UVs
+    moved into its own atlas's strip, so callers still see one texture.
+    """
+    V, T, F, FM, tex = [], [], [], [], None
     base = os.path.dirname(path)
+    maps, cur = {}, None
     with open(path, encoding="utf-8", errors="replace") as f:
         for ln in f:
             if ln.startswith("v "):
@@ -87,14 +94,40 @@ def read_obj(path: str):
             elif ln.startswith("f "):
                 c = [p.split("/") for p in ln.split()[1:4]]
                 F.append([int(x[0]) for x in c] + [int(x[1]) for x in c])
+                FM.append(cur)
+            elif ln.startswith("usemtl "):
+                cur = ln.split(None, 1)[1].strip()
             elif ln.startswith("mtllib "):
                 mtl = os.path.join(base, ln.split(None, 1)[1].strip())
                 if os.path.exists(mtl):
+                    name = None
                     for m in open(mtl, encoding="utf-8", errors="replace"):
-                        if m.strip().startswith("map_Kd"):
+                        m = m.strip()
+                        if m.startswith("newmtl"):
+                            name = m.split(None, 1)[1].strip()
+                        elif m.startswith("map_Kd"):
                             tex = os.path.join(base, m.split(None, 1)[1].strip())
+                            maps[name] = tex
     F = np.asarray(F, np.int64) - 1
-    return (np.asarray(V, np.float64), np.asarray(T, np.float64), F[:, :3], F[:, 3:], tex)
+    V, T = np.asarray(V, np.float64), np.asarray(T, np.float64)
+    if len(maps) <= 1:
+        return V, T, F[:, :3], F[:, 3:], tex
+    import tempfile
+
+    import cv2
+    names = list(maps)
+    imgs = [cv2.imread(maps[n]) for n in names]
+    h = max(i.shape[0] for i in imgs if i is not None)
+    w = max(i.shape[1] for i in imgs if i is not None)
+    imgs = [cv2.resize(i, (w, h)) if i is not None else np.zeros((h, w, 3), np.uint8)
+            for i in imgs]
+    out = os.path.join(tempfile.gettempdir(),
+                       f"sih_atlas_{abs(hash(os.path.abspath(path)))}.jpg")
+    cv2.imwrite(out, np.hstack(imgs), [cv2.IMWRITE_JPEG_QUALITY, 95])
+    k = np.array([names.index(m) if m in maps else 0 for m in FM])
+    uv = T[F[:, 3:]].copy()                                     # (faces, 3 corners, 2)
+    uv[..., 0] = (k[:, None] + np.clip(uv[..., 0], 0, 1)) / len(names)
+    return V, uv.reshape(-1, 2), F[:, :3], np.arange(3 * len(F)).reshape(-1, 3), out
 
 
 def similarity(src: np.ndarray, dst: np.ndarray):
