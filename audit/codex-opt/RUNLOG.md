@@ -578,3 +578,14 @@ Mesh `-d 4` from M0's dense cloud, TextureMesh at 20% unless stated, full-size h
 
 Run pages rebuilt for codex-b1-v2, b2-v2, b3-v2 and b5v-v3, with screenshots in
 `out/codex/codex-*-v*.png` (not committed).
+
+### Storage, third session
+
+Tonight's runs took C: from 121 GB free to 103 GB. At the end I deleted only outputs of
+my own that are derived or superseded, with their numbers above: `out/codex/replay`
+(S5 replay copies, 2.3 GB), the meshes, atlases and scenes in `out/codex/texexp` (results
+and logs kept), `out/codex/exp/B2M0` (Nicosia's kept workspace, 1.3 GB, its experiments
+finished) and the runs `codex-b3-f2`, `codex-b3-focal`, `codex-b3-new` and `codex-b2-cut`
+(about 4.7 GB). C: then had 110 GB free. Kept: M0 (the demo's full workspace, 1.9 GB, for
+further texture tests), the baselines, and the final, v2 and v3 runs. Nothing was
+installed tonight.
