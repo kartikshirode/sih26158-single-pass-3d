@@ -67,6 +67,9 @@ jobs:
       - name: upload API guards
         run: node --test "demo/test/*.test.js"
 
+      - name: workspace measurement maths
+        run: node --test "web/test/geom.test.js"
+
       - name: a run must satisfy its own contracts
         run: |
           python tesseract.py run synthetic --frames 60 --gnss rtk --name ci
