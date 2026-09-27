@@ -842,7 +842,7 @@ The local GPU optimisation write-up for branch codex-opt: benchmarks B1-B5v and 
 Gotcha: its numbers come from audit/codex-opt/RUNLOG.md; accuracy figures are synthetic, and the ten-minute 30 fps time is a prediction. Code comments cite its sections 9 and 10.
 
 ### research/12-demo-model-and-workspace.md
-The night of 2026-09-28: what stops a perfect model from one pass (one angle, backs never seen, the sky crop, seams, no GPS, video), the texture findings (unsharp mask off 22.82 to 24.21 dB, smoothness 0.5 to 24.42), the unseen-face fill and seam levelling (24.65 held out), end-to-end B1 293.4 s and 24.63 dB, B3 unchanged at 0.393 m, B2 coverage 61-71% run to run, the workspace and the site, and what is still wrong.
+The night of 2026-09-28: what stops a perfect model from one pass (one angle, backs never seen, the sky crop, seams, no GPS, video), the texture findings (unsharp mask off 22.82 to 24.21 dB, smoothness 0.5 to 24.42), the unseen-face fill and seam levelling (24.65 held out), end-to-end B1 293.4 s and 24.63 dB, B3 unchanged at 0.391 m, B2 coverage 61-71% run to run, the workspace and the site, and what is still wrong.
 Gotcha: numbers come from audit/night-7of10/RUNLOG.md; B5v was not rerun (disk), its time is a prediction.
 
 ### research/08-web-upload.md
