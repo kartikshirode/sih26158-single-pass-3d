@@ -968,6 +968,54 @@ Gotcha: shows the photo only at real keyframes, never an interpolated pose, so b
 ### web/dist/site.js
 Built bundle of web/src/site.js (esbuild IIFE with three). Committed so the page opens without npm.
 
+### web/src/workspace.js
+Entry of the workspace bundle: reads window.TESSERACT, builds scene, units, nav, flight, minimap, sheet furniture and tools, layers (texture, contours, detail, flight path), view buttons, keys, export, calibration; opens on the chase view a third of the way along the pass. Debug hooks ?demo=item,... (views, one of each measurement, layers, t=, play, scale, probe, tool=) and ?debug (window.__ws), documented at its top.
+Gotcha: bundled with everything under web/src by npm run build into dist/workspace.js; web/src/package.json only marks the folder as ES modules.
+
+### web/src/scene.js
+Renderer (sRGB, no tone mapping, render on demand), the GLB from base64 as an unlit textured mesh, three-mesh-bvh picking, the contour and hillshade shader (onBeforeCompile, fwidth lines, heavier every fifth), the detail colouring from data.detail, detailAt(point).
+Exports: cssVar, cssColor, DEFAULT, createScene
+
+### web/src/nav.js
+Navigation for a long strip: left-drag grab-pan at the picked point's height, right or Ctrl drag orbit about the point under the cursor with a pitch clamp, wheel zoom to the cursor, double-click fly-to (400 ms ease), WASD/QE/arrows (a short A or D tap is the tool shortcut), views plan, oblique, pilot, fit.
+Exports: createNav
+
+### web/src/flight.js
+Keyframe interpolation (lerp and slerp), the chase pose behind and above the drone, the thumbnail strip with scrub, keyboard steps and x2 playback that any view drag stops, and the flight-path layer (centres, a tick a second, the current frustum in magenta).
+Exports: createFlight
+
+### web/src/minimap.js
+Plan map: one orthographic top render at load, turned so the pass runs left to right, then the flight path, the view's ground wedge and the playhead on every render; click or drag moves the view centre. North arrow only when data.georef is set.
+Exports: createMinimap
+
+### web/src/sheet.js
+Neatline graduations with labels (top and left) in plan view, a depth-correct scale bar otherwise.
+Exports: createSheet
+
+### web/src/tools.js
+The eight tools on BVH picks: distance, height, area (plan, surface, perimeter), volume (grid of down rays, base lowest, mean edge or typed), profile (200 samples, SVG chart with hover marker), line of sight (eye height 1.7 m, or 1.7% of the model's diagonal uncalibrated), coordinates (grid x and y, or east and north when georeferenced, height, detail here), note; draggable points, labels, the list, selection, delete.
+Exports: TOOLS, createTools
+
+### web/src/units.js
+Scale state (factor, status, label; one-length calibration stored per model id in localStorage inside try/catch) and number formatting; the only place model units become display units.
+Exports: createUnits, fmt, fmtNice
+
+### web/src/export.js
+GeoJSON FeatureCollection (local frame, or lon/lat when georeferenced) and a CSV summary of every measurement, as two Blob downloads.
+Exports: buildGeoJSON, buildCSV, exportAll
+
+### web/src/geom.js
+Pure measurement maths with no three.js: lengths, plan area, point in polygon, polygon grids, surface factor, grid volume (cut, fill, net), resampling, profile stats, line of sight over a height function, niceInterval, local to lat/lon.
+Exports: dist, distPlan, polylineLength, polylineStats, planArea, pointInPolygon, polygonGrid, gridX, gridZ, gridSurfaceFactor, gridVolume, resampleSegment, resampleRing, profileStats, lineOfSight, niceInterval, localToLatLon, easeOutCubic, clamp
+Used by: web/src/tools.js, web/test/geom.test.js
+
+### web/test/geom.test.js
+node --test cases for geom.js: polyline length, plan area of a square and an L, surface area of a tilted square, volume of a box heap, ramp profile, line of sight past a wall, niceInterval. web/test/index.js imports it so `node --test test/` resolves.
+Used by: npm test, .github/workflows/ci.yml
+
+### web/dist/workspace.js
+Built bundle (esbuild IIFE, about 700 kB, three and three-mesh-bvh inside). Committed so the page opens without npm.
+
 ### web/css/base.css
 Shared tokens and type for the web pages: @font-face for the vendored Archivo (variable width) and Newsreader italic, the palette (--film, --paper, --ink, --slate, --rule, --contour, --magenta), a 1.25 type scale, tabular figures, focus ring, reduced-motion rule.
 
