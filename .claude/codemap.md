@@ -941,6 +941,9 @@ Gotcha: launch from the main checkout's root with its absolute path; saved outpu
 ### audit/night-7of10/PLAN.md
 The overnight plan of 2026-09-28: aims (B1 at 7/10 at the default view, a workspace that travels the whole pass, measurements for the problem statement's applications), what stops a perfect model, the three tracks (model on the GPU, Codex seams, web), the web design direction (drafting film, graphite, contour brown, chart magenta; Archivo and Newsreader italic; neatline frame) and the order of work.
 
+### audit/night-7of10/RUNLOG.md
+The night's measurements on B1's held-out views: baseline 22.866 dB on master, the TextureMesh sweeps X0-X10 (sharpness 0 plus smoothness ratio 0.5 kept: 24.415 dB, SSIM 0.7055), the unseen-face fill F1-F2, and the clean night-b1 run (287.6 s, verify PASS, held out 24.443 dB, 0.7037, 98.47%), plus the machine table.
+
 ## web/
 
 ### web/SPEC.md
