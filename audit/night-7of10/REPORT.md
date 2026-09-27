@@ -15,7 +15,7 @@ every number: `RUNLOG.md` beside this file.
 | No orange holes at the default view | 3.3% of faces orange | **none** | met |
 | No patchwork on roads and roofs | visible patchwork | the bright blotches gone; the colour step at patch borders cut 12% by the texture flags and 18% more by levelling | better, not zero |
 | Far-field houses read as blocks | smeared | still smeared at a grazing angle | physics; now shown on the map sheet and the Detail layer |
-| B3 accuracy with a gimbal pitch at most 0.5 m | 0.394 m | **0.393 m** | held |
+| B3 accuracy with a gimbal pitch at most 0.5 m | 0.394 m | **0.391 m** (349 s) | held |
 | B2 held-out coverage at least 80% | 72% quoted earlier | 61% and 71% in two identical builds | open; B2 varies run to run |
 | B5v R at most 1.0 | 0.84 | not rerun (disk) | predicted about 0.88 |
 
@@ -50,7 +50,7 @@ show exactly where they bite.
 
 ```
 python tools/pack_site.py out/runs/night-b1-final --id b1 --title "SIH demo clip"
-python tools/pack_site.py out/runs/codex-b3-v2 --id b3 --title "Synthetic test flight" --out web/data/b3
+python tools/pack_site.py out/runs/night-b3-final --id b3 --title "Synthetic test flight" --out web/data/b3
 ```
 
 Both are already packed on this laptop. Open `web/index.html` or `web/workspace.html` by

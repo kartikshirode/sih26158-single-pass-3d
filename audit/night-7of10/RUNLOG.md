@@ -177,3 +177,10 @@ Ten points of coverage between two identical runs. The 72.40% of the final suite
 long-lens pan with little parallax, where the mapper's and densify's run-to-run spread is
 large; B1 differed by 0.02-0.05 dB between identical runs. Any B2 comparison needs
 several runs each. The 80% bar stays open.
+
+## Final B3 run (9c972c9)
+
+`night-b3-final`: 349.0 s (318.1 s on codex-b3-v2; fill and levelling about 29 s of the
+difference, levelling 15.0 s on its 8192 px atlas), verify PASS, cloud 0.391 m median and
+95.35% within 1 m of the synthetic truth. Packed as the workspace's second model
+(`web/data/b3`). This run and `night-b1-final` are the ones to keep.

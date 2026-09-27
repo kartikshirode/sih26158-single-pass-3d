@@ -13,7 +13,7 @@ finished run first:
 
 ```
 python tools/pack_site.py out/runs/night-b1-final --id b1 --title "SIH demo clip"
-python tools/pack_site.py out/runs/codex-b3-v2 --id b3 --title "Synthetic test flight" --out web/data/b3
+python tools/pack_site.py out/runs/night-b3-final --id b3 --title "Synthetic test flight" --out web/data/b3
 ```
 
 The first writes `web/data/model.js` and its images; the second adds a model in its own

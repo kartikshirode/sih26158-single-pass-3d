@@ -76,7 +76,7 @@ than colour.
 | Run | Wall | Held out | Truth | Verify |
 |---|---:|---|---|---|
 | B1 `night-b1-final` | 293.4 s (264.5 s before) | 24.63 dB, 0.709, 98.77% | none (no GPS) | PASS |
-| B3 `night-b3` | 342.4 s (318.1 s before) | | 0.393 m median, 95.2% within 1 m | PASS |
+| B3 `night-b3-final` | 349.0 s (318.1 s before) | | 0.391 m median, 95.4% within 1 m | PASS |
 | B2 held-out build | | 27.10 dB, 0.862, 61.09% | | |
 
 The ten-minute clip was not rerun: its 2.9 GB would have taken C: under the owner's 100 GB
