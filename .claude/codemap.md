@@ -886,3 +886,13 @@ Stage-by-stage options for keyframes, cameras, dense reconstruction, mesh, model
 Exports: ranked experiment list and per-option cost, licence, risk and test
 Used by: audit/codex-opt/RUNLOG.md and research/11-codex-optimisation.md
 Gotcha: expected gains are predictions unless a named local run supports them; the 600-view sparse run failed before dense work.
+
+## audit/codex-7of10/
+
+### audit/codex-7of10/PROMPT.md
+Instructions for a Codex audit and planning run after codex-opt, aiming the model at 7/10: no reconstruction or GPU work, no installs, no deletions; phases 0 machine and tests, 1 audit the four final runs' claims against their files and score the 7/10 scorecard, 2 diagnose colour patches, holes, far field, no-pitch accuracy and Nicosia coverage on saved outputs, 3 line-by-line audit of codex-opt's code (fix S1/S2 with tests), 4 research by problem with licences, 5 NEXTRUN.md (a one-night, timed experiment plan the next run follows), 6 REPORT.md. Commits on branch codex-7of10 only.
+Gotcha: launch from the repo root, e.g. `codex exec -s danger-full-access "Read audit/codex-7of10/PROMPT.md and follow it exactly."`; it expects CONTEXT.md beside it and writes LOG.md, FINDINGS.md, RESEARCH.md, NEXTRUN.md and REPORT.md there.
+
+### audit/codex-7of10/CONTEXT.md
+Facts for that run as of 2026-09-27 (codex-opt 4de9efa): the 7/10 scorecard with current values and bars, the four final runs and their files under out/runs, useful scratch under out/codex, the open problems and F19-F22, unfollowed leads (SRT focal_len, iso/shutter/ev and rel_alt in the real fixtures, the horizon as a pitch sensor, constant-light synthetic clips, levelling outside OpenMVS), disk (107 GB free, superseded runs listed), the shared GPU, licences and tests.
+Gotcha: disk, run folders and the scorecard's current values are a dated snapshot; refresh before reusing.
