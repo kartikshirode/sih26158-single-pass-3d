@@ -565,8 +565,9 @@ Used by: run manually (research/10 section 1)
 Gotcha: assumes mostly flat ground under the flight; on a hill or a facade the plane numbers mean nothing. Needs sparse_txt/, which local_gpu keeps. NaN camera rows (unregistered views) are skipped.
 
 ### tools/pack_site.py
-Packs one run for web/workspace.html: export/model.glb (or --mesh, a textured F4 OBJ carried through the run's level.json or georef.json by mesh_export.export_textured) as base64 inside web/data/model.js (window.TESSERACT, the contract in web/SPEC.md), every registered keyframe camera in the Y-up export frame (time, position, forward, up, fovy, aspect) and 1280 px keyframe images in web/data/frames/.
-Exports: frame_transform(run) -> (manifest, tf, to5); cameras(run, to5, fps, f_px, w, h) -> list
+Packs one run for web/workspace.html and web/index.html: export/model.glb (or --mesh, a textured F4 OBJ carried through the run's level.json or georef.json by mesh_export.export_textured) as base64 inside web/data/model.js (window.TESSERACT, the contract in web/SPEC.md), every registered keyframe camera in the Y-up export frame (time, position, forward, up, fovy, aspect) and 1280 px keyframe images in web/data/frames/.
+It also writes data["detail"] (detail_map: per GLB vertex, the finest photo pixel footprint over keyframes that frame it, dist / (f cos incidence), log-scaled to uint8) and data["sheet"] (render_sheet: an orthographic top render through view_check.rasterize, contours from points_llf.npy, the flight path, to data/sheet.jpg).
+Exports: frame_transform(run) -> (manifest, tf, to5); cameras(run, to5, fps, f_px, w, h) -> list; detail_map(glb, cams, f_px, w, h) -> dict; render_sheet(obj_dir, run, cams, out) -> dict
 Used by: run manually before opening web/workspace.html
 Gotcha: camera directions go through the same affine transform as points (by differences) so the depth stretch and axis swap match the mesh. web/data/ is gitignored because a model of the demo clip is a render of it.
 
@@ -953,6 +954,20 @@ Behaviour spec for the workspace script: offline file:// constraint (classic scr
 The workspace page: top bar (model, units, Set scale), tool rail (data-tool, data-key), the neatline stage (view, ticks, minimap, view buttons, layers, hint, scale bar), inspector (current tool readout, chart, measurement list, Export), flight strip, calibration dialog, loading screen. Loads data/model.js then dist/workspace.js.
 Gotcha: opens from disk; ids and classes are the contract with web/src and web/css/workspace.css.
 
+### web/index.html
+The presentation page: masthead, hero (headline, then the wipe: a keyframe photo against the model rendered from that keyframe's camera, with play and scrub), The pass (facts filled from data), The site (the plan-view map sheet), Method (stage log with bars sized by time), Evidence (held-out, synthetic accuracy, ten-minute time, formats), Uses (the eight PS applications against the eight tools), Limits, colophon. Loads data/model.js and dist/site.js.
+Gotcha: evidence figures are typed in the HTML from audit/night-7of10/RUNLOG.md and research/11; refresh them when those change.
+
+### web/css/site.css
+Presentation layout: sticky masthead, hero type, the wipe figure (clip-path photo over the canvas, magenta handle), bands with a wide title column, prose and margin notes, the sheet figure, the stage log, the evidence and application tables; single column below 860 px.
+
+### web/src/site.js
+The presentation page's script (bundled to dist/site.js by npm run build:site): fills the facts, loads the sheet image and caption, renders the GLB unlit from each keyframe's camera behind the wipe, plays the keyframes at their own timestamps, pointer and keyboard wipe, scrub to the nearest keyframe.
+Gotcha: shows the photo only at real keyframes, never an interpolated pose, so both halves are the same moment.
+
+### web/dist/site.js
+Built bundle of web/src/site.js (esbuild IIFE with three). Committed so the page opens without npm.
+
 ### web/css/base.css
 Shared tokens and type for the web pages: @font-face for the vendored Archivo (variable width) and Newsreader italic, the palette (--film, --paper, --ink, --slate, --rule, --contour, --magenta), a 1.25 type scale, tabular figures, focus ring, reduced-motion rule.
 
@@ -960,7 +975,7 @@ Shared tokens and type for the web pages: @font-face for the vendored Archivo (v
 Workspace layout: a 3 by 3 grid (top bar, rail, stage, inspector, flight strip), double neatline, minimap, tool rail tooltips and active bar, readout figures, measurement list, flight strip playhead, dialog, loading screen; folds the inspector under the view below 1100 px.
 
 ### web/package.json
-esbuild, three 0.180.0 and three-mesh-bvh 0.9.1 as dev dependencies; npm run build bundles src/workspace.js to dist/workspace.js (IIFE, minified), npm test runs node --test test/.
+esbuild, three 0.180.0 and three-mesh-bvh 0.9.1 as dev dependencies; npm run build bundles src/workspace.js to dist/workspace.js (IIFE, minified), npm run build:site bundles src/site.js to dist/site.js, npm test runs node --test test/.
 Gotcha: web/.gitignore keeps node_modules/ and data/ out of git.
 
 ### web/fonts/

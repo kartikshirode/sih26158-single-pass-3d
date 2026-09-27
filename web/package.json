@@ -4,7 +4,8 @@
   "description": "Tesseract workspace and site: static pages that open from disk.",
   "scripts": {
     "build": "esbuild src/workspace.js --bundle --format=iife --minify --target=es2020 --outfile=dist/workspace.js",
-    "test": "node --test test/"
+    "test": "node --test test/",
+    "build:site": "esbuild src/site.js --bundle --format=iife --minify --target=es2020 --outfile=dist/site.js"
   },
   "devDependencies": {
     "esbuild": "0.25.10",

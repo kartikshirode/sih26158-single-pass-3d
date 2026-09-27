@@ -43,6 +43,15 @@ window.TESSERACT = {
 };
 ```
 
+Two optional fields:
+
+- `detail`: `{ b64, counts, lo, hi, median }`. One uint8 per GLB vertex in accessor order
+  (mesh after mesh, `counts` each): v in 0..254 means one photo pixel covers
+  `exp(log(lo) + v / 254 * (log(hi) - log(lo)))` model units of surface there, over every
+  keyframe that sees the vertex inside its frame; 255 means none does. Drawn by the
+  Detail layer.
+- `sheet`: the presentation page's plan-view map; the workspace ignores it.
+
 ## Rendering
 
 - `WebGLRenderer` with antialias, `outputColorSpace = SRGBColorSpace`, no tone mapping. The

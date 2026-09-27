@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tesseract</title>
+<meta name="description" content="One drone pass in, a measured and textured 3D model out, on one laptop. SIH26158 for NTRO.">
+<link rel="stylesheet" href="css/base.css">
+<link rel="stylesheet" href="css/site.css">
+</head>
+<body class="site">
+
+<header class="masthead">
+  <a class="mark wide" href="#top">Tesseract</a>
+  <nav aria-label="Sections">
+    <a href="#pass">The pass</a>
+    <a href="#method">Method</a>
+    <a href="#evidence">Evidence</a>
+    <a href="#uses">Uses</a>
+    <a href="#limits">Limits</a>
+    <a class="go" href="workspace.html">Open the workspace</a>
+  </nav>
+</header>
+
+<main id="top">
+
+  <section class="hero" aria-labelledby="heroTitle">
+    <div class="hero-copy">
+      <h1 id="heroTitle" class="wide">One pass in.<br>A measured model out.</h1>
+      <p class="lede">Tesseract turns a single drone flight into a textured 3D model on one laptop, with no second pass and no ground survey. Left of the line is the drone's own photo. Right of it is the model, seen from exactly where the drone was. Drag the line to compare.</p>
+    </div>
+
+    <figure class="wipe" id="wipe" aria-label="The drone photo on the left, the reconstructed model on the right, from the same camera">
+      <canvas id="wipeModel"></canvas>
+      <div class="wipe-photo" id="wipePhoto"><img id="wipeImg" alt="Keyframe from the drone video"></div>
+      <div class="wipe-handle" id="wipeHandle" role="slider" tabindex="0" aria-label="Photo and model divider" aria-valuemin="0" aria-valuemax="100" aria-valuenow="50"><span></span></div>
+      <figcaption>
+        <span class="wipe-side">Photo</span>
+        <span class="wipe-time" id="wipeTime">0.0 s into the pass</span>
+        <span class="wipe-side">Model</span>
+      </figcaption>
+    </figure>
+    <div class="wipe-controls">
+      <button type="button" class="plain" id="wipePlay">Pause the pass</button>
+      <input type="range" id="wipeScrub" min="0" max="1000" value="0" aria-label="Time in the pass">
+      <p class="note" id="wipeNote">Held-out check: the model is rendered into photos it never used, and scored against them.</p>
+    </div>
+  </section>
+
+  <section id="pass" class="band" aria-labelledby="passTitle">
+    <h2 id="passTitle">The pass</h2>
+    <div class="cols">
+      <div class="prose">
+        <p>The problem statement asks for something drone mapping usually avoids: one flight, one angle, and a model accurate enough to measure. Survey workflows fly a grid, twice, with markers on the ground. Disaster response, border mapping and reconnaissance rarely get that chance.</p>
+        <p>The demo clip is <strong id="factDuration">18.9 s</strong> of a consumer drone gliding over a construction site. Tesseract keeps <strong id="factKeyframes">177</strong> sharp, well-spaced frames of the 568, works out where the camera was for each one, and builds <strong id="factTriangles">210,307</strong> textured triangles from them in <strong id="factWall">264 s</strong>.</p>
+      </div>
+      <aside class="margin note">The clip carries no GPS, so this model is in its own units until one known length sets the scale. Clips with a DJI telemetry file come out in metres and on the map.</aside>
+    </div>
+  </section>
+
+  <section id="sheet" class="band" aria-labelledby="sheetTitle">
+    <h2 id="sheetTitle">The site</h2>
+    <figure class="sheet">
+      <img id="sheetImg" alt="The reconstructed site seen straight down, with contour lines and the flight path">
+      <figcaption class="note" id="sheetCaption">The model seen straight down: its own texture, contours drawn from its heights, and the drone's path in black with a dot for each second.</figcaption>
+    </figure>
+  </section>
+
+  <section id="method" class="band" aria-labelledby="methodTitle">
+    <h2 id="methodTitle">Method</h2>
+    <p class="prose">Every stage writes what it did and how long it took. These are the demo run's own timings on an RTX 4060 laptop.</p>
+    <ol class="log" id="stageLog">
+      <li style="--s:1.7"><b>Screen</b><span>Refuse or repair a clip before spending time on it: horizon, sky, overlays, cuts.</span><i>1.7 s</i></li>
+      <li style="--s:4.1"><b>Ingest</b><span>Score every frame for blur and motion; keep a sharp, evenly spaced set.</span><i>4.1 s</i></li>
+      <li style="--s:33.8"><b>Camera</b><span>MapAnything reads the lens from 60 frames; no calibration needed.</span><i>33.8 s</i></li>
+      <li style="--s:70.4"><b>Poses</b><span>COLMAP matches features and solves where every frame was taken.</span><i>70.4 s</i></li>
+      <li style="--s:53.6"><b>Depth</b><span>OpenMVS measures depth for every pixel on the GPU and fuses it.</span><i>53.6 s</i></li>
+      <li style="--s:37.7"><b>Surface</b><span>A mesh through the fused points.</span><i>37.7 s</i></li>
+      <li style="--s:52"><b>Texture</b><span>Each face takes the best photo of it; unseen faces take the cloud's colour.</span><i>52.0 s</i></li>
+      <li style="--s:8.2"><b>Level and export</b><span>Gravity up, then OBJ, GLB, FBX, PLY, LAS and GeoTIFF.</span><i>8.2 s</i></li>
+    </ol>
+  </section>
+
+  <section id="evidence" class="band" aria-labelledby="evidenceTitle">
+    <h2 id="evidenceTitle">Evidence</h2>
+    <p class="prose">A number only counts here if something outside the model checked it.</p>
+    <table class="evidence">
+      <thead><tr><th scope="col">Check</th><th scope="col">Result</th><th scope="col">How it was measured</th></tr></thead>
+      <tbody>
+        <tr><th scope="row">Looks like the photos</th><td id="evHeldOut">24.4 dB, SSIM 0.70</td><td>Every tenth frame is held back from the build, then the model is rendered into it and compared, pixel by pixel.</td></tr>
+        <tr><th scope="row">Accurate to a metre</th><td>0.35 m median</td><td>A ten-minute synthetic flight with known ground truth and a DJI-style telemetry file; 98.5% of the cloud within 1 m.</td></tr>
+        <tr><th scope="row">Ten minutes of video</th><td>502 s</td><td>The same ten-minute file end to end, inside the 15-minute budget.</td></tr>
+        <tr><th scope="row">Every format asked for</th><td>6 of 6</td><td>OBJ, GLB, FBX, PLY, LAS and GeoTIFF from every run.</td></tr>
+      </tbody>
+    </table>
+    <p class="note">The accuracy figures come from synthetic clips, because a real flight with surveyed ground truth wasn't available. They need a gimbal angle in the telemetry, which many consumer drones don't record.</p>
+  </section>
+
+  <section id="uses" class="band" aria-labelledby="usesTitle">
+    <h2 id="usesTitle">Uses</h2>
+    <p class="prose">The problem statement names eight applications. Each one needs a few measurements, and the workspace has them all, taken on the model's surface rather than on the screen.</p>
+    <div class="matrix-wrap">
+      <table class="matrix">
+        <thead>
+          <tr><th scope="col">Application</th><th scope="col">Distance</th><th scope="col">Height</th><th scope="col">Area</th><th scope="col">Volume</th><th scope="col">Profile</th><th scope="col">Line of sight</th><th scope="col">Coordinates</th><th scope="col">Notes</th></tr>
+        </thead>
+        <tbody>
+          <tr><th scope="row">Border and strategic area mapping</th><td>&#9679;</td><td></td><td></td><td></td><td>&#9679;</td><td>&#9679;</td><td>&#9679;</td><td></td></tr>
+          <tr><th scope="row">Disaster damage assessment</th><td></td><td>&#9679;</td><td>&#9679;</td><td>&#9679;</td><td></td><td></td><td>&#9679;</td><td>&#9679;</td></tr>
+          <tr><th scope="row">Urban planning and smart cities</th><td>&#9679;</td><td>&#9679;</td><td>&#9679;</td><td></td><td>&#9679;</td><td></td><td></td><td></td></tr>
+          <tr><th scope="row">Infrastructure inspection</th><td>&#9679;</td><td>&#9679;</td><td></td><td></td><td>&#9679;</td><td></td><td></td><td>&#9679;</td></tr>
+          <tr><th scope="row">Construction progress monitoring</th><td></td><td>&#9679;</td><td>&#9679;</td><td>&#9679;</td><td>&#9679;</td><td></td><td></td><td></td></tr>
+          <tr><th scope="row">Archaeological documentation</th><td>&#9679;</td><td></td><td>&#9679;</td><td></td><td>&#9679;</td><td></td><td>&#9679;</td><td>&#9679;</td></tr>
+          <tr><th scope="row">Digital twin generation</th><td></td><td></td><td></td><td></td><td></td><td></td><td>&#9679;</td><td></td></tr>
+          <tr><th scope="row">Military reconnaissance and mission planning</th><td>&#9679;</td><td>&#9679;</td><td></td><td></td><td>&#9679;</td><td>&#9679;</td><td>&#9679;</td><td>&#9679;</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="cta-line"><a class="go" href="workspace.html">Open the workspace</a> <span class="note">Everything you measure exports as GeoJSON and CSV.</span></p>
+  </section>
+
+  <section id="limits" class="band" aria-labelledby="limitsTitle">
+    <h2 id="limitsTitle">Limits</h2>
+    <div class="cols">
+      <ul class="prose limits">
+        <li><b>One angle.</b> A single pass sees the far field only at a grazing angle, and never sees the back of anything. That's physics, not software.</li>
+        <li><b>The sky crop.</b> Frames with a horizon lose their top third to keep the sky out of the depth maps, and with it most of the distant houses.</li>
+        <li><b>Seams.</b> Each patch of texture comes from a different photo, so exposure changes can show at patch borders.</li>
+        <li><b>Scale.</b> Without GPS, or a gimbal angle in the telemetry, heights are only as good as the lens estimate.</li>
+      </ul>
+      <aside class="margin note">We'd rather show these than hide them. The workspace labels every number with where its scale came from.</aside>
+    </div>
+  </section>
+
+</main>
+
+<footer class="colophon">
+  <p>Tesseract, for Smart India Hackathon 2026, problem statement SIH26158 from the National Technical Research Organisation.</p>
+  <p class="note">Built with MapAnything (Apache 2.0), COLMAP (BSD), OpenMVS (AGPL 3.0, run as a separate program) and three.js (MIT). Runs offline.</p>
+</footer>
+
+<script src="data/model.js"></script>
+<script src="dist/site.js"></script>
+</body>
+</html>
