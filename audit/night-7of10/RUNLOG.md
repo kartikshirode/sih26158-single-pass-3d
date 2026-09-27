@@ -100,3 +100,21 @@ the fall from the 72.40% that Codex quoted (FINDINGS.md, from the final suite) i
 tonight's doing: it comes with the current geometry. Per view it runs from 28% at the ends
 of the pan to 90% in the middle. Not investigated further tonight: the demo clip is the
 target, and B2's 80% bar stays open.
+
+## MapAnything's scale as a metre estimate for clips without GPS
+
+B1 has no GPS, so every length is in model units. MapAnything is trained to predict
+metric depth, so its camera centres might give an approximate metre scale. Test
+(`out/codex/next7/ma_scale.py`): MapAnything on the same 60 spread views S3 uses, a
+similarity from the COLMAP centres to MapAnything's, and on the georeferenced runs the
+same fit to the GNSS-fitted centres as the reference.
+
+| Run | MapAnything, m per unit | GNSS, m per unit | Error |
+|---|---:|---:|---:|
+| codex-b3-v2 | 1.49 | 63.58 | -97.7% |
+| codex-b5v-v3 | 1.59 | 64.05 | -97.5% |
+| night-b1 | 3.69 | none | unknown |
+
+Rejected: on the synthetic flights (110 m up) MapAnything's scale is 40 times too small,
+so nothing on a real clip could be trusted from it. B1 keeps model units, and the
+workspace's one-length calibration is the only way to metres without GPS.
