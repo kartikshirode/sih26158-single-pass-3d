@@ -68,6 +68,7 @@ out/             every run artefact — gitignored, regenerable
 |---|---|---|
 | Everything, one clip | `python tesseract.py run <video> [--adopt out/<run>] [--calibration-run <run>]` | local |
 | Everything, no data | `python tesseract.py run synthetic --gnss rtk` | local, seconds |
+| Everything, one clip, on a local NVIDIA GPU | `python tesseract.py run <video> --geometry local --horizon crop` with `SIH_COLMAP` and `SIH_OPENMVS` set (`research/09-gpu-pipeline.md` section 9) | local GPU, ~10 min for a 10-min clip (predicted) |
 | Screen only | `python tesseract.py screen data/cand/*.webm` | local |
 | Calibrate from a known length | `python tesseract.py calibrate <run> --points X1 Y1 Z1 X2 Y2 Z2 --length 21.0 --what "ecoduct waist"` | local |
 | Check a finished run | `python tesseract.py verify out/runs/<run>` | local |
@@ -197,7 +198,7 @@ rediscovering any of these.
 | Apache MapAnything trained on 6 datasets, not 13 | Probably weaker | EXP-02 |
 | Consumer GNSS caps absolute at ~4 m | R-O3 unreachable without RTK | Report both numbers |
 | ICP alignment flatters 12.8× | Looks like a pass | Harness reports both |
-| 7-DoF fit on a straight pass | Scene thrown 267–311 m | 5-DOF only (ADR-008) |
+| 7-DoF fit on a straight pass | Scene thrown 267-311 m | Never 7-DOF: level first, then yaw and slope from the track, roll from gravity (ADR-008, ADR-026) |
 | RANSAC threshold below the noise floor | Worse than no RANSAC | MAD-derived threshold |
 | PROJ skips the geoid silently | 24–98 m vertical error in India | `allow_ballpark=False`, grid check |
 | EGM96 vs EGM2008 differ 1.68 m (Amritsar) | Blows the budget alone | EPSG:9518 |

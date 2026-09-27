@@ -185,7 +185,8 @@ def parse_dji_srt(path: str) -> list[dict]:
     return out
 
 
-def telemetry_for_frames(records: list[dict], frame_idx, fps: float) -> list[dict]:
+def telemetry_for_frames(records: list[dict], frame_idx, fps: float,
+                         times_s=None) -> list[dict]:
     """
     The telemetry record for each source frame index, keyed the way the file allows.
 
@@ -195,7 +196,12 @@ def telemetry_for_frames(records: list[dict], frame_idx, fps: float) -> list[dic
     lookup on a 30 fps clip would hand frame 300 the record from five minutes in.
 
       1. FrameCnt / SrtCnt, 1-based, when the records carry it;
-      2. else nearest by time, from the timing line at the clip's frame rate;
+      2. else nearest by time, from the timing line. A frame's time is its
+         presentation timestamp from `times_s` (seconds from the first frame) when
+         the caller has it, and index / fps only when it does not. Phones and some
+         drones record variable frame rate, where index / average rate drifts: a
+         frame shown at 2.0 s after a rate change would be looked up at 1.0 s and
+         handed a plausible but wrong fix;
       3. else nothing, rather than a guess.
     """
     if not records:
@@ -203,13 +209,14 @@ def telemetry_for_frames(records: list[dict], frame_idx, fps: float) -> list[dic
     by_cnt = {r["frame_cnt"]: r for r in records if "frame_cnt" in r}
     if len(by_cnt) == len(records):
         return [by_cnt.get(int(fi) + 1, {}) for fi in frame_idx]
-    if fps and fps > 0 and all("t_us" in r for r in records):
+    if (times_s is not None or (fps and fps > 0)) and all("t_us" in r for r in records):
         ts = np.asarray([r["t_us"] for r in records], np.float64)
         order = np.argsort(ts)
         ts = ts[order]
         out = []
-        for fi in frame_idx:
-            t = int(fi) / fps * 1e6
+        for i, fi in enumerate(frame_idx):
+            t_s = times_s[i] if times_s is not None else None
+            t = (t_s if t_s is not None else int(fi) / fps) * 1e6
             j = int(np.searchsorted(ts, t))
             cands = [k for k in (j - 1, j) if 0 <= k < len(ts)]
             k = min(cands, key=lambda k: abs(ts[k] - t))
@@ -246,9 +253,40 @@ def is_slate(bgr_small: np.ndarray, dark_thr: float = 42.0,
     return (g.mean() < dark_thr) and (float((g < dark_thr).mean()) > flat_frac)
 
 
+def letterbox_rows(bgr_small: np.ndarray, dark: float = 20.0,
+                   max_frac: float = 0.2) -> tuple[int, int]:
+    """
+    Rows of black bar at the top and bottom of a letterboxed frame, as (top, bottom).
+
+    Re-edited clips often carry them: the demo clip has 34 black rows above and below
+    its 1920x1012 picture. They matter twice. The sky test below anchors on the top
+    edge, and a black bar there hid the sky of every frame (screen said sky 0.0 and
+    horizon 0.0 on a clip whose top 15% is sky). And a bar is a perfectly static,
+    textureless band that no reconstruction can use.
+    """
+    v = bgr_small.max(axis=2).mean(axis=1)
+    lim = int(len(v) * max_frac)
+    lit_top, lit_bot = v[:lim] >= dark, v[::-1][:lim] >= dark
+    top = int(np.argmax(lit_top)) if lit_top.any() else 0
+    bot = int(np.argmax(lit_bot)) if lit_bot.any() else 0
+    return top, bot
+
+
+def letterbox_box(frames_small: list) -> tuple:
+    """Crop box (top, bottom, left, right fractions) removing letterbox bars, clip-wide."""
+    if not frames_small:
+        return (0.0, 0.0, 0.0, 0.0)
+    h = frames_small[0].shape[0]
+    med = np.median(np.asarray([letterbox_rows(f) for f in frames_small]), axis=0)
+    # The median across the clip, so a fade or a dark frame cannot set the crop, plus
+    # one row, because the bar's edge row is usually a blend.
+    t, b = (med + (med > 0)).astype(int)
+    return (float(t) / h, float(b) / h, 0.0, 0.0)
+
+
 def sky_mask(bgr_small: np.ndarray) -> np.ndarray:
     """
-    Sky: bright, low-saturation, AND connected to the top edge of the frame.
+    Sky: bright, low-saturation, AND connected to the top edge of the picture.
 
     The connectivity term is not cosmetic. Brightness-and-saturation alone calls
     pale arid ground sky - graded desert fill has exactly the signature, high value
@@ -259,10 +297,12 @@ def sky_mask(bgr_small: np.ndarray) -> np.ndarray:
     """
     hsv = cv2.cvtColor(bgr_small, cv2.COLOR_BGR2HSV)
     raw = ((hsv[..., 1] < 70) & (hsv[..., 2] > 120)).astype(np.uint8)
-    if not raw[0].any():
+    # The top of the PICTURE, below any letterbox bar, is the edge sky touches.
+    t0 = letterbox_rows(bgr_small)[0]
+    if not raw[t0].any():
         return np.zeros(raw.shape, bool)
     n, lab = cv2.connectedComponents(raw, connectivity=8)
-    top = np.unique(lab[0][raw[0] > 0])
+    top = np.unique(lab[t0][raw[t0] > 0])
     return np.isin(lab, top[top > 0])
 
 
@@ -298,15 +338,24 @@ def horizon_present(bgr_small: np.ndarray, min_sky: float = 0.06) -> bool:
     past the edge of a roof in a steep oblique is not, because it does not span
     the frame width.
     """
+    return sky_and_horizon(bgr_small, min_sky)[1]
+
+
+def sky_and_horizon(bgr_small: np.ndarray, min_sky: float = 0.06) -> tuple[float, bool]:
+    """
+    sky_fraction and horizon_present from ONE sky mask.
+
+    S1 called both on every frame and each built its own mask: 6 of the 24 ms spent
+    per frame on the demo clip, half of it duplicated.
+    """
     m = sky_mask(bgr_small)
-    h, w = m.shape
-    if m.mean() < min_sky:
-        return False
+    frac = float(m.mean())
+    if frac < min_sky:
+        return frac, False
     # Row-wise sky coverage; a horizon shows as rows that are almost entirely sky
     # at the top, falling away sharply at one row.
-    rows = m.mean(axis=1)
-    spanning = rows > 0.80
-    return bool(spanning[: int(h * 0.75)].any())
+    spanning = m.mean(axis=1) > 0.80
+    return frac, bool(spanning[: int(m.shape[0] * 0.75)].any())
 
 
 def horizon_row(bgr_small: np.ndarray, purity: float = 0.70) -> int | None:
@@ -322,12 +371,13 @@ def horizon_row(bgr_small: np.ndarray, purity: float = 0.70) -> int | None:
     """
     m = sky_mask(bgr_small)
     h = m.shape[0]
-    cum = np.cumsum(m.mean(axis=1)) / np.arange(1, h + 1)
+    t0 = letterbox_rows(bgr_small)[0]           # count from the top of the picture
+    cum = np.cumsum(m[t0:].mean(axis=1)) / np.arange(1, h - t0 + 1)
     good = np.flatnonzero(cum >= purity)
     if len(good) == 0:
         return None
     r = int(good[-1])
-    return r if r >= h * 0.03 else None
+    return t0 + r if r >= h * 0.03 else None
 
 
 def horizon_crop_fraction(frames_small: list, margin: float = 0.04) -> float:
@@ -375,7 +425,19 @@ def static_overlay_mask(frames_small: list, std_thr: float = 3.0,
     q25, q50, q75 = np.percentile(stack, [25, 50, 75], axis=0)
     spread = q75 - q25
     grad = cv2.Laplacian(q50.astype(np.float32), cv2.CV_32F)
-    return (spread < std_thr) & (np.abs(grad) > grad_thr)
+    mask = (spread < std_thr) & (np.abs(grad) > grad_thr)
+    # A letterbox bar's edge is static and sharp too. Left in, it put "overlay" at the
+    # very top and bottom of the demo clip, no edge crop under 12% could clear both,
+    # and the real watermark above the bottom bar was kept in every keyframe.
+    # The clip's median bars, as letterbox_box takes them: one dark sample (a fade)
+    # measured none and brought the bar edges back.
+    t, b = np.median(np.asarray([letterbox_rows(f) for f in frames_small]),
+                     axis=0).astype(int)
+    if t:
+        mask[:t + 2] = False
+    if b:
+        mask[mask.shape[0] - b - 2:] = False
+    return mask
 
 
 def overlay_crop_box(mask: np.ndarray, max_trim: float = 0.12) -> tuple:
@@ -463,12 +525,49 @@ class IngestResult:
     stats: dict = field(default_factory=dict)
 
 
+def select_keyframes(ok, usable, flows, scores, flow_budget: float, target: int, *,
+                     bridge: float = 1.5) -> tuple[np.ndarray, int]:
+    """
+    Keyframes along the clip: a frame that passed the gates (`ok`) once the flow since
+    the last keyframe reaches `flow_budget`. Where none arrives before `bridge` budgets,
+    the sharpest `usable` frame past one budget is taken, so the chain of shared views
+    never breaks. Returns the indices and how many were bridged.
+    """
+    ok, usable = np.asarray(ok, bool), np.asarray(usable, bool)
+    scores = np.asarray(scores, float)
+    cum = np.cumsum(np.asarray(flows, float))
+    first = np.flatnonzero(ok)
+    if not len(first):
+        return np.zeros(0, int), 0
+    last = int(first[0])
+    selected, bridged = [last], 0
+    for j in np.flatnonzero(usable):
+        if j <= last:
+            continue
+        gap = cum[j] - cum[last]
+        if ok[j] and gap >= flow_budget:
+            last = int(j)
+        elif gap >= bridge * flow_budget:
+            span = np.arange(last + 1, j + 1)
+            span = span[usable[span] & (cum[span] - cum[last] >= flow_budget)]
+            last = int(span[np.argmax(scores[span])])
+            bridged += 1
+        else:
+            continue
+        selected.append(last)
+        if len(selected) >= target:
+            break
+    return np.asarray(selected), bridged
+
+
 def ingest_video(path: str, *, target_keyframes: int = 600,
                  blur_reject_pct: float = 25.0, max_sky: float = 0.15,
                  horizon_policy: str = "reject", single_shot: bool = True,
                  skip_start_s: float = 0.0, end_s: float | None = None,
-                 analyse_scale: float = 0.25,
+                 analyse_scale: float = 0.25, analyse_every: int | None = None,
+                 flow_method: str = "dis", workers: int | None = None,
                  min_flow_px: float = 1.0, srt_path: str | None = None,
+                 bridge: float = 1.5, bridge_max_sky: float = 0.5,
                  progress: bool = True) -> IngestResult:
     """
     Decode `path`, score every frame, and return the selected keyframes.
@@ -484,15 +583,32 @@ def ingest_video(path: str, *, target_keyframes: int = 600,
       3. drop frames that are mostly sky or blown out by flare         (max_sky)
       4. drop the blurriest `blur_reject_pct` (percentile, not a constant)
       5. require accumulated optical flow between consecutive keyframes, so each
-         pair carries real baseline instead of being near-duplicates
+         pair carries real baseline instead of being near-duplicates, and bridge any
+         stretch the gates emptied with its sharpest frame              (bridge)
+
+    `analyse_every` scores one frame in N (all are still decoded, which the codec needs
+    anyway); flow is then measured between the scored frames, so the accumulated
+    baseline means the same thing. The default scores about 15 frames a second: on
+    the 10-minute test clip that halved S1 (240 s to 108 s) and moved the chosen
+    keyframes by at most two frames, where keyframes are ~30 frames apart.
+    `flow_method` "dis" is OpenCV's DIS flow at its ultrafast preset; "farneback" is
+    the original. `workers` scans time segments on
+    threads; the default uses them for constant-rate clips of a minute or more.
     """
     import av
 
     container = av.open(path)
     stream = container.streams.video[0]
+    # Frame threading: the decoder was single-threaded by default.
+    stream.thread_type = "AUTO"
     fps = float(stream.average_rate or 30.0)
     W, H = stream.codec_context.width, stream.codec_context.height
+    # Skip and end are compared with each frame's presentation time when the stream
+    # has one; frame counts at the average rate are only the fallback. On a
+    # variable-frame-rate clip the two disagree, and the time is what the caller means.
     skip_n = int(skip_start_s * fps)
+    if analyse_every is None:
+        analyse_every = max(1, int(round(fps / 15.0)))
     # Ending early is a real lever, not a convenience. Keyframe budget is fixed by
     # the time budget, so halving the covered ground doubles the view density over
     # what remains - which is what resolves structure standing off the ground.
@@ -505,36 +621,23 @@ def ingest_video(path: str, *, target_keyframes: int = 600,
     # frames, so the analysis copy is kept here and the selected frames are decoded
     # again in a second pass: O(clip) memory at 1/16 the constant, O(keyframes) at full
     # resolution.
-    scores, skies, slates, horiz, flows, kept_idx, smalls, hists =         [], [], [], [], [], [], [], []
-    prev_small = None
-    n = 0
-
-    for frame in container.decode(video=0):
-        if end_n is not None and n >= end_n:
-            n += 1
-            break
-        img = frame.to_ndarray(format="bgr24")
-        if n >= skip_n:
-            small = cv2.resize(img, (int(W * analyse_scale), int(H * analyse_scale)))
-            gray = cv2.cvtColor(small, cv2.COLOR_BGR2GRAY)
-            scores.append(sharpness(gray))
-            skies.append(sky_fraction(small))
-            slates.append(is_slate(small))
-            horiz.append(horizon_present(small))
-            hists.append(frame_hist(small))
-            if prev_small is not None:
-                fl = cv2.calcOpticalFlowFarneback(prev_small, gray, None,
-                                                  0.5, 2, 13, 2, 5, 1.1, 0)
-                flows.append(float(np.linalg.norm(fl, axis=2).mean()))
-            else:
-                flows.append(0.0)
-            prev_small = gray
-            kept_idx.append(n)
-            smalls.append(small)
-        n += 1
-        if progress and n % 150 == 0:
-            print(f"    decoded {n} frames", end="\r", flush=True)
     container.close()
+    # Parallel scoring over time segments for long constant-rate clips; the one
+    # sequential pass otherwise. They select the same frames (research/09 section 5).
+    workers = _scan_workers(path, fps, workers)
+    scan = None
+    if workers > 1:
+        scan = _scan_parallel(path, W, H, fps, workers, analyse_scale=analyse_scale,
+                              every=analyse_every, flow_method=flow_method,
+                              skip_start_s=skip_start_s, end_s=end_s)
+    if scan is None:
+        workers = 1
+        scan = _scan(path, W, H, fps, analyse_scale=analyse_scale, every=analyse_every,
+                     flow_method=flow_method, skip_start_s=skip_start_s, end_s=end_s,
+                     skip_n=skip_n, end_n=end_n, progress=progress)
+    scores, skies, slates, horiz = scan["score"], scan["sky"], scan["slate"], scan["horiz"]
+    flows, kept_idx, smalls, hists = scan["flow"], scan["n"], scan["small"], scan["hist"]
+    times, n = scan["t"], scan["decoded"]
 
     scores  = np.asarray(scores);  skies = np.asarray(skies)
     slates  = np.asarray(slates, dtype=bool)
@@ -563,6 +666,8 @@ def ingest_video(path: str, *, target_keyframes: int = 600,
     ar = H / W
     sub = [cv2.resize(smalls[i], (480, int(480 * ar))) for i in idx_shot]
     crop = overlay_crop_box(static_overlay_mask(sub))
+    # Letterbox bars go too, whatever the overlay test found.
+    crop = tuple(max(a, b) for a, b in zip(crop, letterbox_box(sub)))
 
     ok = in_shot.copy()
     if horizon_policy == "reject":
@@ -573,11 +678,16 @@ def ingest_video(path: str, *, target_keyframes: int = 600,
         crop = (max(crop[0], ht), crop[1], crop[2], crop[3])
         # Re-score sky and blur on the CROPPED frame - the uncropped numbers describe
         # an image we are no longer using, and the sky gate would reject everything.
-        for j in np.flatnonzero(in_shot):
-            c = apply_crop(cv2.resize(smalls[j], (int(W * analyse_scale),
-                                                  int(H * analyse_scale))), crop)
-            skies[j] = sky_fraction(c)
-            scores[j] = sharpness(cv2.cvtColor(c, cv2.COLOR_BGR2GRAY))
+        # On threads, like the scan: this loop alone was 30 s of a 66 s S1 on the
+        # 10-minute clip. (It also resized each frame to the size it already had.)
+        from concurrent.futures import ThreadPoolExecutor
+
+        def rescore(j):
+            c = apply_crop(smalls[j], crop)
+            return j, sky_fraction(c), sharpness(cv2.cvtColor(c, cv2.COLOR_BGR2GRAY))
+        with ThreadPoolExecutor(max_workers=max(workers, 1) + 2) as ex:
+            for j, sk, sc in ex.map(rescore, np.flatnonzero(in_shot), chunksize=64):
+                skies[j], scores[j] = sk, sc
     ok &= skies <= max_sky                             # 3. sky / flare washout
     ok &= ~slates
     blur_thr = np.percentile(scores[ok], blur_reject_pct) if ok.any() else 0.0
@@ -589,26 +699,32 @@ def ingest_video(path: str, *, target_keyframes: int = 600,
             "every frame rejected. Check out/screen.json - this clip is probably "
             "not a survey pass (horizon in frame, or mostly sky).")
 
-    # 5. baseline budget
+    # 5. baseline budget, and no hole in the chain. The gates used to be absolute: on
+    #    the demo clip the sky gate dropped frames 82-144 (pale sand read as sky, 0.15
+    #    to 0.19 against 0.15) and the percentile blur gate dropped 240-306, a stretch
+    #    that was only less textured. Each hole cut the chain of shared views, and the
+    #    poses on either side came out as separate pieces. Now a gated frame is only
+    #    preferred: once the flow since the last keyframe passes `bridge` budgets with no
+    #    frame passing the gates, the sharpest frame past one budget is taken instead.
     need = max(len(idx_ok) / max(target_keyframes, 1), 1.0)
     flow_budget = max(np.median(flows[idx_ok]) * need, min_flow_px)
-    selected, acc = [int(idx_ok[0])], 0.0
-    for j in idx_ok[1:]:
-        acc += flows[j]
-        if acc >= flow_budget:
-            selected.append(int(j)); acc = 0.0
-        if len(selected) >= target_keyframes:
-            break
-    selected = np.asarray(selected)
+    usable = in_shot & ~slates & (skies <= max(bridge_max_sky, max_sky))
+    selected, bridged = select_keyframes(ok, usable, np.where(in_shot, flows, 0.0), scores,
+                                         flow_budget, target_keyframes, bridge=bridge)
 
     srt = srt_path or (os.path.splitext(path)[0] + ".SRT")
     tel_all = parse_dji_srt(srt)
-    telemetry = telemetry_for_frames(tel_all, [int(kept_idx[s_]) for s_ in selected], fps)
+    # Each keyframe's own presentation time, not its index at the average rate
+    # (audit F-13). A frame with no timestamp falls back to index / fps.
+    telemetry = telemetry_for_frames(tel_all, [int(kept_idx[s_]) for s_ in selected], fps,
+                                     times_s=[times[s_] for s_ in selected])
 
     stats = {
         "video": os.path.basename(path), "resolution": f"{W}x{H}",
         "fps": round(fps, 2), "frames_decoded": int(n),
-        "frames_analysed": int(len(scores)),
+        "variable_frame_rate": _is_vfr(times, fps, analyse_every),
+        "frames_analysed": int(len(scores)), "analyse_every": int(analyse_every),
+        "scan_workers": int(workers),
         "shots_detected": len(shots),
         "shot_kept_frames": int(in_shot.sum()),
         "overlay_crop_trbl": [round(float(x), 3) for x in crop],
@@ -624,6 +740,7 @@ def ingest_video(path: str, *, target_keyframes: int = 600,
         "rejected_blur": int((scores < blur_thr).sum()),
         "median_sky_fraction": round(float(np.median(skies[in_shot])), 3),
         "flow_budget_px": round(float(flow_budget), 2),
+        "bridged_keyframes": int(bridged),
         "has_gps_sidecar": bool(tel_all), "srt_records": len(tel_all),
     }
     # Second pass for the frames that survive. Only these are needed at full
@@ -631,15 +748,288 @@ def ingest_video(path: str, *, target_keyframes: int = 600,
     # clip. One extra sequential decode (about 20 s on a 114 s 1080p clip) in exchange
     # for memory that no longer grows with clip length at full resolution.
     want = np.asarray(kept_idx)[selected]
-    full = _decode_frames(path, want)
-    return IngestResult(
-        keyframe_indices=want,
-        frames=[apply_crop(full[i], crop) for i in want],
-        telemetry=telemetry, stats=stats)
+    # The analysis copies are done with; on the 10-minute test clip they and the full
+    # frames together peaked at 11.8 GB.
+    del smalls, sub
+    # After a parallel scan the frame numbers come from timestamps, so the sequential
+    # fallback must number frames the same way, not by decode count (audit 2).
+    full = ((_decode_frames_parallel(path, want, crop, fps, workers) or
+             _decode_frames(path, want, crop, pts_fps=fps)) if workers > 1
+            else _decode_frames(path, want, crop))
+    return IngestResult(keyframe_indices=want, frames=[full[i] for i in want],
+                        telemetry=telemetry, stats=stats)
 
 
-def _decode_frames(path, indices):
-    """Decode exactly `indices` (original frame numbers) at full resolution.
+def _score(small, gray, prev_gray, dis):
+    """The per-frame S1 measurements, shared by the sequential and parallel scans."""
+    sky, hz = sky_and_horizon(small)
+    if prev_gray is None:
+        flow = 0.0
+    else:
+        fl = (dis.calc(prev_gray, gray, None) if dis is not None else
+              cv2.calcOpticalFlowFarneback(prev_gray, gray, None,
+                                           0.5, 2, 13, 2, 5, 1.1, 0))
+        flow = float(np.linalg.norm(fl, axis=2).mean())
+    return sharpness(gray), sky, is_slate(small), hz, frame_hist(small), flow
+
+
+class _FreshDIS:
+    """
+    DIS flow with no memory between calls.
+
+    Farneback was 60% of S1's time on the demo clip (14.4 of 24 ms per frame at
+    480x270); DIS at its ultrafast preset measures the same mean motion in pixels.
+    But one DIS object carries state from call to call: on a small test clip the same
+    pair gave 1.17 px after a run of calls and 3.41 px from a fresh object, so a
+    threaded scan disagreed with the sequential one at every segment start. A new
+    object per pair costs microseconds and makes the result depend on the pair alone
+    (on the demo's 480x270 frames the two agree exactly).
+    """
+
+    def calc(self, a, b, flow):
+        return cv2.DISOpticalFlow_create(
+            cv2.DISOPTICAL_FLOW_PRESET_ULTRAFAST).calc(a, b, flow)
+
+
+def _new_dis(flow_method: str):
+    return _FreshDIS() if flow_method == "dis" else None
+
+
+_SCAN_KEYS = ("n", "t", "score", "sky", "slate", "horiz", "hist", "flow", "small")
+
+
+def _scan(path, W, H, fps, *, analyse_scale, every, flow_method, skip_start_s, end_s,
+          skip_n, end_n, progress=False) -> dict:
+    """One sequential pass: every frame decoded, one in `every` scored. VFR-safe."""
+    import av
+
+    out = {k: [] for k in _SCAN_KEYS}
+    container = av.open(path)
+    container.streams.video[0].thread_type = "AUTO"
+    dis, prev, n, in_range = _new_dis(flow_method), None, 0, 0
+    size = (int(W * analyse_scale), int(H * analyse_scale))
+    # A microsecond of slack on both limits: with a first timestamp other than 0,
+    # t - t_first lands just under whole seconds, and the frame at exactly 1.0 s failed
+    # "t >= 1.0" here while _scan_parallel's frame numbers counted it (audit 2).
+    eps = 1e-6
+    for n, frame, t_rel in timed_frames(container):
+        if end_s and (t_rel >= end_s - eps if t_rel is not None else n >= end_n):
+            n += 1
+            break
+        if (t_rel >= skip_start_s - eps) if t_rel is not None else (n >= skip_n):
+            in_range += 1
+            if (in_range - 1) % max(every, 1) == 0:
+                small = cv2.resize(frame.to_ndarray(format="bgr24"), size)
+                gray = cv2.cvtColor(small, cv2.COLOR_BGR2GRAY)
+                vals = _score(small, gray, prev, dis)
+                for k, v in zip(_SCAN_KEYS, (n, t_rel) + vals + (small,)):
+                    out[k].append(v)
+                prev = gray
+        n += 1
+        if progress and n % 150 == 0:
+            print(f"    decoded {n} frames", end="\r", flush=True)
+    container.close()
+    out["decoded"] = n
+    return out
+
+
+def _scan_workers(path: str, fps: float, workers: int | None) -> int:
+    """How many parallel scans: 1 for short or variable-rate clips (see _scan_parallel)."""
+    if workers is not None:
+        return max(1, int(workers))
+    import av
+
+    c = av.open(path)
+    try:
+        st = c.streams.video[0]
+        dur = float(c.duration / av.time_base) if c.duration else 0.0
+        if dur < 60.0 or not fps:
+            return 1
+        ts = []
+        for fr in c.decode(video=0):
+            if fr.time is None:
+                return 1
+            ts.append(fr.time)
+            if len(ts) >= 90:
+                break
+    finally:
+        c.close()
+    d = np.diff(np.asarray(ts))
+    if len(d) < 10 or np.abs(d - 1.0 / fps).max() > 0.25 / fps:
+        return 1
+    return int(min(10, max(2, (os.cpu_count() or 4) // 2)))
+
+
+def _scan_parallel(path, W, H, fps, workers, *, analyse_scale, every, flow_method,
+                   skip_start_s, end_s) -> dict | None:
+    """
+    The same scan in `workers` time segments on threads, or None to fall back.
+
+    S1 on a 10-minute clip was one thread decoding and scoring 18,000 frames. PyAV,
+    OpenCV and most of numpy release the GIL, so threads each seeking to their own
+    segment scale without copying frames between processes. Frame numbers come from
+    presentation times, which is exact only at a constant frame rate: _scan_workers
+    probes for that, and a segment whose decoded count does not match its span sends
+    the whole scan back to the sequential pass rather than guessing.
+    """
+    import av
+    from concurrent.futures import ThreadPoolExecutor
+
+    c = av.open(path)
+    st = c.streams.video[0]
+    tb, t_first = st.time_base, None
+    for fr in c.decode(video=0):
+        t_first = fr.time
+        break
+    total = st.frames or int(round(float(c.duration / av.time_base) * fps))
+    c.close()
+    if t_first is None or not total:
+        return None
+    n_skip = int(np.ceil(skip_start_s * fps - 1e-6)) if skip_start_s else 0
+    n_end = min(total, int(np.ceil(end_s * fps - 1e-6))) if end_s else total
+    span = (n_end - n_skip + every - 1) // every          # scored frames in range
+    per = -(-span // workers) * every                     # frames per segment, stride-aligned
+    bounds = [(n_skip + k * per, min(n_skip + (k + 1) * per, n_end))
+              for k in range(workers) if n_skip + k * per < n_end]
+    size = (int(W * analyse_scale), int(H * analyse_scale))
+
+    def seg(lo_hi):
+        lo, hi = lo_hi
+        first = lo - every if lo > n_skip else lo         # one earlier frame for the flow
+        out = {k: [] for k in _SCAN_KEYS}
+        cont = av.open(path)
+        s = cont.streams.video[0]
+        s.thread_type = "AUTO"
+        s.codec_context.thread_count = 2
+        dis, prev, seen, last = _new_dis(flow_method), None, 0, -1
+        need_ref = lo > n_skip
+        try:
+            target = t_first + max(first - 1, 0) / fps
+            cont.seek(int(target / tb), stream=s, backward=True, any_frame=False)
+            for fr in cont.decode(s):
+                if fr.time is None:
+                    return None
+                t_rel = fr.time - t_first
+                n = int(round(t_rel * fps))
+                if n < first:
+                    continue
+                if n >= hi:
+                    break
+                if n <= last:                                # duplicate timestamp
+                    return None
+                last = n
+                if n >= lo:
+                    seen += 1
+                if (n - n_skip) % every:
+                    continue
+                small = cv2.resize(fr.to_ndarray(format="bgr24"), size)
+                gray = cv2.cvtColor(small, cv2.COLOR_BGR2GRAY)
+                if n < lo:                                    # the flow reference only
+                    prev = gray
+                    continue
+                if need_ref and prev is None:
+                    # The seek landed past the reference frame, so this segment's
+                    # first flow would silently read 0. Fall back (audit 2).
+                    return None
+                vals = _score(small, gray, prev, dis)
+                for k, v in zip(_SCAN_KEYS, (n, t_rel) + vals + (small,)):
+                    out[k].append(v)
+                prev = gray
+        finally:
+            cont.close()
+        return out if seen == hi - lo else None
+
+    with ThreadPoolExecutor(max_workers=len(bounds)) as ex:
+        parts = list(ex.map(seg, bounds))
+    if any(p is None for p in parts):
+        return None
+    out = {k: [v for p in parts for v in p[k]] for k in _SCAN_KEYS}
+    out["decoded"] = n_end
+    return out
+
+
+def timed_frames(container):
+    """
+    Yield (decode index, frame, seconds since the first frame's presentation time).
+
+    The time is None for a frame without a timestamp. It is the presentation time,
+    not index / average rate: the two agree only at a constant frame rate.
+    """
+    t_first = None
+    for n, frame in enumerate(container.decode(video=0)):
+        t = frame.time
+        if t is not None and t_first is None:
+            t_first = t
+        yield n, frame, (t - t_first) if (t is not None and t_first is not None) else None
+
+
+def _is_vfr(times, fps: float, every: int = 1) -> bool | None:
+    """
+    True when frame spacing departs from the average rate; None without timestamps.
+
+    `times` holds the scored frames only, `every` apart. Comparing their gaps with
+    1 / fps called every clip above ~23 fps variable once S1 began scoring every
+    second frame.
+    """
+    t = np.asarray([x for x in times if x is not None], np.float64)
+    if len(t) < 3 or not fps:
+        return None
+    step = every / fps
+    return bool(np.abs(np.diff(t) - step).max() > 0.5 / fps)
+
+
+def _decode_frames_parallel(path, indices, crop, fps, workers) -> dict | None:
+    """
+    _decode_frames over `workers` contiguous groups of the wanted frames, on threads.
+
+    Only called after _scan_workers found a constant frame rate, since frame numbers
+    come from presentation times; any frame not found returns None and the caller
+    falls back to the sequential pass.
+    """
+    import av
+    from concurrent.futures import ThreadPoolExecutor
+
+    want = sorted(int(i) for i in indices)
+    groups = [g for g in np.array_split(np.asarray(want), workers) if len(g)]
+    c = av.open(path)
+    t_first = next((fr.time for fr in c.decode(video=0)), None)
+    c.close()
+    if t_first is None:
+        return None
+
+    def part(g):
+        need, got = set(int(i) for i in g), {}
+        cont = av.open(path)
+        s = cont.streams.video[0]
+        s.thread_type = "AUTO"
+        s.codec_context.thread_count = 2
+        try:
+            cont.seek(int((t_first + max(int(g[0]) - 1, 0) / fps) / s.time_base),
+                      stream=s, backward=True, any_frame=False)
+            for fr in cont.decode(s):
+                if fr.time is None:
+                    return None
+                n = int(round((fr.time - t_first) * fps))
+                if n > g[-1]:
+                    break
+                if n in need:
+                    got[n] = apply_crop(fr.to_ndarray(format="bgr24"), crop).copy()
+        finally:
+            cont.close()
+        return got if len(got) == len(need) else None
+
+    with ThreadPoolExecutor(max_workers=len(groups)) as ex:
+        parts = list(ex.map(part, groups))
+    if any(p is None for p in parts):
+        return None
+    return {k: v for p in parts for k, v in p.items()}
+
+
+def _decode_frames(path, indices, crop=(0.0, 0.0, 0.0, 0.0), pts_fps=None):
+    """Decode exactly `indices` (original frame numbers) at full resolution, cropped.
+
+    Each frame is cropped as it is decoded and kept as its own copy. A crop is a
+    view, and the views used to keep every uncropped 1080p frame alive until the end.
 
     Sequential rather than seeking: these clips are long-GOP VP9/H.264, where seeking
     to an arbitrary frame means decoding from the previous keyframe anyway, and a
@@ -648,15 +1038,21 @@ def _decode_frames(path, indices):
     import av
 
     want = set(int(i) for i in indices)
-    out, n = {}, 0
+    out, n, t_first = {}, 0, None
     container = av.open(path)
+    container.streams.video[0].thread_type = "AUTO"
     try:
-        for frame in container.decode(video=0):
+        for i, frame in enumerate(container.decode(video=0)):
+            n = i
+            if pts_fps and frame.time is not None:          # number frames by timestamp
+                t_first = frame.time if t_first is None else t_first
+                n = int(round((frame.time - t_first) * pts_fps))
             if n in want:
-                out[n] = frame.to_ndarray(format="bgr24")
+                # .copy(), not ascontiguousarray: a top-and-bottom crop is already
+                # contiguous, so that returned the view and kept the frame alive.
+                out[n] = apply_crop(frame.to_ndarray(format="bgr24"), crop).copy()
                 if len(out) == len(want):
                     break
-            n += 1
     finally:
         container.close()
     missing = want - set(out)

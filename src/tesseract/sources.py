@@ -74,8 +74,11 @@ class SyntheticSource(Source):
         return f"synthetic:seed={self.seed},frames={self.n_frames},gnss={self.gnss}"
 
     def inputs(self) -> list[dict[str, Any]]:
+        # Every parameter that changes the scene or its GNSS, since the orchestrator keys
+        # resume on this list: a field left out here is a change resume cannot see.
         return [{"path": "(synthetic)", "seed": self.seed, "frames": self.n_frames,
-                 "gnss_class": self.gnss, "pitch_deg": self.pitch_deg}]
+                 "gnss_class": self.gnss, "pitch_deg": self.pitch_deg,
+                 "site": list(self.site)}]
 
     # ---- the world, built once per process
     def world(self) -> dict[str, Any]:

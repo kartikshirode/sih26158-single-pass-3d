@@ -400,3 +400,64 @@ def robust_yaw_sim3(src: np.ndarray, dst: np.ndarray, *, with_scale: bool = True
         best_inl = np.ones(n, bool)
     R, t, s = yaw_only_sim3(src[best_inl], dst[best_inl], with_scale=with_scale)
     return R, t, s, best_inl
+
+
+def _track_dir(X: np.ndarray) -> np.ndarray:
+    """Principal direction of a track, pointing from its first sample to its last."""
+    d = np.linalg.svd(X - X.mean(axis=0), full_matrices=False)[2][0]
+    return d if float(np.dot(X[-1] - X[0], d)) > 0 else -d
+
+
+def _track_basis(d: np.ndarray) -> np.ndarray:
+    """Columns: along-track, horizontal cross-track, and their normal (Z-up frame)."""
+    c = np.cross(np.array([0.0, 0.0, 1.0]), d)
+    c = c / np.linalg.norm(c)
+    return np.stack([d, c, np.cross(d, c)], axis=1)
+
+
+def track_sim3(src: np.ndarray, dst: np.ndarray, *, with_scale: bool = True):
+    """
+    Similarity fit for a straight pass: the track's direction, slope included, comes
+    from the GNSS; only the roll ABOUT the track comes from the source's own vertical.
+
+    Both inputs must be Z-up: `src` a levelled reconstruction, `dst` local ENU. The
+    split follows what each side can actually observe. A near-straight track cannot
+    constrain rotation about its own axis (EXP-09), so that roll has to come from
+    gravity. But it constrains the other two rotations directly, and gravity estimated
+    from the scene is weakest exactly there: on the synthetic pass the ground-plane
+    vertical was 0.70 deg off, all of it along the track, which a yaw-only fit carries
+    into the scene as 2.4-3.1 m of error even with RTK. Taking the along-track tilt
+    from the GNSS instead brought RTK back to 0.06-0.09 m, and consumer GNSS from
+    4.4-5.7 m to 2.6-4.8 m, over three seeds (ADR-026).
+
+    Returns (R, t, s) with the same convention as `umeyama`.
+    """
+    src = np.asarray(src, dtype=np.float64)
+    dst = np.asarray(dst, dtype=np.float64)
+    R = _track_basis(_track_dir(dst)) @ _track_basis(_track_dir(src)).T
+    mu_s, mu_d = src.mean(axis=0), dst.mean(axis=0)
+    sc, dc = src - mu_s, dst - mu_d
+    if with_scale:
+        denom = float(np.sum(sc ** 2))
+        s = float(np.sum((R @ sc.T).T * dc) / denom) if denom > 0 else 1.0
+    else:
+        s = 1.0
+    return R, mu_d - s * (R @ mu_s), s
+
+
+def robust_track_sim3(src: np.ndarray, dst: np.ndarray, *, with_scale: bool = True,
+                      thresh: float | str = "auto",
+                      rng: np.random.Generator | None = None, **kw):
+    """
+    `robust_yaw_sim3` picks the GNSS inliers, then `track_sim3` fits on them.
+
+    RANSAC stays on the yaw-only model: it is the stabler hypothesis from three samples,
+    and a wild fix is an outlier to either model. Returns (R, t, s, inliers).
+    """
+    R, t, s, inl = robust_yaw_sim3(src, dst, with_scale=with_scale, thresh=thresh,
+                                   rng=rng, **kw)
+    if inl.sum() < 3:
+        return R, t, s, inl
+    R, t, s = track_sim3(np.asarray(src, float)[inl], np.asarray(dst, float)[inl],
+                         with_scale=with_scale)
+    return R, t, s, inl

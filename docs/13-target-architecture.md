@@ -22,7 +22,7 @@ and dense keyframe sets**, and a **GPU dense path** that is not a hard dependenc
 | S3 Pose + prior | MapAnything, chunked, with priors | ✅ single window, **no priors** (GAP C-5); ✅ windowed stitching (synthetic) | ✅ 45 views, CPU and T4 |
 | S3b BA | — (added by ADR-006) | ✅ COLMAP, CPU | ✅ 0.366 px |
 | S4 Dense + surface | Poisson / TSDF | ✅ OpenMVS densify + Delaunay mesh; ⚠ texture fails | ✅ two clips |
-| S5 Georef | robust 5-DOF, ENU → UTM, geoid | ✅ synthetic path | ✗ **no GNSS clip** |
+| S5 Georef | level, then robust 6-DOF (ADR-026), ENU → UTM, geoid | ✅ synthetic path | ✗ **no GNSS clip** |
 | S6 Export | six formats + viewer | ✅ seven files, one frame | ✅ readback |
 | Scale | implied by the model | ✗ | ✅ **found 5.5× off** (EXP-14) |
 
@@ -61,7 +61,7 @@ flowchart LR
   S3b[S3b Bundle adjustment<br/>COLMAP CPU]
   S4[S4 Dense + surface<br/>CPU: OpenMVS<br/>GPU: COLMAP PatchMatch]
   SC[Scale service<br/>GNSS / known object /<br/>independent witness]
-  S5[S5 Georeference<br/>5-DOF in ENU,<br/>EGM2008, UTM last]
+  S5[S5 Georeference<br/>level, 6-DOF in ENU,<br/>EGM2008, UTM last]
   S6[S6 Export<br/>7 files, one frame]
   QA[QA report<br/>verdicts + provenance]
   VW[Viewer<br/>measure, scale badge,<br/>inferred toggle]
@@ -112,7 +112,7 @@ EXP-03 decides the dense-set size; until it runs, 300 is an allocation, not a fi
 
 Resolves `scale.status` for a run, in priority order:
 
-1. **GNSS** (and RTK): the 5-DOF fit's scale in F6. Status `gnss` / `gnss+rtk`.
+1. **GNSS** (and RTK): the georeferencing fit's scale in F6 (6-DOF, ADR-026). Status `gnss` / `gnss+rtk`.
 2. **Known object**: an operator-confirmed length (viewer tool, `docs/08` S8) or an
    automatic ruler (lane pitch, vehicle length). Status `calibrated`.
 3. **Independent witness**: an altitude-adapted metric-depth model (ADR-024). Used to
@@ -198,6 +198,13 @@ measured.**
 | Reserve | 30 | |
 | **Total** | **900** | **Target ≤ 600** (`docs/11` §6) |
 
+**Measured on one laptop GPU (RTX 4060, 8 GB), 2026-09-25** (`research/09-gpu-pipeline.md`,
+ADR-027): S0 10 s and S1 55 s on a 10-minute 1080p file; on 600 uncropped views MapAnything
+254 s, SIFT, matching, triangulation and BA 86 s, densify with undistortion 104 s and
+meshing 58 s. Predicted total for a 10-minute clip: 8 to 12 minutes. Densify came in at
+0.33 s/view, inside the 0.83 s/view the table below needs; poses at 0.42 s/view on this
+card are over the 300 s line.
+
 The arithmetic that matters: 250 s for 300 dense views is **0.83 s/view** on the densifier,
 against 35 s/view on CPU. That is a ~42× requirement on the GPU path, and EXP-16 is what
 says whether it holds.
@@ -236,7 +243,7 @@ says whether it holds.
 | Keyframe planner: pose set vs dense set | **Built, simple** — even subsampling; EXP-03 has not run, so the dense-set size is still an allocation |
 | S0 screen, S1 ingest | **Built** — wrap the existing, measured screener and ingest |
 | S3 geometry | **Three providers**: `sense` (synthetic), `adopt` (a real run's artefacts), `request` (names the container command and steps the ladder down). The containers themselves are unchanged and still run on Cloud Run |
-| S5 georeference (5-DOF, ENU → UTM, EGM2008) | **Built** — refuses a 7-DOF fit outright |
+| S5 georeference (level first, 6-DOF per ADR-026, ENU → UTM, EGM2008) | **Built**; refuses a 7-DOF fit outright |
 | S5b level (F4 → F5), S6 export, S7 score, S8 verdicts | **Built** |
 | QA report | **Built** — `report.py`, written on every run |
 | CLI: screen / run / calibrate / report / verify | **Built** — `cli.py`, `python tesseract.py` |

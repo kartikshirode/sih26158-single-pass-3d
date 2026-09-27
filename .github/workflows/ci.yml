@@ -38,11 +38,28 @@ jobs:
       - name: telemetry - every DJI SRT family, and the fuzz (EXP-23)
         run: python src/ingest/test_srt.py
 
+      - name: frame gates on letterboxed footage
+        run: python src/ingest/test_frames.py
+
+      - name: local GPU path, the parts that need no GPU
+        run: python src/pipeline/test_local_gpu.py
+
       - name: window fusion
         run: python src/pipeline/test_window_fuse.py
 
+      - name: MVS bundle-adjustment gate (S3b), against the recorded Kolu runs
+        run: python mvs_job/test_ba_gate.py
+
+      - name: MVS principal-point guard on a cropped keyframe
+        run: python src/pipeline/test_colmap_export.py
+
       - name: pipeline - contracts, scale, orchestration, end to end
         run: python src/tesseract/test_tesseract.py
+
+      # The public upload API spends real compute per start. Its guards (one start per
+      # run id, the daily cap, the signed byte bound) run here against in-memory fakes.
+      - name: upload API guards
+        run: node --test "demo/test/*.test.js"
 
       - name: a run must satisfy its own contracts
         run: |

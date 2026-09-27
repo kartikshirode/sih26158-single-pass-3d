@@ -1,0 +1,242 @@
+{
+  "n_views": 568,
+  "keyframe_size": [
+    1920,
+    595
+  ],
+  "options": {
+    "pose_window": 48,
+    "pose_overlap": 8,
+    "intrinsics_views": 60,
+    "sift_features": 4096,
+    "match_overlap": 10,
+    "tri_refinements": 1,
+    "tri_ba_iterations": 3,
+    "ba_iterations": 10,
+    "dense_resolution_level": 1,
+    "dense_views_fuse": 3,
+    "mesh": true
+  },
+  "camera": {
+    "f": 1100.032,
+    "cx": 956.35,
+    "cy": 293.279,
+    "w": 1920,
+    "h": 595,
+    "pp_reference": "keyframe centre",
+    "scale": 0.282,
+    "crop_x0_full": 42.708,
+    "crop_y0_full": 0.0
+  },
+  "intrinsics_fit_residual_px": 0.142,
+  "stitch": [
+    {
+      "window": 1,
+      "views": [
+        40,
+        88
+      ],
+      "scale": 0.75558,
+      "inlier_frac": 0.849
+    },
+    {
+      "window": 2,
+      "views": [
+        80,
+        128
+      ],
+      "scale": 0.6618,
+      "inlier_frac": 0.945
+    },
+    {
+      "window": 3,
+      "views": [
+        120,
+        168
+      ],
+      "scale": 0.59969,
+      "inlier_frac": 0.854
+    },
+    {
+      "window": 4,
+      "views": [
+        160,
+        208
+      ],
+      "scale": 0.51315,
+      "inlier_frac": 0.798
+    },
+    {
+      "window": 5,
+      "views": [
+        200,
+        248
+      ],
+      "scale": 0.45917,
+      "inlier_frac": 0.795
+    },
+    {
+      "window": 6,
+      "views": [
+        240,
+        288
+      ],
+      "scale": 0.47417,
+      "inlier_frac": 0.793
+    },
+    {
+      "window": 7,
+      "views": [
+        280,
+        328
+      ],
+      "scale": 0.45221,
+      "inlier_frac": 0.749
+    },
+    {
+      "window": 8,
+      "views": [
+        320,
+        368
+      ],
+      "scale": 0.4611,
+      "inlier_frac": 0.817
+    },
+    {
+      "window": 9,
+      "views": [
+        360,
+        408
+      ],
+      "scale": 0.47916,
+      "inlier_frac": 0.795
+    },
+    {
+      "window": 10,
+      "views": [
+        400,
+        448
+      ],
+      "scale": 0.43927,
+      "inlier_frac": 0.815
+    },
+    {
+      "window": 11,
+      "views": [
+        440,
+        488
+      ],
+      "scale": 0.39831,
+      "inlier_frac": 0.851
+    },
+    {
+      "window": 12,
+      "views": [
+        480,
+        528
+      ],
+      "scale": 0.34154,
+      "inlier_frac": 0.846
+    },
+    {
+      "window": 13,
+      "views": [
+        520,
+        568
+      ],
+      "scale": 0.3454,
+      "inlier_frac": 0.819
+    }
+  ],
+  "mapanything_s": {
+    "model": 20.0,
+    "images": 15.7,
+    "inference": 99.1,
+    "stitch": 2.3
+  },
+  "mapanything_peak_gib": 7.04,
+  "sparse_after_triangulation": {
+    "Registered images": "568",
+    "Points": "230005",
+    "Observations": "1703155",
+    "Mean track length": "7.404861",
+    "Mean observations per image": "2998.512324",
+    "Mean reprojection error": "1.973827px"
+  },
+  "sparse_after_bundle_adjustment": {
+    "Registered images": "568",
+    "Points": "219953",
+    "Observations": "1656809",
+    "Mean track length": "7.532559",
+    "Mean observations per image": "2916.917254",
+    "Mean reprojection error": "0.488488px"
+  },
+  "ba_gate": {
+    "passed": true,
+    "problems": []
+  },
+  "dense_points": 1686424,
+  "stages": [
+    {
+      "stage": "poses (MapAnything)",
+      "seconds": 142.52
+    },
+    {
+      "stage": "intrinsics fit",
+      "seconds": 0.73
+    },
+    {
+      "stage": "feature_extractor",
+      "seconds": 13.0
+    },
+    {
+      "stage": "sequential_matcher",
+      "seconds": 93.04
+    },
+    {
+      "stage": "point_triangulator",
+      "seconds": 31.56
+    },
+    {
+      "stage": "analyze_triangulated",
+      "seconds": 0.69
+    },
+    {
+      "stage": "bundle_adjuster",
+      "seconds": 25.07
+    },
+    {
+      "stage": "point_filtering",
+      "seconds": 1.41
+    },
+    {
+      "stage": "analyze_adjusted",
+      "seconds": 0.68
+    },
+    {
+      "stage": "model_converter",
+      "seconds": 5.22
+    },
+    {
+      "stage": "dense subset",
+      "seconds": 1.39
+    },
+    {
+      "stage": "image_undistorter",
+      "seconds": 5.12
+    },
+    {
+      "stage": "InterfaceCOLMAP",
+      "seconds": 0.36
+    },
+    {
+      "stage": "DensifyPointCloud",
+      "seconds": 89.51
+    },
+    {
+      "stage": "ReconstructMesh",
+      "seconds": 49.67
+    }
+  ],
+  "total_seconds": 461.7
+}

@@ -1,2 +1,5 @@
 # DJI sidecars are test inputs: keep their bytes, BOMs and line endings exactly.
 src/ingest/fixtures/dji_srt/* -text
+
+# Keep the codemap LF on every platform.
+.claude/codemap*.md text eol=lf

@@ -221,6 +221,25 @@ def t_pipeline():
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
 
+    # A ladder step re-plans from the top. Stages whose output does not depend on the
+    # level (screen, ingest) must not redo their work, and reusing them is not a resume.
+    tmp = tempfile.mkdtemp(prefix="tess-")
+    try:
+        first = Toy("first", produces=("x",))
+        plan = Toy("plan", needs=("x",), produces=("p",))
+        plan.level_sensitive = True
+        soft = Toy("soft", needs=("p",), fail=StageError(Code.MVS_RC, "rc=1"),
+                   levels=("L0",))
+        ctx = ctx_for(tmp)
+        man = Pipeline([first, plan, soft]).run(ctx)
+        check("a ladder step reuses a stage that does not depend on the level",
+              first.calls == 1 and man.level == "L1", f"calls {first.calls}, {man.level}")
+        check("and re-runs one that does", plan.calls == 2, f"calls {plan.calls}")
+        check("reuse within one run is not counted as a resumed stage", ctx.cached == [],
+              str(ctx.cached))
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
     tmp = tempfile.mkdtemp(prefix="tess-")
     try:
         fatal = Toy("fatal", fail=StageError(Code.REF_7DOF, "refused", fatal=True))
@@ -230,6 +249,201 @@ def t_pipeline():
         check("the refusal is recorded as a code", Code.REF_7DOF in man.codes)
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
+
+    # A stage that judges accumulated facts has no inputs to key on, so a resumed run
+    # would replay its old answer. It has to run every time, and the run has to know
+    # which stages it did not actually time.
+    tmp = tempfile.mkdtemp(prefix="tess-")
+    try:
+        a, judge = Toy("A", produces=("x",)), Toy("judge")
+        judge.cacheable = False
+        Pipeline([a, judge]).run(ctx_for(tmp))
+        ctx = ctx_for(tmp)
+        Pipeline([a, judge]).run(ctx)
+        check("an uncacheable stage runs again on resume", judge.calls == 2)
+        check("the run records which stages came from the cache", ctx.cached == ["A"],
+              str(ctx.cached))
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+    t_resume_keys()
+
+
+class _Reads(Toy):
+    """A toy stage that reads a file outside the run, and says so in its key."""
+
+    def __init__(self, sid, path, **kw):
+        super().__init__(sid, **kw)
+        self.src = path
+
+    def key_extra(self, ctx):
+        return io.open(self.src, encoding="utf-8").read()
+
+
+def t_resume_keys():
+    """Audit F-01: resume must notice every change that would change the answer."""
+    tmp = tempfile.mkdtemp(prefix="tess-")
+    try:
+        a, b = Toy("A", produces=("x",)), Toy("B")
+        Pipeline([a, b]).run(ctx_for(tmp, source=SyntheticSource(n_frames=8, seed=1)))
+        Pipeline([a, b]).run(ctx_for(tmp, source=SyntheticSource(n_frames=8, seed=2)))
+        check("a different source under the same run re-runs every stage",
+              (a.calls, b.calls) == (2, 2), f"calls {(a.calls, b.calls)}")
+        Pipeline([a, b]).run(ctx_for(tmp, source=SyntheticSource(n_frames=8, seed=2)))
+        check("the same source again is still a no-op", (a.calls, b.calls) == (2, 2))
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+    tmp = tempfile.mkdtemp(prefix="tess-")
+    try:
+        # B reads A's facts, not A's files: only the chain can tell it A changed.
+        src = os.path.join(tmp, "calibration.txt")
+        with io.open(src, "w", encoding="utf-8") as f:
+            f.write("x5.54")
+        a, b = _Reads("A", src), Toy("B")
+        Pipeline([a, b]).run(ctx_for(tmp))
+        with io.open(src, "w", encoding="utf-8") as f:
+            f.write("x5.60")
+        Pipeline([a, b]).run(ctx_for(tmp))
+        check("a changed outside file re-runs its stage", a.calls == 2)
+        check("and every stage after it, files or no files", b.calls == 2)
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+    # The two real stages that read outside the run directory.
+    from tesseract.pipeline import State
+    from tesseract.stages import Geometry, Scale
+
+    tmp = tempfile.mkdtemp(prefix="tess-")
+    old = scale_svc.CAL_DIR
+    try:
+        scale_svc.CAL_DIR = tmp
+        cal = {"runs": ["r"], "factor": 5.54, "bracket": [5.3, 5.8],
+               "status": "calibrated", "method": "known-object", "summary": "s"}
+        with io.open(os.path.join(tmp, "r.json"), "w", encoding="utf-8") as f:
+            json.dump(cal, f)
+        ctx = ctx_for(tmp, config={"calibration_run": "r"})
+        st = State(os.path.join(tmp, "state.json"))
+        k1 = st.key(Scale(), ctx)
+        with io.open(os.path.join(tmp, "r.json"), "w", encoding="utf-8") as f:
+            json.dump(dict(cal, factor=5.60), f)
+        check("recalibrating changes the scale stage's key", st.key(Scale(), ctx) != k1)
+    finally:
+        scale_svc.CAL_DIR = old
+        shutil.rmtree(tmp, ignore_errors=True)
+
+    tmp = tempfile.mkdtemp(prefix="tess-")
+    try:
+        np.save(os.path.join(tmp, "points_fused.npy"), np.zeros((4, 3), np.float32))
+        ctx = ctx_for(tmp, config={"adopt": tmp})
+        st = State(os.path.join(tmp, "state.json"))
+        k1 = st.key(Geometry(), ctx)
+        np.save(os.path.join(tmp, "points_fused.npy"), np.ones((4, 3), np.float32))
+        check("re-running the adopted reconstruction changes the geometry key",
+              st.key(Geometry(), ctx) != k1)
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
+# ---------------------------------------------------------------- T3b verdicts
+class _Clip:
+    """A stand-in video source: the verdicts only ask whether it has a path."""
+    path = "clip.mp4"
+
+
+def t_verdicts():
+    section("T3b: a verdict says met only about what it measured")
+    from tesseract.stages import _verdict_formats, _verdict_time
+
+    three = _verdict_formats(["ply", "las", "geotiff"])
+    check("three of the six PS formats is not met (audit F-02)",
+          three.startswith("not met") and "obj" in three and "fbx" in three, three)
+    check("all six is met, and GLB answers the glTF row",
+          _verdict_formats(["obj", "ply", "las", "geotiff", "glb", "fbx"]) == "met")
+
+    def verdict(source, spent, facts, cached=()):
+        c = Context(run_id="v", workdir=".", source=source, budget_s=900.0,
+                    spent_s=spent, facts=facts, log=lambda *_: None)
+        c.cached = list(cached)
+        return _verdict_time(c)
+
+    ten_min = {"screen": {"duration_s": 600.0}}
+    cases = {
+        "synthetic": verdict(SyntheticSource(n_frames=8), 100, {}),
+        "short clip": verdict(_Clip(), 100, {"screen": {"duration_s": 52.0}}),
+        "adopted": verdict(_Clip(), 100, dict(ten_min, geometry_provider="adopt")),
+        "cached": verdict(_Clip(), 100, ten_min, cached=["S0-screen"]),
+        "timed, inside": verdict(_Clip(), 800, ten_min),
+        "timed, over": verdict(_Clip(), 1200, ten_min),
+    }
+    check("a synthetic scene cannot meet R-O2 (audit F-09)",
+          cases["synthetic"].startswith("not measurable"), cases["synthetic"])
+    check("a clip shorter than ten minutes cannot meet R-O2",
+          cases["short clip"].startswith("not measurable"), cases["short clip"])
+    check("adopted geometry is not timed",
+          cases["adopted"].startswith("not measurable"), cases["adopted"])
+    check("a resumed run's wall clock is not a measurement",
+          cases["cached"].startswith("not measurable"), cases["cached"])
+    check("a timed ten-minute clip is judged on its wall clock",
+          cases["timed, inside"] == "met" and cases["timed, over"] == "not met",
+          f"{cases['timed, inside']} / {cases['timed, over']}")
+    from tesseract.stages import _verdict_coverage
+    easy = {"recall_at_1m_observable": 0.95, "recall_at_1m_whole_scene": 0.40}
+    cov = {
+        "easy surface": _verdict_coverage(dict(easy, geometry_provider="adopt")),
+        "short": _verdict_coverage({"recall_at_1m_observable": 0.60,
+                                    "recall_at_1m_whole_scene": 0.30}),
+        "sensed": _verdict_coverage(dict(easy, geometry_provider="sense")),
+        "no truth": _verdict_coverage({}),
+    }
+    check("R-O4 met on the observable surface still prints the whole-scene 40% (audit F-08)",
+          cov["easy surface"].startswith("met") and "whole scene 40%" in cov["easy surface"],
+          cov["easy surface"])
+    check("R-O4 below 90% observable is not met", cov["short"].startswith("not met"),
+          cov["short"])
+    check("synthetic sensing cannot meet R-O4: its coverage is the mask it was built from",
+          cov["sensed"].startswith("not measurable"), cov["sensed"])
+    check("no ground truth, no R-O4", cov["no truth"].startswith("not measurable"))
+
+    vocab = ("met", "not met", "not measurable")
+    check("every verdict keeps the console's three-word vocabulary",
+          all(s.startswith(vocab) for s in list(cases.values()) + list(cov.values()) + [three]))
+
+
+def t_level_units():
+    section("T3c: a levelled length names its own unit")
+    from tesseract.stages import Level
+
+    rng = np.random.default_rng(0)
+    ground = np.column_stack([rng.uniform(-50, 50, 4000), rng.uniform(-20, 20, 4000),
+                              rng.normal(0, 0.05, 4000)])
+    cams = np.column_stack([np.linspace(-40, 40, 20), np.zeros(20), np.full(20, 30.0)])
+    for status, factor in (("unvalidated", 1.0), ("calibrated", 2.0)):
+        tmp = tempfile.mkdtemp(prefix="tess-")
+        try:
+            np.save(os.path.join(tmp, "points.npy"), ground.astype(np.float32))
+            np.save(os.path.join(tmp, "cameras.npy"), cams)
+            units = K.units_for(status)
+            ctx = Context(run_id="lv", workdir=tmp, source=SyntheticSource(n_frames=8),
+                          facts={"scale": {"factor": factor, "status": status},
+                                 "units": units},
+                          artefacts={"points": Artefact("points.npy", "point-cloud")
+                                     .stamp(tmp),
+                                     "cameras": Artefact("cameras.npy", "array")
+                                     .stamp(tmp)},
+                          log=lambda *_: None)
+            f = Level().execute(ctx).facts
+            keys = set(f) | set(f.get("gravity", {}))
+            want = "extent_m" if units == Units.METRES else "extent_model"
+            metre_named = sorted(k for k in keys if k.endswith("_m"))
+            if units == Units.METRES:
+                check("a calibrated run reports its extent in metres",
+                      want in f and abs(max(f[want]) - 200.0) < 20.0, str(f.get(want)))
+            else:
+                check("an unvalidated run names no length in metres (audit F-06)",
+                      want in f and not metre_named, f"metre-named: {metre_named}")
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
 
 
 # ---------------------------------------------------------------- T4 end to end
@@ -274,6 +488,61 @@ def t_end_to_end():
           and out["consumer"][0].verdicts["R-O3 spatial accuracy"] == "not met")
     check("scale comes from the fit when there is GNSS",
           out["rtk"][0].scale["status"] == "gnss+rtk")
+    v = out["rtk"][0].verdicts
+    check("a synthetic run does not claim the processing-time target",
+          v["R-O2 processing time"].startswith("not measurable"), v["R-O2 processing time"])
+    check("S6's three files do not claim the six-format target",
+          v["R-O5 formats"].startswith("not met"), v["R-O5 formats"])
+    check("a synthetic end-to-end run does not claim R-O4 (audit F-08)",
+          v["R-O4 coverage"].startswith("not measurable") and "whole scene" in v["R-O4 coverage"],
+          v["R-O4 coverage"])
+    g = get(out["rtk"][0], "gravity") or {}
+    up = g.get("up") or [0, 0, 1]
+    check("the synthetic gauge is no longer secretly level (audit F-07)",
+          abs(up[2]) < 0.999, f"recovered up {np.round(up, 3).tolist()}")
+    # The flight is at 110 m. S5 measures gravity on the raw gauge (scaled 0.1-2x), so
+    # a metre-named height has to come out near 110 whatever that gauge's scale was.
+    h = g.get("camera_above_ground_m")
+    check("S5's metre-named camera height is in metres, not the gauge's units",
+          h is not None and 80.0 < h < 140.0, f"camera_above_ground_m {h}")
+
+
+def t_georef_fit():
+    section("T3d: a straight track gives yaw and slope; gravity gives only the roll")
+    from eval3d.gnss import track_sim3, yaw_only_sim3
+    from eval3d.metrics import apply_transform
+
+    rng = np.random.default_rng(3)
+    s_ = np.linspace(-450, 450, 60)
+    truth_cams = np.column_stack([s_, np.zeros(60), 110 + 0.02 * s_])   # a gentle climb
+    truth_scene = np.column_stack([rng.uniform(-450, 450, 3000),
+                                   rng.uniform(-300, 300, 3000), rng.uniform(0, 30, 3000)])
+    # The reconstruction: scaled, yawed, and levelled with a 0.7 deg error along the
+    # track, the size of the ground-plane error measured on the synthetic pass.
+    a, yaw, sc = np.radians(0.7), np.radians(40), 0.2
+    tilt = np.array([[np.cos(a), 0, np.sin(a)], [0, 1, 0], [-np.sin(a), 0, np.cos(a)]])
+    Rz = np.array([[np.cos(yaw), -np.sin(yaw), 0], [np.sin(yaw), np.cos(yaw), 0], [0, 0, 1]])
+    fwd = lambda X: apply_transform(X, Rz @ tilt, np.array([5.0, -3, 2]), sc)
+    src_c, src_s = fwd(truth_cams), fwd(truth_scene)
+    err = lambda R, t, s: float(np.sqrt(np.mean(np.sum(
+        (apply_transform(src_s, R, t, s) - truth_scene) ** 2, axis=1))))
+    e_yaw, e_trk = err(*yaw_only_sim3(src_c, truth_cams)), err(*track_sim3(src_c, truth_cams))
+    check("a levelling error along the track survives a yaw-only fit",
+          e_yaw > 1.0, f"{e_yaw:.2f} m")
+    check("the track's own slope removes it (ADR-026)", e_trk < 0.05, f"{e_trk:.4f} m")
+
+    tmp = tempfile.mkdtemp(prefix="tess-")
+    try:
+        from tesseract.stages import _write_ply_f64
+        P = np.array([[500000.123, 3000000.456, 210.789], [500001.5, 3000002.5, 211.0]])
+        p = os.path.join(tmp, "c.ply")
+        _write_ply_f64(p, P)
+        raw = open(p, "rb").read()
+        body = np.frombuffer(raw[raw.index(b"end_header\n") + 11:], "<f8").reshape(-1, 3)
+        check("a projected PLY keeps its coordinates to the millimetre (audit F-03)",
+              np.abs(body - P).max() < 1e-6, f"max diff {np.abs(body - P).max():.2e}")
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
 
 
 # ---------------------------------------------------------------- T5 a real run
@@ -325,6 +594,75 @@ def t_real_run():
           refused["level"])
 
 
+def t_local_provider():
+    section("T3e: the local GPU provider's failures step the ladder, once")
+    import types
+    from tesseract.stages import Geometry
+
+    calls = []
+
+    class SparseError(RuntimeError):
+        pass
+
+    def make(exc):
+        def run(images, work, **kw):
+            calls.append(sorted(kw["dense_names"]))
+            raise exc
+        mod = types.ModuleType("local_gpu")
+        mod.SparseError, mod.run = SparseError, run
+        mod.frame_order = lambda n: (int(n[3:].split("_")[0]), n)
+        return mod
+
+    tmp = tempfile.mkdtemp(prefix="tess-")
+    saved = sys.modules.get("local_gpu")
+    try:
+        kf = os.path.join(tmp, "keyframes")
+        os.makedirs(kf)
+        for i in (0, 1, 2, 1000):
+            open(os.path.join(kf, f"kf_{i:03d}_f{i:05d}.jpg"), "wb").close()
+        with io.open(os.path.join(tmp, "ingest.json"), "w", encoding="utf-8") as f:
+            json.dump({"stats": {"overlay_crop_trbl": [0, 0, 0, 0]}}, f)
+        np.save(os.path.join(tmp, "dense_index.npy"), np.array([0, 3]))
+
+        def ctx(level):
+            c = ctx_for(tmp, source=_Clip(), config={"geometry": "local"}, level=level)
+            c.artefacts["plan"] = Artefact("dense_index.npy", "array")
+            return c
+
+        g = Geometry()
+        sys.modules["local_gpu"] = make(SparseError("S3b gate failed: 4.0 px"))
+        e1 = _raises_as(lambda: g.execute(ctx("L0")))
+        check("a failed S3b gate is GEO_REPROJ, not fatal",
+              e1 is not None and e1.code == Code.GEO_REPROJ and not e1.fatal, repr(e1))
+        check("the dense set follows the keyframes' time order, past 999",
+              calls and calls[0] == ["kf_000_f00000.jpg", "kf_1000_f01000.jpg"], str(calls))
+        e2 = _raises_as(lambda: g.execute(ctx("L1")))
+        check("at L1 the same sparse failure is replayed, not recomputed",
+              len(calls) == 1 and e2 is not None and e2.code == Code.GEO_REPROJ, str(calls))
+        g2 = Geometry()
+        sys.modules["local_gpu"] = make(SystemExit("principal point is 12% off"))
+        e3 = _raises_as(lambda: g2.execute(ctx("L0")))
+        check("a SystemExit from colmap_export becomes a StageError, not an exit",
+              e3 is not None and e3.code == Code.MVS_RC, repr(e3))
+        e4 = _raises_as(lambda: Geometry().execute(ctx("L3")))
+        check("levels the provider has no mode for are STAGE_UNAVAILABLE",
+              e4 is not None and e4.code == Code.STAGE_UNAVAILABLE)
+    finally:
+        if saved is not None:
+            sys.modules["local_gpu"] = saved
+        else:
+            sys.modules.pop("local_gpu", None)
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
+def _raises_as(fn):
+    try:
+        fn()
+    except StageError as e:
+        return e
+    return None
+
+
 if __name__ == "__main__":
     print("=" * 62)
     print("tesseract - contracts, scale, orchestration, end to end")
@@ -332,6 +670,10 @@ if __name__ == "__main__":
     t_contracts()
     t_scale()
     t_pipeline()
+    t_verdicts()
+    t_level_units()
+    t_georef_fit()
+    t_local_provider()
     t_end_to_end()
     t_real_run()
     print("\n" + "=" * 62)

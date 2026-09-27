@@ -58,8 +58,10 @@ clip with no sidecar. Nothing distinguished the two. Now `longt?itude`.
 record per second, so frame 300 of a 30 fps clip was handed the record from five minutes
 in. The modern families do write one per frame, but the parser drops blocks without a
 fix, which shifts every later index. `telemetry_for_frames` now keys on `FrameCnt` when
-every record has it, else on the timing line at the clip's frame rate, else returns
-nothing (`docs/09` S1 GAP C-3, now corrected).
+every record has it, else on the timing line, else returns nothing (`docs/09` S1
+GAP C-3, now corrected). The time side uses each keyframe's presentation timestamp
+from PyAV. It used index / average frame rate until 2026-09-25, which drifts on a
+variable-frame-rate clip: a frame shown at 3.0 s got the 1 s fix (audit F-13).
 
 ## What the record carries now
 

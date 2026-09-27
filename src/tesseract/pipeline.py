@@ -43,6 +43,9 @@ class Context:
     spent_s: float = 0.0
     artefacts: dict[str, Artefact] = field(default_factory=dict)
     facts: dict[str, Any] = field(default_factory=dict)
+    # Stages this invocation took from the cache. A cached stage adds 0 s to spent_s, so
+    # a resumed run's wall clock is not a measurement of the pipeline (audit F-09).
+    cached: list[str] = field(default_factory=list)
     log: Callable[[str], None] = print
 
     def path(self, *parts: str) -> str:
@@ -68,6 +71,7 @@ class Stage(Protocol):
     levels: tuple[str, ...]          # ladder levels at which this stage runs
 
     def estimate(self, ctx: Context) -> float: ...
+    def key_extra(self, ctx: Context) -> Any: ...
     def run(self, ctx: Context) -> StageResult: ...
 
 
@@ -83,9 +87,29 @@ class BaseStage:
     needs: tuple[str, ...] = ()
     produces: tuple[str, ...] = ()
     levels: tuple[str, ...] = ("L0", "L1", "L2", "L3", "L4", "L5")
+    # A stage that reads the run's accumulated facts rather than declared artefacts
+    # cannot be keyed on its inputs, so it must run every time or it replays an old
+    # answer about new facts. S8 is the case: its key would be only its config.
+    cacheable: bool = True
+    # Only a stage whose output depends on the ladder level keys on it. Keying every
+    # stage on it made each ladder step re-run S0 and S1 from scratch: on a 20 s clip
+    # that stepped L0 to L5, four of five ingest passes (about 90 of 124 s) repeated
+    # identical work, and on a 10-minute clip each repeat is minutes of R-O2's budget.
+    level_sensitive: bool = False
 
     def estimate(self, ctx: Context) -> float:
         return 1.0
+
+    def key_extra(self, ctx: Context) -> Any:
+        """
+        Anything outside the run directory that this stage reads, as JSON-able data.
+
+        The cache key sees declared artefacts, config, the source and the stages
+        upstream. A stage that also reads a file of its own choosing (a calibration, an
+        adopted run) must report that file's content here, or a changed file is
+        silently ignored on resume.
+        """
+        return None
 
     def execute(self, ctx: Context) -> StageResult:      # pragma: no cover - abstract
         raise NotImplementedError
@@ -103,9 +127,19 @@ class State:
     """
     The resume record: which stages ran, with what key, and what they produced.
 
-    The key is the stage id plus the config plus the hashes of its inputs. Change a
-    threshold and only the stages downstream of it re-run; change nothing and the whole
-    pipeline is a no-op that still writes a manifest.
+    The key is the stage id, version, config (and the level, for a stage whose
+    output depends on it), the hashes of its declared
+    inputs, the source's own fingerprint, whatever else the stage says it reads
+    (`key_extra`), and the key of the stage before it. Change a threshold and only the
+    stages downstream of it re-run; change nothing and the whole pipeline is a no-op
+    that still writes a manifest.
+
+    The source and the chain were added after audit F-01. Without the source, a
+    different clip under the same run name resumed on the old clip's keyframes, since
+    S0 and S1 declare no inputs. Without the chain, a stage that reads an upstream
+    stage's facts rather than its files (S5b reads S4's scale factor) kept its old
+    output after a recalibration. The chain costs one thing: a downstream stage re-runs
+    even when an upstream re-run happened to produce identical files.
     """
 
     def __init__(self, path: str):
@@ -120,13 +154,23 @@ class State:
             except json.JSONDecodeError:
                 pass                                   # a corrupt cache is not a failure
 
-    def key(self, stage: Stage, ctx: Context) -> str:
+    def key(self, stage: Stage, ctx: Context, *, source: str | None = None,
+            upstream: str = "") -> str:
+        # Pipeline.run hashes the source once and passes it in; a video's sha256 is not
+        # something to recompute per stage. Any other caller gets it computed here, so
+        # no key is ever blind to the source.
+        if source is None:
+            source = K.config_sha256(ctx.source.inputs())
         inputs = {n: (ctx.artefacts[n].sha256 if n in ctx.artefacts else None)
                   for n in stage.needs}
+        extra = stage.key_extra(ctx) if hasattr(stage, "key_extra") else None
         return K.config_sha256({"stage": stage.id,
                                 "version": getattr(stage, "version", "1"),
-                                "level": ctx.level,
-                                "config": ctx.config, "inputs": inputs})
+                                "level": (ctx.level if getattr(stage, "level_sensitive",
+                                                               False) else None),
+                                "config": ctx.config, "inputs": inputs,
+                                "source": source, "extra": extra,
+                                "upstream": upstream})
 
     def cached(self, stage: Stage, key: str, workdir: str) -> StageResult | None:
         rec = self.data["stages"].get(stage.id)
@@ -177,10 +221,15 @@ class Pipeline:
                           budget_s=ctx.budget_s,
                           config_sha256=K.config_sha256(ctx.config))
         man.inputs = ctx.source.inputs()
+        source_key = K.config_sha256(man.inputs)
 
         i = 0
+        upstream = ""
+        made_here: set[str] = set()     # keys of results this invocation computed
         while i < len(self.stages):
             st = self.stages[i]
+            if i == 0:
+                upstream = ""                           # a ladder restart re-plans
             if ctx.level not in st.levels:
                 ctx.log(f"  {st.id:<12} skipped at {ctx.level}")
                 man.add(StageResult(stage=st.id, seconds=0.0, skipped=True,
@@ -188,10 +237,22 @@ class Pipeline:
                 i += 1
                 continue
 
-            key = state.key(st, ctx)
-            hit = state.cached(st, key, ctx.workdir) if resume else None
+            key = state.key(st, ctx, source=source_key, upstream=upstream)
+            upstream = key
+            reuse = resume and getattr(st, "cacheable", True)
+            hit = state.cached(st, key, ctx.workdir) if reuse else None
+            if hit is not None and key in made_here:
+                # Computed earlier in this same invocation, before the ladder stepped
+                # down. Its time is already in spent_s, so it is not a resume and must
+                # not make R-O2 unmeasurable the way a resumed stage does.
+                ctx.log(f"  {st.id:<12} reused")
+                hit.note = "reused from this run's earlier attempt"
+                self._absorb(ctx, man, hit)
+                i += 1
+                continue
             if hit is not None:
                 ctx.log(f"  {st.id:<12} cached")
+                ctx.cached.append(st.id)
                 self._absorb(ctx, man, hit)
                 i += 1
                 continue
@@ -219,6 +280,7 @@ class Pipeline:
             ctx.log(f"  {st.id:<12} {res.seconds:6.2f}s"
                     + (f"  [{' '.join(res.codes)}]" if res.codes else ""))
             state.record(st, key, res)
+            made_here.add(key)
             self._absorb(ctx, man, res)
             i += 1
 

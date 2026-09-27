@@ -5,11 +5,12 @@
 // and capacity limits: one run is roughly 70 minutes of 8 vCPU on a real billing
 // account, and two concurrent MVS runs would want 16 vCPU of asia-south1 quota.
 
-const { Storage } = require("@google-cloud/storage");
-// Two clients, deliberately. JobsClient starts a job; listing executions lives on
+// The GCP clients are required on first use, not at load, so the tests in demo/test/
+// can run these handlers against in-memory fakes without the SDKs installed.
+//
+// Two Run clients, deliberately. JobsClient starts a job; listing executions lives on
 // ExecutionsClient, and calling it on JobsClient fails at runtime rather than at
 // require time, so it only showed up against the deployed function.
-const { JobsClient, ExecutionsClient } = require("@google-cloud/run").v2;
 
 const BUCKET = process.env.GCS_BUCKET || "sih26158-mumbai";
 const PROJECT = process.env.GCP_PROJECT || "agentbillboard";
@@ -34,16 +35,32 @@ function creds() {
 
 let _storage, _jobs, _execs;
 function storage() {
-  if (!_storage) _storage = new Storage(creds());
+  if (!_storage) {
+    const { Storage } = require("@google-cloud/storage");
+    _storage = new Storage(creds());
+  }
   return _storage;
 }
 function jobs() {
-  if (!_jobs) _jobs = new JobsClient(creds());
+  if (!_jobs) {
+    const { JobsClient } = require("@google-cloud/run").v2;
+    _jobs = new JobsClient(creds());
+  }
   return _jobs;
 }
 function execs() {
-  if (!_execs) _execs = new ExecutionsClient(creds());
+  if (!_execs) {
+    const { ExecutionsClient } = require("@google-cloud/run").v2;
+    _execs = new ExecutionsClient(creds());
+  }
   return _execs;
+}
+
+// Tests only: swap in fakes for the three clients.
+function _inject(c) {
+  _storage = c.storage;
+  _jobs = c.jobs;
+  _execs = c.execs;
 }
 function bucket() {
   return storage().bucket(BUCKET);
@@ -68,15 +85,97 @@ async function runningCount() {
   return list.filter((e) => !e.completionTime).length;
 }
 
-async function startedToday() {
-  const [list] = await execs().listExecutions({
-    parent: `projects/${PROJECT}/locations/${REGION}/jobs/${JOB}`,
+// Create an object only if nothing exists at that name. GCS applies the
+// ifGenerationMatch=0 precondition atomically, so of two requests racing for the same
+// name exactly one wins; that is what makes a run id or a daily slot claimable once.
+// The nonce covers a retried write whose first attempt did land: the 412 it gets back
+// is our own object, not someone else's.
+async function claim(name, body) {
+  const nonce = require("crypto").randomBytes(8).toString("hex");
+  const file = bucket().file(name);
+  try {
+    await file.save(JSON.stringify({ ...body, nonce, at: new Date().toISOString() }), {
+      contentType: "application/json",
+      resumable: false,
+      preconditionOpts: { ifGenerationMatch: 0 },
+    });
+    return true;
+  } catch (e) {
+    if (!e || e.code !== 412) throw e;
+    try {
+      const [buf] = await file.download();
+      return JSON.parse(buf.toString()).nonce === nonce;
+    } catch (_) {
+      return false;
+    }
+  }
+}
+
+// One start at a time, across every function instance. The concurrency check reads
+// the platform's execution list, and two starts for DIFFERENT run ids could both read
+// it before either launched: each won its own run-id claim and its own daily slot, and
+// MAX_CONCURRENT=1 let two orchestrators through (audit F-04, the half the run-id
+// claim did not cover). Holding this lease from the check until runJob returns makes
+// the check and the launch one step. A holder that died mid-start is taken over once
+// its lease is older than LEASE_TTL_MS, well past any function's time limit.
+const START_LEASE = "web/_lock/start.json";
+const LEASE_TTL_MS = 120 * 1000;
+
+async function acquireLease(name = START_LEASE, ttlMs = LEASE_TTL_MS) {
+  if (await claim(name, {})) return true;
+  const file = bucket().file(name);
+  try {
+    const [meta] = await file.getMetadata();
+    const [buf] = await file.download();
+    const at = Date.parse(JSON.parse(buf.toString()).at);
+    if (!(Date.now() - at > ttlMs)) return false;
+    // Delete only the generation we judged stale. If another request took it over
+    // in between, this fails and that request keeps it.
+    await file.delete({ ifGenerationMatch: meta.generation });
+  } catch (_) {
+    return false;
+  }
+  return claim(name, {});
+}
+
+async function release(name) {
+  try {
+    await bucket().file(name).delete();
+  } catch (_) {
+    // A slot that cannot be released costs one start today; it is not worth a 500.
+  }
+}
+
+// The daily cap is a set of numbered slot objects per UTC day, each claimable once.
+// Counting executions could not enforce it: two starts read the same count before
+// either launched, and a start never checked the count at all (audit F-04).
+function slotPrefix() {
+  return `web/_slots/${new Date().toISOString().slice(0, 10)}/`;
+}
+
+async function slotsUsedToday() {
+  const [files] = await bucket().getFiles({ prefix: slotPrefix() });
+  return files.length;
+}
+
+// Returns the slot's object name, or null when every slot today is taken.
+async function reserveSlot(runId) {
+  const prefix = slotPrefix();
+  for (let n = 0; n < MAX_PER_DAY; n++) {
+    const name = `${prefix}${String(n).padStart(3, "0")}.json`;
+    if (await claim(name, { runId })) return name;
+  }
+  return null;
+}
+
+// The orchestrator execution a status file names, or null. Short names only, since the
+// value comes from a file in the bucket and is spliced into a resource path.
+async function execution(shortName) {
+  if (typeof shortName !== "string" || !/^[a-z0-9-]{1,63}$/.test(shortName)) return null;
+  const [ex] = await execs().getExecution({
+    name: `projects/${PROJECT}/locations/${REGION}/jobs/${JOB}/executions/${shortName}`,
   });
-  const since = Date.now() - 24 * 3600 * 1000;
-  return list.filter((e) => {
-    const t = e.createTime && Number(e.createTime.seconds) * 1000;
-    return t && t >= since;
-  }).length;
+  return ex;
 }
 
 function json(res, code, body) {
@@ -88,5 +187,7 @@ function json(res, code, body) {
 module.exports = {
   BUCKET, PROJECT, REGION, JOB,
   MAX_BYTES, MAX_CONCURRENT, MAX_PER_DAY, PAUSED,
-  storage, jobs, execs, bucket, newRunId, isRunId, runningCount, startedToday, json,
+  storage, jobs, execs, bucket, newRunId, isRunId, runningCount,
+  claim, release, slotsUsedToday, reserveSlot, execution, json, _inject,
+  START_LEASE, acquireLease,
 };

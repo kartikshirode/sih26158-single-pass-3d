@@ -42,7 +42,7 @@ For the product, not the demo. They are what the finale runbook defends.
 | `torch.cuda.is_available()` True but kernels fail (Baramati) | Wrong conda env for sm_120 cards | Use `torch-gpu`; smoke-test with a real matmul |
 | `srun` fails with "Job credential expired" (Baramati) | Clock skew on the login node | Use `sbatch` |
 | Registered < N views | Weak overlap or bad frames | Drop unregistered views; below 80% → ladder L3 (`GEO-UNREG`) |
-| Reprojection > 1 px after BA | Bad intrinsics or poses | Check the intrinsics fit residual and principal point (refuses > 8% off-centre); stop (`GEO-REPROJ`) |
+| Reprojection > 1 px after BA | Bad intrinsics or poses | Check the intrinsics fit residual and principal point (refuses > 8% off both the keyframe centre and, when S1 cropped, the crop-shifted source centre); stop (`GEO-REPROJ`) |
 | `TextureMesh` rc = 1 in 0.2 s | Known (EXP-20) | Non-fatal; per-vertex colour ships (ADR-016) |
 | Transform raises instead of returning heights | Geoid grid missing — **this is the defence working** | Load the grid; never set `allow_ballpark=True` (`REF-BALLPARK`) |
 | Measured distances look wrong | Scale status `unvalidated` (`docs/08`) | Calibrate from a known length (§4.5); never apply a global factor |
@@ -88,7 +88,7 @@ T+0:60  Check the insurance result exists. From here there is always something t
 | Telemetry | Did a parser match? | Continue with S5 | Proceed without; record `ING-NOGNSS` |
 | S3b | Registered ≥ 80% and reprojection ≤ 1 px? | Continue to S4 | Ladder L3 |
 | S4 | Predicted densify time fits the remaining budget? | L0 | L1 → L2 |
-| S5 | 5-DOF fit residual consistent with the GNSS class? | Write F7 | Ship LLF; report the fit failure |
+| S5 | Georeferencing fit residual (6-DOF, ADR-026) consistent with the GNSS class? | Write F7 | Ship LLF; report the fit failure |
 | Scale | Status `gnss` or `calibrated`? | Print metres | Print model units, and calibrate (§4.5) |
 
 ### 4.4 The 36 hours

@@ -27,7 +27,9 @@ module.exports = async (req, res) => {
 
     // Capacity, checked before an upload rather than after: being told to come back
     // later after pushing 300 MB is a worse experience than being told now.
-    const [running, today] = await Promise.all([L.runningCount(), L.startedToday()]);
+    // Advisory only: /api/start reserves the slot for real. Both read the same slot
+    // objects, so the two checks cannot disagree about what "today" has used.
+    const [running, today] = await Promise.all([L.runningCount(), L.slotsUsedToday()]);
     if (running >= L.MAX_CONCURRENT) {
       return L.json(res, 429, {
         error: `A reconstruction is already running, and this runs one at a time. ` +
@@ -47,14 +49,24 @@ module.exports = async (req, res) => {
     const object = `web/${runId}/source${ext}`;
     const contentType = String(body.type || "application/octet-stream");
 
+    // The size above is whatever the caller declared. The real bound has to be on the
+    // upload itself: GCS refuses a PUT whose body falls outside this range, and since
+    // the header is signed into the URL the client cannot drop or widen it (audit
+    // F-05). The bucket's CORS config must allow this header; see
+    // deploy/web-bucket-cors.json.
+    const uploadHeaders = {
+      "content-type": contentType,
+      "x-goog-content-length-range": `0,${L.MAX_BYTES}`,
+    };
     const [uploadUrl] = await L.bucket().file(object).getSignedUrl({
       version: "v4",
       action: "write",
       expires: Date.now() + 30 * 60 * 1000,
       contentType,
+      extensionHeaders: { "x-goog-content-length-range": uploadHeaders["x-goog-content-length-range"] },
     });
 
-    return L.json(res, 200, { runId, uploadUrl, object });
+    return L.json(res, 200, { runId, uploadUrl, uploadHeaders, object });
   } catch (e) {
     return L.json(res, 500, { error: String((e && e.message) || e) });
   }

@@ -70,6 +70,8 @@ def cmd_run(a) -> int:
     }
     if a.adopt:
         cfg["adopt"] = a.adopt
+    if a.geometry:
+        cfg["geometry"] = a.geometry
     if a.calibration_run:
         cfg["calibration_run"] = a.calibration_run
     if a.config:
@@ -83,7 +85,7 @@ def cmd_run(a) -> int:
     man = Pipeline(DEFAULT_STAGES).run(ctx, resume=not a.no_resume)
 
     print(f"\n  level      {man.level}  ({K.LEVELS[man.level].quality})")
-    print(f"  frame      {man.frame}   units {man.units}")
+    print(f"  frame      {man.frame or 'none (no geometry)'}   units {man.units}")
     if man.scale:
         print(f"  scale      {man.scale.get('label')}")
     for k, v in (man.verdicts or {}).items():
@@ -183,6 +185,8 @@ def main(argv: list[str] | None = None) -> int:
     r.add_argument("--name")
     r.add_argument("--telemetry", help="SRT/CSV sidecar")
     r.add_argument("--adopt", help="out/<run> whose geometry to adopt")
+    r.add_argument("--geometry", choices=["local"],
+                   help="compute S3 on this machine's GPU (src/pipeline/local_gpu.py)")
     r.add_argument("--calibration-run", help="which calibration file applies")
     r.add_argument("--level", default="L0", choices=[lv.key for lv in K.LADDER])
     r.add_argument("--budget", type=float, default=900.0)

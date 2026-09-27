@@ -251,6 +251,47 @@ check("records with neither counter nor time yield nothing rather than a guess",
       got == [{}, {}])
 check("no records: one empty dict per frame", telemetry_for_frames([], [0, 1, 2], 30.0) == [{}] * 3)
 
+# Variable frame rate (audit F-13). Index / average rate is a time only at a constant
+# rate; the lookup must use the frame's presentation time when it has one.
+got = telemetry_for_frames(one_hz, [30, 31], fps=30.0, times_s=[3.0, None])
+check("a presentation time keys the lookup; a frame without one falls back to index / fps",
+      [g.get("latitude") for g in got] == [3.0, 1.0], str([g.get("latitude") for g in got]))
+
+try:
+    import av
+    from fractions import Fraction
+    from ingest.video_ingest import timed_frames
+except ImportError as e:                      # CI installs av; a bare checkout may not
+    print(f"  SKIP  variable-frame-rate clip: {e}")
+else:
+    # 30 frames at 10 fps, then 60 at 30 fps, in a stream that declares 30 fps. Frame
+    # 30 is shown at 3.0 s; at the declared rate it would be looked up at 1.0 s.
+    vfr = os.path.join(tempfile.mkdtemp(), "vfr.mkv")
+    out = av.open(vfr, "w")
+    st = out.add_stream("mpeg4", rate=30)
+    st.width, st.height, st.pix_fmt = 64, 64, "yuv420p"
+    st.codec_context.time_base = Fraction(1, 1000)
+    for i, ms in enumerate([k * 100 for k in range(30)] +
+                           [3000 + round(k * 1000 / 30) for k in range(60)]):
+        fr = av.VideoFrame.from_ndarray(np.full((64, 64, 3), i, np.uint8), format="rgb24")
+        fr.pts, fr.time_base = ms, Fraction(1, 1000)
+        for pk in st.encode(fr):
+            out.mux(pk)
+    for pk in st.encode():
+        out.mux(pk)
+    out.close()
+    c = av.open(vfr)
+    rate = float(c.streams.video[0].average_rate)
+    times = {n: t for n, _, t in timed_frames(c)}
+    c.close()
+    got = telemetry_for_frames(one_hz, [30, 89], fps=rate, times_s=[times[30], times[89]])
+    old = telemetry_for_frames(one_hz, [30, 89], fps=rate)
+    check("on a variable-frame-rate clip, frame 30 (shown at 3.0 s) gets the 3 s fix",
+          [g.get("latitude") for g in got] == [3.0, 5.0],
+          f"times {times[30]}, {times[89]}; got {[g.get('latitude') for g in got]}")
+    check("index / declared rate would have given it the 1 s fix",
+          old[0].get("latitude") == 1.0, str([g.get("latitude") for g in old]))
+
 print()
 if FAILED:
     print(f"{len(FAILED)} TEST(S) FAILED: {FAILED}")
