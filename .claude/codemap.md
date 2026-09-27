@@ -576,8 +576,8 @@ Gotcha: assumes mostly flat ground under the flight; on a hill or a facade the p
 
 ### tools/pack_site.py
 Packs one run for web/workspace.html and web/index.html: export/model.glb (or --mesh, a textured F4 OBJ carried through the run's level.json or georef.json by mesh_export.export_textured) as base64 inside web/data/model.js (window.TESSERACT, the contract in web/SPEC.md), every registered keyframe camera in the Y-up export frame (time, position, forward, up, fovy, aspect) and 1280 px keyframe images in web/data/frames/.
-It also writes data["detail"] (detail_map: per GLB vertex, the finest photo pixel footprint over keyframes that frame it, dist / (f cos incidence), log-scaled to uint8) and data["sheet"] (render_sheet: an orthographic top render through view_check.rasterize, contours from points_llf.npy, the flight path, to data/sheet.jpg).
-Exports: frame_transform(run) -> (manifest, tf, to5); cameras(run, to5, fps, f_px, w, h) -> list; detail_map(glb, cams, f_px, w, h) -> dict; render_sheet(obj_dir, run, cams, out) -> dict
+It also writes data["detail"] (detail_map: per GLB vertex, the finest photo pixel footprint over keyframes that frame it, dist / (f cos incidence), log-scaled to uint8) and data["sheet"] (render_sheet: an orthographic top render through view_check.rasterize, contours from points_llf.npy, hatching where the photo pixel footprint is over 4x the median, read back by rasterising a grey ramp as the atlas, and the flight path, to data/sheet.jpg). pixel_footprint(V, N, cams, f_px) is the shared per-point computation.
+Exports: frame_transform(run) -> (manifest, tf, to5); cameras(run, to5, fps, f_px, w, h) -> list; pixel_footprint(V, N, cams, f_px); detail_map(glb, cams, f_px, w, h) -> dict; render_sheet(obj_dir, run, cams, out, f_px=None) -> dict
 Used by: run manually before opening web/workspace.html
 Gotcha: camera directions go through the same affine transform as points (by differences) so the depth stretch and axis swap match the mesh. web/data/ is gitignored because a model of the demo clip is a render of it.
 

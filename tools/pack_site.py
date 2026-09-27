@@ -81,7 +81,8 @@ def cameras(run: str, to5, fps: float, f_px: float, w: int, h: int) -> list:
     return out
 
 
-def render_sheet(obj_dir: str, run: str, cams: list, out_path: str, width: int = 2400) -> dict:
+def render_sheet(obj_dir: str, run: str, cams: list, out_path: str, width: int = 2400,
+                 f_px: float | None = None) -> dict:
     """
     The site drawn as a map sheet, straight down: the textured mesh rendered
     orthographically, contours from the levelled dense cloud, the flight path on top.
@@ -106,6 +107,23 @@ def render_sheet(obj_dir: str, run: str, cams: list, out_path: str, width: int =
     zr = float(np.ptp(V[:, 2])) or 1.0
     depth = (V[:, 2].max() - V[:, 2]) + 200.0 * zr      # near-orthographic
     img, mask = rasterize(uv, depth, F, FU, TU, atlas, width, height)
+
+    # Where the photos are coarse: rasterise each vertex's pixel footprint through a
+    # one-row grey ramp used as the atlas, then read the value back per pixel.
+    hatch = None
+    if f_px:
+        import trimesh
+        m = trimesh.Trimesh(V, F, process=False)
+        fp = pixel_footprint(z_up_to_y_up(V), z_up_to_y_up(np.asarray(m.vertex_normals)),
+                             cams, f_px)
+        seen = np.isfinite(fp)
+        if seen.any():
+            coarse = 4.0 * np.median(fp[seen])
+            q = np.where(seen, np.clip(fp / coarse, 0, 2) / 2, 1.0)
+            ramp = np.repeat(np.linspace(0, 255, 256, dtype=np.uint8)[None, :, None], 3, 2)
+            vt = np.column_stack([q * 255 / 256 + 0.5 / 256, np.full(len(q), 0.5)])
+            val, _ = rasterize(uv, depth, F, F, vt, ramp, width, height)
+            hatch = (val[..., 0] >= 128) & mask            # footprint over 4x the median
 
     # Heights for contours: the dense cloud's highest point per cell, holes filled from
     # the nearest cell, smoothed so the lines follow the ground rather than the noise.
@@ -148,6 +166,15 @@ def render_sheet(obj_dir: str, run: str, cams: list, out_path: str, width: int =
     idx = [lv for lv in levels if round(lv / interval) % 5 == 0]
     ax.contour(xx, yy, Zm, levels=levels, colors="#7A4E26", linewidths=0.9, alpha=0.9)
     ax.contour(xx, yy, Zm, levels=idx, colors="#7A4E26", linewidths=2.0)
+    if hatch is not None and hatch.any():
+        # Hatched, as a map marks an unsurveyed area: the ground here was only ever seen
+        # coarsely, at a grazing angle or from far away.
+        from matplotlib.colors import ListedColormap
+        yy2, xx2 = np.mgrid[0:height, 0:width]
+        lines = ((xx2 + yy2) % 18) < 3
+        layer = np.where(hatch & lines, 1.0, np.nan)
+        ax.imshow(layer, extent=[0, width, height, 0], cmap=ListedColormap(["#1F2629"]),
+                  alpha=0.45, interpolation="nearest")
     fx = [(c["p"][0] - lo[0]) / res for c in cams]
     fy = [(hi[1] + c["p"][2]) / res for c in cams]
     ax.plot(fx, fy, color="#1F2629", linewidth=5, solid_capstyle="round")
@@ -161,8 +188,38 @@ def render_sheet(obj_dir: str, run: str, cams: list, out_path: str, width: int =
     fig.savefig(out_path, dpi=dpi, pil_kwargs={"quality": 88})
     plt.close(fig)
     return {"file": "data/" + os.path.basename(out_path), "width": width, "height": height,
+            "hatched_fraction": round(float(hatch.sum() / max(1, mask.sum())), 4)
+            if hatch is not None else None,
             "units_per_px": round(float(res), 6), "contour_interval": interval,
             "extent": [round(float(x), 3) for x in (*lo, *hi)]}
+
+
+def pixel_footprint(V: np.ndarray, N: np.ndarray, cams: list, f_px: float) -> np.ndarray:
+    """
+    For points V with normals N (both Y-up, the cameras' frame): the finest surface size
+    one photo pixel covers, over every keyframe whose frame holds the point,
+    dist / (f * cos(incidence)); inf where none does.
+    """
+    P = np.array([c["p"] for c in cams])
+    Fw = np.array([c["f"] for c in cams])
+    U = np.array([c["u"] for c in cams])
+    R = np.cross(Fw, U)
+    tan_y = np.tan(np.radians(cams[0]["fovy"]) / 2)
+    tan_x = tan_y * cams[0]["aspect"]
+    best = np.full(len(V), np.inf)
+    for a in range(0, len(V), 20000):
+        v, n = V[a:a + 20000], N[a:a + 20000]
+        d = v[:, None, :] - P[None, :, :]                    # camera to point
+        z = np.einsum("vck,ck->vc", d, Fw)
+        x = np.einsum("vck,ck->vc", d, R)
+        y = np.einsum("vck,ck->vc", d, U)
+        inside = (z > 0) & (np.abs(x) < z * tan_x) & (np.abs(y) < z * tan_y)
+        dist = np.linalg.norm(d, axis=2)
+        cos = np.abs(np.einsum("vck,vk->vc", d, n)) / np.maximum(dist, 1e-12)
+        upp = dist / (f_px * np.maximum(cos, 0.05))
+        upp[~inside] = np.inf
+        best[a:a + 20000] = upp.min(1)
+    return best
 
 
 def detail_map(glb_path: str, cams: list, f_px: float, w: int, h: int) -> dict:
@@ -176,30 +233,9 @@ def detail_map(glb_path: str, cams: list, f_px: float, w: int, h: int) -> dict:
     import trimesh
     scene = trimesh.load(glb_path, process=False)
     meshes = list(scene.geometry.values()) if hasattr(scene, "geometry") else [scene]
-    P = np.array([c["p"] for c in cams])
-    Fw = np.array([c["f"] for c in cams])
-    U = np.array([c["u"] for c in cams])
-    R = np.cross(Fw, U)
-    tan_y = np.tan(np.radians(cams[0]["fovy"]) / 2)
-    tan_x = tan_y * cams[0]["aspect"]
-    out = []
-    for m in meshes:
-        V = np.asarray(m.vertices, np.float64)
-        N = np.asarray(m.vertex_normals, np.float64)
-        best = np.full(len(V), np.inf)
-        for a in range(0, len(V), 20000):
-            v, n = V[a:a + 20000], N[a:a + 20000]
-            d = v[:, None, :] - P[None, :, :]                    # camera to vertex
-            z = np.einsum("vck,ck->vc", d, Fw)
-            x = np.einsum("vck,ck->vc", d, R)
-            y = np.einsum("vck,ck->vc", d, U)
-            inside = (z > 0) & (np.abs(x) < z * tan_x) & (np.abs(y) < z * tan_y)
-            dist = np.linalg.norm(d, axis=2)
-            cos = np.abs(np.einsum("vck,vk->vc", d, n)) / np.maximum(dist, 1e-12)
-            upp = dist / (f_px * np.maximum(cos, 0.05))
-            upp[~inside] = np.inf
-            best[a:a + 20000] = upp.min(1)
-        out.append(best)
+    out = [pixel_footprint(np.asarray(m.vertices, np.float64),
+                           np.asarray(m.vertex_normals, np.float64), cams, f_px)
+           for m in meshes]
     allv = np.concatenate(out)
     seen = np.isfinite(allv)
     lo, hi = np.percentile(allv[seen], [2, 98]) if seen.any() else (1e-3, 1.0)
@@ -293,7 +329,8 @@ def main():
     }
     data["detail"] = detail_map(glb, cams, float(cam["f"]), int(cam["w"]), int(cam["h"]))
     if not a.no_sheet:
-        data["sheet"] = render_sheet(obj_dir, run, cams, os.path.join(a.out, "sheet.jpg"))
+        data["sheet"] = render_sheet(obj_dir, run, cams, os.path.join(a.out, "sheet.jpg"),
+                                     f_px=float(cam["f"]))
     with open(glb, "rb") as f:
         data["glb"] = base64.b64encode(f.read()).decode("ascii")
     with open(os.path.join(a.out, "model.js"), "w", encoding="utf-8", newline="\n") as f:

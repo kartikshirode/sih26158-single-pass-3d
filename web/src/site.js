@@ -35,7 +35,8 @@ function sheet() {
   img.height = sh.height;
   const unit = data.units === "metres" ? "m" : "model units";
   const across = (sh.extent[2] - sh.extent[0]).toFixed(1);
-  $("sheetCaption").textContent = `The model seen straight down: its own texture, contours every ${sh.contour_interval} ${unit} from its heights (heavier every fifth), and the drone's path in black with a dot for each second. The sheet is ${across} ${unit} across.`;
+  $("sheetCaption").textContent = `The model seen straight down: its own texture, contours every ${sh.contour_interval} ${unit} from its heights (heavier every fifth), and the drone's path in black with a dot for each second. The sheet is ${across} ${unit} across.` +
+    (sh.hatched_fraction ? ` Hatched, ${Math.round(sh.hatched_fraction * 100)}% of it: ground the photos only saw coarsely, where one pixel covers over four times the median, so measure there with care.` : "");
 }
 
 function wipe() {
