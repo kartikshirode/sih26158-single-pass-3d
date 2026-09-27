@@ -900,13 +900,13 @@ Facts for that run as of 2026-09-27 (codex-opt 4de9efa): the 7/10 scorecard with
 Gotcha: disk, run folders and the scorecard's current values are a dated snapshot; refresh before reusing.
 
 ### audit/codex-7of10/LOG.md
-CPU-only saved-output and test command ledger for this audit, including replay inputs, results and scratch paths under out/codex/7of10. Read before interpreting FINDINGS.md numbers.
+CPU-only saved-output and test command ledger for this audit, including replay inputs, altitude probes, results and scratch paths under out/codex/7of10. Read before interpreting FINDINGS.md numbers.
 
 ### audit/codex-7of10/FINDINGS.md
-Phases 0-3: machine and tests, four-run manifest and export verification, the numeric 7/10 scorecard, CPU seam/hole/far-field and no-pitch analysis, and code findings C1/F19-F22 including the SIMPLE_RADIAL F21 schema issue. Replay and sampling limits are stated explicitly; source scripts and outputs are in LOG.md.
+Phases 0-3: machine and tests, four-run manifest and export verification, the numeric 7/10 scorecard, CPU seam/hole/far-field and no-pitch analysis, and code findings C1/F19-F22 including the SIMPLE_RADIAL F21 schema issue. The rel_alt discussion accounts for rolling terrain. Replay and sampling limits are stated explicitly; source scripts and outputs are in LOG.md.
 
 ### audit/codex-7of10/RESEARCH.md
-Phase 4 options ranked by scorecard impact: texture patch correction, holes/far field, independent focal scale, B2 visibility, viewer/gsplat, and speed. Each option labels predicted gain, runtime, 8 GB and Windows feasibility, install size, separate code/weight licence and risk; links to primary project sources.
+Phase 4 options ranked by scorecard impact: texture patch correction, holes/far field, independent focal scale including rel_alt with rolling terrain, B2 visibility, viewer/gsplat, and speed. Each option labels predicted gain, runtime, 8 GB and Windows feasibility, install size, separate code/weight licence and risk; links to primary project sources.
 
 ### audit/codex-7of10/NEXTRUN.md
 Phase 5 instructions for an eight-hour next run: owner-approved disk/dependency preflight, unique held-out baselines, six ordered single-change experiments, time slots, exact keep/stop rules and final scorecard proof. Never treat its predicted gains as measured results.
