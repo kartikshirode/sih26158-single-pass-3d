@@ -909,7 +909,7 @@ Phases 0-3: machine and tests, four-run manifest and export verification, the nu
 Phase 4 options ranked by scorecard impact: texture patch correction, holes/far field, independent focal scale including rel_alt with rolling terrain, B2 visibility, viewer/gsplat, and speed. Each option labels predicted gain, runtime, 8 GB and Windows feasibility, install size, separate code/weight licence and risk; links to primary project sources.
 
 ### audit/codex-7of10/NEXTRUN.md
-Phase 5 instructions for an eight-hour next run: owner-approved disk/dependency preflight, unique held-out baselines, six ordered single-change experiments, time slots, exact keep/stop rules and final scorecard proof. Never treat its predicted gains as measured results.
+Phase 5 instructions for an eight-hour next run: owner-approved disk/dependency preflight, unique held-out baselines, six ordered single-change experiments, time slots, source-specific clean-run command templates, exact keep/stop rules and final scorecard proof. Never treat its predicted gains as measured results.
 
 ### audit/codex-7of10/REPORT.md
 One-screen owner summary: current numeric 7/10 scorecard, three consequential audit findings, visible fault causes, five next-run experiments with predicted gains and slots, and the requested disk/dependency decisions. Links to full FINDINGS, RESEARCH and NEXTRUN records.
