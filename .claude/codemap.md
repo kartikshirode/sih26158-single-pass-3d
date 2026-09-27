@@ -841,6 +841,10 @@ Why the demo model came out as stacked ground sheets and the fix (2026-09-25): k
 The local GPU optimisation write-up for branch codex-opt: benchmarks B1-B5v and the held-out, shape, truth and time checks; before and after; audit findings F1-F18; poses (retriangulation off, point filtering); dense, mesh and texture experiments; mesh exports; SRT georeferencing; the 600 s clip; the focal length (the straight-pass ambiguity, the turn gate, the gimbal-pitch correction); time rates and the ten-minute projection; what was rejected and what is still wrong; machine changes; how to reproduce.
 Gotcha: its numbers come from audit/codex-opt/RUNLOG.md; accuracy figures are synthetic, and the ten-minute 30 fps time is a prediction. Code comments cite its sections 9 and 10.
 
+### research/12-demo-model-and-workspace.md
+The night of 2026-09-28: what stops a perfect model from one pass (one angle, backs never seen, the sky crop, seams, no GPS, video), the texture findings (unsharp mask off 22.82 to 24.21 dB, smoothness 0.5 to 24.42), the unseen-face fill and seam levelling (24.65 held out), end-to-end B1 293.4 s and 24.63 dB, B3 unchanged at 0.393 m, B2 coverage 61%, the workspace and the site, and what is still wrong.
+Gotcha: numbers come from audit/night-7of10/RUNLOG.md; B5v was not rerun (disk), its time is a prediction.
+
 ### research/08-web-upload.md
 Design of the upload feature (one Cloud Run job per upload, preview before final, status.json contract, limits, uploads kept off curated pages) and two defects it exposed: packing scripts pinned to one laptop, and S1 retaining every full-res frame (~112 GB for a 10-min clip) now fixed with a two-pass decode. A 10-minute clip was first ingested on 2026-09-25 (402 s as the code stood, 55 s after research/09). A 2026-09-24 addendum records the start claim, daily slots and signed byte bound (audit F-04, F-05) and the CORS dependency.
 
@@ -956,6 +960,9 @@ The overnight plan of 2026-09-28: aims (B1 at 7/10 at the default view, a worksp
 The night's measurements on B1's held-out views: baseline 22.866 dB on master, the TextureMesh sweeps X0-X10 (sharpness 0 plus smoothness ratio 0.5 kept: 24.415 dB, SSIM 0.7055), the unseen-face fill F1-F2, and the clean night-b1 run (287.6 s, verify PASS, held out 24.443 dB, 0.7037, 98.47%), plus the machine table.
 
 ## web/
+
+### web/README.md
+How to pack a run (tools/pack_site.py, a second model with --out web/data/<id>), open the two pages from disk, the workspace controls and shortcuts, and the npm build and test commands.
 
 ### web/SPEC.md
 Behaviour spec for the workspace script: offline file:// constraint (classic scripts, esbuild IIFE), the window.TESSERACT data contract, rendering (unlit photo texture, BVH picking, contour shader, flight path), navigation that travels the pass (grab-pan, orbit and zoom about the cursor point, double-click fly-to, WASD, minimap, flight strip with chase camera and playback), the tools (distance, height, area, volume, profile, line of sight, coordinates, note), export, one-length scale calibration, neatline ticks, loading and tests.

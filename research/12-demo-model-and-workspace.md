@@ -109,6 +109,9 @@ what the model's own heights draw.
 - **Detail layer.** Colours the surface by how much ground one photo pixel covers there,
   so nobody measures the far field as if it were the near field.
 - **Contours**, drawn in the shader from the model's heights.
+- **More than one model.** The synthetic test flight with its SRT packs beside the demo
+  clip (`?model=b3`), and there the same tools read metres, east and north, latitude and
+  longitude, with heights labelled as above take-off.
 
 | Application in the problem statement | Tools |
 |---|---|
@@ -126,7 +129,9 @@ what the model's own heights draw.
 `web/index.html`. Its one bold element is the hero: each keyframe photo wiped against
 the model rendered from that keyframe's own camera, playing through the pass. Then the
 site as a map sheet with contours and the flight path, the stage log with measured
-timings, the evidence table, the application matrix and the limits. Offline, two
+timings, the evidence table, the application matrix and the limits. The sheet hatches
+the 18% of the site that the photos saw only coarsely (a pixel footprint over four times
+the median), the way a map marks ground that wasn't surveyed. Offline, two
 vendored fonts (Archivo and Newsreader italic, OFL), one bundled script.
 
 ## 7. Still wrong
