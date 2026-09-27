@@ -579,7 +579,7 @@ Packs one run for web/workspace.html and web/index.html: export/model.glb (or --
 It also writes data["detail"] (detail_map: per GLB vertex, the finest photo pixel footprint over keyframes that frame it, dist / (f cos incidence), log-scaled to uint8) and data["sheet"] (render_sheet: an orthographic top render through view_check.rasterize, contours from points_llf.npy, hatching where the photo pixel footprint is over 4x the median, read back by rasterising a grey ramp as the atlas, and the flight path, to data/sheet.jpg). pixel_footprint(V, N, cams, f_px) is the shared per-point computation.
 Exports: frame_transform(run) -> (manifest, tf, to5); cameras(run, to5, fps, f_px, w, h) -> list; pixel_footprint(V, N, cams, f_px); detail_map(glb, cams, f_px, w, h) -> dict; render_sheet(obj_dir, run, cams, out, f_px=None) -> dict
 Used by: run manually before opening web/workspace.html
-Gotcha: camera directions go through the same affine transform as points (by differences) so the depth stretch and axis swap match the mesh. web/data/ is gitignored because a model of the demo clip is a render of it.
+Gotcha: camera directions go through the same affine transform as points (by differences) so the depth stretch and axis swap match the mesh. --out web/data/<id> packs a second model with paths relative to web/, and register() lists every model in web/data/models.js for the pages' ?model= switch. web/data/ is gitignored because a model of the demo clip is a render of it.
 
 ### tools/build_run.py
 Generates demo/run/index.html (upload page) from run_template.html, injecting __DS_CSS__, __TITLE__, __DESC__, __LIMITS__.
@@ -961,11 +961,11 @@ The night's measurements on B1's held-out views: baseline 22.866 dB on master, t
 Behaviour spec for the workspace script: offline file:// constraint (classic scripts, esbuild IIFE), the window.TESSERACT data contract, rendering (unlit photo texture, BVH picking, contour shader, flight path), navigation that travels the pass (grab-pan, orbit and zoom about the cursor point, double-click fly-to, WASD, minimap, flight strip with chase camera and playback), the tools (distance, height, area, volume, profile, line of sight, coordinates, note), export, one-length scale calibration, neatline ticks, loading and tests.
 
 ### web/workspace.html
-The workspace page: top bar (model, units, Set scale), tool rail (data-tool, data-key), the neatline stage (view, ticks, minimap, view buttons, layers, hint, scale bar), inspector (current tool readout, chart, measurement list, Export), flight strip, calibration dialog, loading screen. Loads data/model.js then dist/workspace.js.
+The workspace page: top bar (model, units, Set scale), tool rail (data-tool, data-key), the neatline stage (view, ticks, minimap, view buttons, layers, hint, scale bar), inspector (current tool readout, chart, measurement list, Export), flight strip, calibration dialog, loading screen. Loads data/models.js, then the model ?model=<id> names (document.write script tag), then dist/workspace.js; a model switcher shows when more than one is packed.
 Gotcha: opens from disk; ids and classes are the contract with web/src and web/css/workspace.css.
 
 ### web/index.html
-The presentation page: masthead, hero (headline, then the wipe: a keyframe photo against the model rendered from that keyframe's camera, with play and scrub), The pass (facts filled from data), The site (the plan-view map sheet), Method (stage log with bars sized by time), Evidence (held-out, synthetic accuracy, ten-minute time, formats), Uses (the eight PS applications against the eight tools), Limits, colophon. Loads data/model.js and dist/site.js.
+The presentation page: masthead, hero (headline, then the wipe: a keyframe photo against the model rendered from that keyframe's camera, with play and scrub), The pass (facts filled from data), The site (the plan-view map sheet), Method (stage log with bars sized by time), Evidence (held-out, synthetic accuracy, ten-minute time, formats), Uses (the eight PS applications against the eight tools), Limits, colophon; the evidence links to the workspace on the GPS test flight (?model=b3). Loads data/models.js, the chosen model and dist/site.js.
 Gotcha: evidence figures are typed in the HTML from audit/night-7of10/RUNLOG.md and research/11; refresh them when those change.
 
 ### web/css/site.css

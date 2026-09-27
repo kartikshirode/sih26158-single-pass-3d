@@ -387,7 +387,9 @@ export function createTools(S, units, T) {
           const g = G.localToLatLon(units.len(p.x), units.len(p.y), units.len(p.z), T.georef);
           rows.push({ label: 'Latitude', text: g.lat.toFixed(7), unit: '°' });
           rows.push({ label: 'Longitude', text: g.lon.toFixed(7), unit: '°' });
-          rows.push({ label: 'Height', text: fmt(g.h), unit: 'm' });
+          // The local height is already above; this one says what it is measured from.
+          if (T.georef.height_note) rows.push({ label: 'Height is above', text: 'take-off', unit: '', note: T.georef.height_note });
+          else rows.push({ label: 'Ellipsoid height', text: fmt(g.h), unit: 'm' });
         }
         return rows;
       },

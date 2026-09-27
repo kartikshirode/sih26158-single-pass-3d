@@ -95,6 +95,7 @@
       </tbody>
     </table>
     <p class="note">The accuracy figures come from synthetic clips, because a real flight with surveyed ground truth wasn't available. They need a gimbal angle in the telemetry, which many consumer drones don't record.</p>
+    <p class="cta-line"><a class="plain-link" href="workspace.html?model=b3">Measure the synthetic flight in metres, with latitude and longitude</a></p>
   </section>
 
   <section id="uses" class="band" aria-labelledby="usesTitle">
@@ -140,7 +141,17 @@
   <p class="note">Built with MapAnything (Apache 2.0), COLMAP (BSD), OpenMVS (AGPL 3.0, run as a separate program) and three.js (MIT). Runs offline.</p>
 </footer>
 
-<script src="data/model.js"></script>
+<script src="data/models.js"></script>
+<script>
+  // Pick the packed model named by ?model=<id>, else the first one listed. A plain script
+  // tag, because a page opened from disk may not fetch local files.
+  (function () {
+    var want = new URLSearchParams(location.search).get("model");
+    var list = window.TESSERACT_MODELS || [];
+    var m = list.filter(function (x) { return x.id === want; })[0] || list[0];
+    document.write('<script src="' + (m ? m.src : "data/model.js") + '"><\/script>');
+  })();
+</script>
 <script src="dist/site.js"></script>
 </body>
 </html>

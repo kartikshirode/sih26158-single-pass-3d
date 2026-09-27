@@ -34,6 +34,22 @@ async function main() {
 
   $('modelTitle').textContent = T.title || 'Model';
   $('modelSub').textContent = T.subtitle || '';
+  // With more than one packed model, a switcher replaces the title; switching reloads the
+  // page with ?model=<id>, since each model arrives by its own script tag.
+  const models = window.TESSERACT_MODELS || [];
+  if (models.length > 1) {
+    const sel = $('modelSelect');
+    models.forEach((m) => {
+      const o = document.createElement('option');
+      o.value = m.id;
+      o.textContent = `${m.title} (${m.georef ? 'GPS, metres' : m.units})`;
+      o.selected = m.id === T.id;
+      sel.appendChild(o);
+    });
+    sel.addEventListener('change', () => { location.search = `?model=${encodeURIComponent(sel.value)}`; });
+    sel.parentElement.hidden = false;
+    $('modelTitle').hidden = true;
+  }
   document.title = `${T.title || 'Model'} · Tesseract workspace`;
 
   const canvas = $('view');

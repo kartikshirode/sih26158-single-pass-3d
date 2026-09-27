@@ -31,6 +31,8 @@ body.ws {
 .ws-title { display: flex; align-items: baseline; gap: 12px; min-width: 0; }
 .ws-title #modelTitle { font-weight: 600; white-space: nowrap; }
 .ws-title .note { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ws-model { display: flex; align-items: center; gap: 8px; font-size: var(--t-sm); color: var(--slate); }
+.ws-model select { font: inherit; color: var(--ink); background: var(--paper); border: 1px solid var(--rule); border-radius: 3px; padding: 3px 6px; }
 .ws-units { margin-left: auto; display: flex; align-items: center; gap: 10px; font-size: var(--t-sm); }
 .ws-units-label { color: var(--slate); }
 .ws-units strong { font-weight: 600; }

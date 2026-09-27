@@ -186,6 +186,7 @@ table { border-collapse: collapse; }
 .matrix tbody th { text-align: left; font-weight: 500; white-space: nowrap; padding-right: 28px; }
 .matrix td { text-align: center; color: var(--magenta); font-size: 11px; }
 .matrix tbody tr:hover { background: var(--magenta-wash); }
+.plain-link { color: var(--magenta); font-weight: 500; }
 .cta-line { display: flex; gap: 18px; align-items: center; margin-top: 26px; flex-wrap: wrap; }
 
 .limits { list-style: none; padding: 0; }

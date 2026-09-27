@@ -47,7 +47,7 @@ def frame_transform(run: str):
     return man, tf, (lambda X: _apply_frame_json(np.asarray(X, np.float64), tf))
 
 
-def cameras(run: str, to5, fps: float, f_px: float, w: int, h: int) -> list:
+def cameras(run: str, to5, fps: float, f_px: float, w: int, h: int, prefix: str = "data") -> list:
     """Each registered keyframe camera: time, thumbnail, position, forward and up, Y up."""
     names = sorted((x for x in os.listdir(os.path.join(run, "keyframes"))
                     if x.lower().endswith((".jpg", ".jpeg", ".png"))), key=frame_order)
@@ -73,7 +73,7 @@ def cameras(run: str, to5, fps: float, f_px: float, w: int, h: int) -> list:
         u /= np.linalg.norm(u)
         frame = int(re.search(r"_f(\d+)", name).group(1)) if "_f" in name else len(out)
         out.append({"t": round(frame / fps, 3), "name": name,
-                    "file": f"data/frames/{os.path.splitext(name)[0]}.jpg",
+                    "file": f"{prefix}/frames/{os.path.splitext(name)[0]}.jpg",
                     "p": [round(float(x), 4) for x in P[0]],
                     "f": [round(float(x), 5) for x in f],
                     "u": [round(float(x), 5) for x in u],
@@ -82,7 +82,7 @@ def cameras(run: str, to5, fps: float, f_px: float, w: int, h: int) -> list:
 
 
 def render_sheet(obj_dir: str, run: str, cams: list, out_path: str, width: int = 2400,
-                 f_px: float | None = None) -> dict:
+                 f_px: float | None = None, prefix: str = "data") -> dict:
     """
     The site drawn as a map sheet, straight down: the textured mesh rendered
     orthographically, contours from the levelled dense cloud, the flight path on top.
@@ -187,7 +187,7 @@ def render_sheet(obj_dir: str, run: str, cams: list, out_path: str, width: int =
     ax.axis("off")
     fig.savefig(out_path, dpi=dpi, pil_kwargs={"quality": 88})
     plt.close(fig)
-    return {"file": "data/" + os.path.basename(out_path), "width": width, "height": height,
+    return {"file": f"{prefix}/" + os.path.basename(out_path), "width": width, "height": height,
             "hatched_fraction": round(float(hatch.sum() / max(1, mask.sum())), 4)
             if hatch is not None else None,
             "units_per_px": round(float(res), 6), "contour_interval": interval,
@@ -254,6 +254,22 @@ def glb_bounds(glb_path: str) -> dict:
     return {"min": [round(float(x), 4) for x in lo], "max": [round(float(x), 4) for x in hi]}
 
 
+def register(prefix: str, data: dict):
+    """List the packed models in web/data/models.js for the pages' model switcher."""
+    path = os.path.join(ROOT, "web", "data", "models.js")
+    models = []
+    if os.path.exists(path):
+        txt = open(path, encoding="utf-8").read()
+        models = json.loads(txt[txt.index("=") + 1:].strip().rstrip(";"))
+    models = [m for m in models if m["src"] != f"{prefix}/model.js"]
+    models.append({"id": data["id"], "title": data["title"], "src": f"{prefix}/model.js",
+                   "units": data["units"], "georef": bool(data["georef"])})
+    models.sort(key=lambda m: (m["src"] != "data/model.js", m["title"]))
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w", encoding="utf-8", newline="\n") as f:
+        f.write("window.TESSERACT_MODELS = " + json.dumps(models, indent=1) + ";\n")
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("run")
@@ -284,13 +300,15 @@ def main():
 
     obj_dir = os.path.dirname(glb)
     os.makedirs(os.path.join(a.out, "frames"), exist_ok=True)
-    cams = cameras(run, to5, fps, float(cam["f"]), int(cam["w"]), int(cam["h"]))
+    # Paths in the data are relative to web/, where the pages sit.
+    prefix = os.path.relpath(os.path.abspath(a.out), os.path.join(ROOT, "web")).replace(os.sep, "/")
+    cams = cameras(run, to5, fps, float(cam["f"]), int(cam["w"]), int(cam["h"]), prefix)
     for c in cams:
         img = cv2.imread(os.path.join(run, "keyframes", c.pop("name")))
         s = THUMB_W / img.shape[1]
         img = cv2.resize(img, (THUMB_W, max(1, round(img.shape[0] * s))),
                          interpolation=cv2.INTER_AREA)
-        cv2.imwrite(os.path.join(a.out, os.path.relpath(c["file"], "data")), img,
+        cv2.imwrite(os.path.join(a.out, os.path.relpath(c["file"], prefix)), img,
                     [cv2.IMWRITE_JPEG_QUALITY, 82])
 
     metres = man.get("units") == "metres"
@@ -330,7 +348,7 @@ def main():
     data["detail"] = detail_map(glb, cams, float(cam["f"]), int(cam["w"]), int(cam["h"]))
     if not a.no_sheet:
         data["sheet"] = render_sheet(obj_dir, run, cams, os.path.join(a.out, "sheet.jpg"),
-                                     f_px=float(cam["f"]))
+                                     f_px=float(cam["f"]), prefix=prefix)
     with open(glb, "rb") as f:
         data["glb"] = base64.b64encode(f.read()).decode("ascii")
     with open(os.path.join(a.out, "model.js"), "w", encoding="utf-8", newline="\n") as f:
@@ -339,6 +357,7 @@ def main():
         f.write(";\n")
     if tmp:
         shutil.rmtree(tmp, ignore_errors=True)
+    register(prefix, data)
     size = os.path.getsize(os.path.join(a.out, "model.js")) / 1e6
     print(f"{data['id']}: {len(cams)} cameras, {tri} triangles, {size:.1f} MB -> {a.out}")
 

@@ -14,6 +14,9 @@
   <a class="ws-brand wide" href="index.html">Tesseract</a>
   <div class="ws-title">
     <span id="modelTitle">Loading model</span>
+    <label class="ws-model" hidden>Model
+      <select id="modelSelect"></select>
+    </label>
     <span class="note" id="modelSub"></span>
   </div>
   <div class="ws-units">
@@ -129,7 +132,17 @@
 
 <div class="ws-loading" id="loading"><span class="wide">Tesseract</span><span class="note" id="loadingNote">Reading the model</span></div>
 
-<script src="data/model.js"></script>
+<script src="data/models.js"></script>
+<script>
+  // Pick the packed model named by ?model=<id>, else the first one listed. A plain script
+  // tag, because a page opened from disk may not fetch local files.
+  (function () {
+    var want = new URLSearchParams(location.search).get("model");
+    var list = window.TESSERACT_MODELS || [];
+    var m = list.filter(function (x) { return x.id === want; })[0] || list[0];
+    document.write('<script src="' + (m ? m.src : "data/model.js") + '"><\/script>');
+  })();
+</script>
 <script src="dist/workspace.js"></script>
 </body>
 </html>

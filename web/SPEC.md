@@ -52,6 +52,12 @@ Two optional fields:
   Detail layer.
 - `sheet`: the presentation page's plan-view map; the workspace ignores it.
 
+Several packed models: `tools/pack_site.py --out web/data/<id>` packs into a subfolder
+(paths inside stay relative to `web/`) and lists every model in `web/data/models.js` as
+`window.TESSERACT_MODELS` (id, title, src, units, georef). Both pages load that list, then
+the model named by `?model=<id>` (else the first) with a `document.write` script tag. The
+workspace shows a switcher in the top bar when more than one is listed.
+
 ## Rendering
 
 - `WebGLRenderer` with antialias, `outputColorSpace = SRGBColorSpace`, no tone mapping. The
