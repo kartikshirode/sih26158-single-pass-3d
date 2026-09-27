@@ -913,3 +913,9 @@ Phase 5 instructions for an eight-hour next run: owner-approved disk/dependency 
 
 ### audit/codex-7of10/REPORT.md
 One-screen owner summary: current numeric 7/10 scorecard, three consequential audit findings, visible fault causes, five next-run experiments with predicted gains and slots, and the requested disk/dependency decisions. Links to full FINDINGS, RESEARCH and NEXTRUN records.
+
+## audit/codex-seams/
+
+### audit/codex-seams/PROMPT.md
+Brief for a CPU-only Codex job in its own worktree (branch codex-seams): build tools/texture_level.py, a Waechter-style global colour adjustment on a finished TextureMesh OBJ and atlases (per patch-vertex RGB offsets, seam plus smoothness least squares, barycentric application, gutter fill), with tools/test_texture_level.py; prove it with the FINDINGS.md seam metric on the four saved meshes and view_check (no --build) on out/codex/next7/b1-base-ho. No GPU, installs or edits to src/.
+Gotcha: launch from the main checkout's root with its absolute path; saved outputs are read from the main checkout because out/ is not in the worktree.
