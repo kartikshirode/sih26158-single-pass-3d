@@ -47,6 +47,9 @@ jobs:
       - name: textured mesh exports (OBJ, GLB; FBX needs assimp and is skipped here)
         run: python src/pipeline/test_mesh_export.py
 
+      - name: unseen faces coloured from the dense cloud
+        run: python src/pipeline/test_texture_fill.py
+
       - name: window fusion
         run: python src/pipeline/test_window_fuse.py
 

@@ -2,7 +2,8 @@
 Give the faces no photo saw a colour from the dense cloud instead of TextureMesh's flat
 empty colour.
 
-Run:  python tools/texture_fill.py <geometry_dir> --out <new_dir> [--report <json>]
+Run:  python src/pipeline/texture_fill.py <geometry_dir> --out <new_dir> [--report <json>]
+In a run, local_gpu calls fill_in_place on its work folder right after TextureMesh.
 
 TextureMesh maps every face it could not texture to one texel of the empty colour, so on
 the demo 3.2% of the faces (6.8k) share a single UV point and render as orange blotches.
@@ -72,7 +73,8 @@ def unseen(faces: list, VT: np.ndarray) -> np.ndarray:
 
 def corner_colours(P: np.ndarray, C: np.ndarray, X: np.ndarray) -> np.ndarray:
     """Inverse-distance mean colour (BGR) of the dense points nearest each corner."""
-    d, j = cKDTree(P).query(X, k=NEIGHBOURS)
+    d, j = cKDTree(P).query(X, k=min(NEIGHBOURS, len(P)))
+    d, j = d.reshape(len(X), -1), j.reshape(len(X), -1)
     w = 1.0 / np.maximum(d, 1e-9)
     rgb = (C[j].astype(np.float64) * w[..., None]).sum(1) / w.sum(1, keepdims=True)
     return rgb[:, ::-1]
@@ -193,6 +195,26 @@ def fill(geometry: str, out: str, cloud: str | None = None) -> dict:
     if os.path.isdir(src) and not os.path.exists(os.path.join(out, "sparse_txt")):
         shutil.copytree(src, os.path.join(out, "sparse_txt"))
     report["seconds"] = round(time.perf_counter() - t0, 2)
+    return report
+
+
+def fill_in_place(work: str) -> dict:
+    """fill() into a temporary folder, then replace the work folder's OBJ, MTL and atlas."""
+    import tempfile
+    tmp = tempfile.mkdtemp(prefix="fill-", dir=work)
+    try:
+        report = fill(work, tmp)
+        if report["unseen_faces"]:
+            _, atlases = materials(work, parse(os.path.join(work, "scene_tex.obj"))[0])
+            for name in os.listdir(tmp):
+                if name != "sparse_txt":
+                    shutil.move(os.path.join(tmp, name), os.path.join(work, name))
+            _, now = materials(work, parse(os.path.join(work, "scene_tex.obj"))[0])
+            for old in set(atlases.values()) - set(now.values()):
+                if os.path.exists(os.path.join(work, old)):
+                    os.remove(os.path.join(work, old))
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
     return report
 
 

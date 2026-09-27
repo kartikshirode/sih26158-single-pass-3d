@@ -106,6 +106,15 @@ DEFAULTS = {
     "mesh": True,
     "texture": True,            # OpenMVS TextureMesh on the mesh, to a textured OBJ
     "texture_decimate": 0.2,    # fraction of the mesh's faces kept before texturing
+    # TextureMesh's unsharp mask (default 0.5) adds contrast the photos never had: at 0
+    # the demo's held-out views gained 1.4 dB (22.82 to 24.21) and the colour step at
+    # patch borders fell from 25.6 to 22.6 levels. A smoothness ratio of 0.5 (default
+    # 0.1) makes fewer, larger patches: 24.42 dB, SSIM 0.705 with both (night-7of10).
+    "texture_sharpness": 0.0,
+    "texture_smoothness": 0.5,
+    # Faces no photo saw get the dense cloud's colours instead of the flat empty colour
+    # (texture_fill.py): 6,815 orange faces on the demo, 3.2% of the mesh.
+    "texture_fill": True,
     # Extra arguments for one tool, split on spaces and appended last so they win; for
     # an operator or an experiment trying a flag no option above covers yet.
     "mapper_extra": "",
@@ -734,8 +743,8 @@ def reuse_sparse(src: str, work: str, names: list, o: dict) -> dict:
 # Options read only after the S3b gate. reuse_sparse checks that the rest match.
 DENSE_OPTIONS = ("dense_resolution_level", "dense_min_resolution", "dense_views_fuse", "dense_neighbours",
                  "dense_fusion_filter", "mesh_min_point_distance", "mesh", "texture",
-                 "texture_decimate", "keep_intermediate", "densify_extra", "mesh_extra",
-                 "texture_extra")
+                 "texture_decimate", "texture_sharpness", "texture_smoothness", "texture_fill",
+                 "keep_intermediate", "densify_extra", "mesh_extra", "texture_extra")
 
 
 def sparse(r: Runner, colmap: str, img: str, names: list, h0: int, w0: int, crop_trbl,
@@ -853,9 +862,20 @@ def dense(r: Runner, mvs: dict, colmap: str, img: str, sp_txt: str, names: list,
             r.sh(with_extra([mvs["TextureMesh"], "scene.mvs", "-m", "scene_dense_mesh.ply",
                   "-w", r.work, "--decimate", o["texture_decimate"],
                   "--global-seam-leveling", "0", "--local-seam-leveling", "0",
+                  "--sharpness-weight", o["texture_sharpness"],
+                  "--cost-smoothness-ratio", o["texture_smoothness"],
                   "--export-type", "obj", "-o", "scene_tex.mvs"], o["texture_extra"]),
                  "TextureMesh")
             result["textured_mesh"] = "scene_tex.obj"
+            if o["texture_fill"]:
+                try:
+                    from pipeline.texture_fill import fill_in_place
+                except ImportError:
+                    from texture_fill import fill_in_place
+                t = time.perf_counter()
+                result["texture_fill"] = fill_in_place(r.work)
+                log(f"  texture fill: {result['texture_fill']['unseen_faces']} unseen faces "
+                    f"coloured from the dense cloud, {time.perf_counter() - t:.1f} s")
         except RuntimeError as e:
             result["texture_error"] = str(e)[-500:]
             log("  TextureMesh failed; continuing with the untextured mesh")
