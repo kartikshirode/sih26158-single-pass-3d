@@ -178,7 +178,7 @@ table { border-collapse: collapse; }
 .evidence tbody td:nth-child(2) { font-size: var(--t-lg); font-weight: 500; white-space: nowrap; width: 9em; color: var(--ink); }
 .evidence tbody td:last-child { color: #3b4844; }
 
-.matrix-wrap { overflow-x: auto; max-width: 1100px; }
+.matrix-wrap { overflow-x: auto; max-width: min(1100px, 100%); }
 .matrix { font-size: var(--t-sm); min-width: 820px; }
 .matrix th, .matrix td { padding: 9px 12px; border-bottom: 1px solid var(--rule); }
 .matrix thead th { font-weight: 500; color: var(--slate); text-align: center; vertical-align: bottom; white-space: nowrap; }
@@ -201,7 +201,9 @@ table { border-collapse: collapse; }
 
 @media (max-width: 860px) {
   .masthead nav a:not(.go) { display: none; }
-  .band { grid-template-columns: 1fr; }
+  .band { grid-template-columns: minmax(0, 1fr); }
+  .masthead { padding-top: 10px; padding-bottom: 10px; }
+  .hero h1 { font-size: 34px; }
   .band > h2 { grid-row: auto; margin-bottom: 16px; }
   .band > * { grid-column: 1; }
   .cols { grid-template-columns: 1fr; gap: 20px; }

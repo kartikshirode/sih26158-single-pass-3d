@@ -150,11 +150,11 @@ def render_sheet(obj_dir: str, run: str, cams: list, out_path: str, width: int =
     ax.contour(xx, yy, Zm, levels=idx, colors="#7A4E26", linewidths=2.0)
     fx = [(c["p"][0] - lo[0]) / res for c in cams]
     fy = [(hi[1] + c["p"][2]) / res for c in cams]
-    ax.plot(fx, fy, color="#1F2629", linewidth=2.2, solid_capstyle="round")
+    ax.plot(fx, fy, color="#1F2629", linewidth=5, solid_capstyle="round")
     for c in cams:
         if abs(c["t"] - round(c["t"])) < 0.06:        # a tick each second
             ax.plot((c["p"][0] - lo[0]) / res, (hi[1] + c["p"][2]) / res, "o",
-                    color="#1F2629", markersize=4.5)
+                    color="#1F2629", markersize=10)
     ax.set_xlim(0, width)
     ax.set_ylim(height, 0)
     ax.axis("off")
