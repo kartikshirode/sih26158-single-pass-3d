@@ -203,7 +203,7 @@ class PlanKeyframes(BaseStage):
 @dataclass
 class Geometry(BaseStage):
     id: str = "S3-geometry"
-    version: str = "10"         # local GPU: unsharpened, compact texture; unseen faces filled
+    version: str = "11"         # local GPU: seams levelled after the unseen-face fill
     needs: tuple = ("plan",)
     # S3 on a synthetic source also reads the scene straight from ctx.source; the
     # orchestrator keys every stage on the source's fingerprint, which covers that.

@@ -115,6 +115,10 @@ DEFAULTS = {
     # Faces no photo saw get the dense cloud's colours instead of the flat empty colour
     # (texture_fill.py): 6,815 orange faces on the demo, 3.2% of the mesh.
     "texture_fill": True,
+    # OpenMVS's seam levelling blackens the atlas here, so the colour steps between
+    # patches are levelled afterwards (texture_level.py, Waechter et al. 2014): on the
+    # demo's held-out views 24.44 to 24.65 dB, the border step 9.6 to 7.8 levels.
+    "texture_level": True,
     # Extra arguments for one tool, split on spaces and appended last so they win; for
     # an operator or an experiment trying a flag no option above covers yet.
     "mapper_extra": "",
@@ -744,6 +748,7 @@ def reuse_sparse(src: str, work: str, names: list, o: dict) -> dict:
 DENSE_OPTIONS = ("dense_resolution_level", "dense_min_resolution", "dense_views_fuse", "dense_neighbours",
                  "dense_fusion_filter", "mesh_min_point_distance", "mesh", "texture",
                  "texture_decimate", "texture_sharpness", "texture_smoothness", "texture_fill",
+                 "texture_level",
                  "keep_intermediate", "densify_extra", "mesh_extra", "texture_extra")
 
 
@@ -876,6 +881,14 @@ def dense(r: Runner, mvs: dict, colmap: str, img: str, sp_txt: str, names: list,
                 result["texture_fill"] = fill_in_place(r.work)
                 log(f"  texture fill: {result['texture_fill']['unseen_faces']} unseen faces "
                     f"coloured from the dense cloud, {time.perf_counter() - t:.1f} s")
+            if o["texture_level"]:
+                try:
+                    from pipeline.texture_level import level_in_place
+                except ImportError:
+                    from texture_level import level_in_place
+                t = time.perf_counter()
+                result["texture_level"] = level_in_place(r.work)
+                log(f"  seam levelling: {time.perf_counter() - t:.1f} s")
         except RuntimeError as e:
             result["texture_error"] = str(e)[-500:]
             log("  TextureMesh failed; continuing with the untextured mesh")

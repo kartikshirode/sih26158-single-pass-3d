@@ -50,6 +50,9 @@ jobs:
       - name: unseen faces coloured from the dense cloud
         run: python src/pipeline/test_texture_fill.py
 
+      - name: texture seams levelled outside OpenMVS
+        run: python src/pipeline/test_texture_level.py
+
       - name: window fusion
         run: python src/pipeline/test_window_fuse.py
 
