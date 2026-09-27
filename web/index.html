@@ -72,13 +72,13 @@
     <p class="prose">Every stage writes what it did and how long it took. These are the demo run's own timings on an RTX 4060 laptop.</p>
     <ol class="log" id="stageLog">
       <li style="--s:1.7"><b>Screen</b><span>Refuse or repair a clip before spending time on it: horizon, sky, overlays, cuts.</span><i>1.7 s</i></li>
-      <li style="--s:4.1"><b>Ingest</b><span>Score every frame for blur and motion; keep a sharp, evenly spaced set.</span><i>4.1 s</i></li>
-      <li style="--s:33.8"><b>Camera</b><span>MapAnything reads the lens from 60 frames; no calibration needed.</span><i>33.8 s</i></li>
-      <li style="--s:70.4"><b>Poses</b><span>COLMAP matches features and solves where every frame was taken.</span><i>70.4 s</i></li>
-      <li style="--s:53.6"><b>Depth</b><span>OpenMVS measures depth for every pixel on the GPU and fuses it.</span><i>53.6 s</i></li>
-      <li style="--s:37.7"><b>Surface</b><span>A mesh through the fused points.</span><i>37.7 s</i></li>
-      <li style="--s:52"><b>Texture</b><span>Each face takes the best photo of it; unseen faces take the cloud's colour.</span><i>52.0 s</i></li>
-      <li style="--s:8.2"><b>Level and export</b><span>Gravity up, then OBJ, GLB, FBX, PLY, LAS and GeoTIFF.</span><i>8.2 s</i></li>
+      <li style="--s:4.0"><b>Ingest</b><span>Score every frame for blur and motion; keep a sharp, evenly spaced set.</span><i>4.0 s</i></li>
+      <li style="--s:39.5"><b>Camera</b><span>MapAnything reads the lens from 60 frames; no calibration needed.</span><i>39.5 s</i></li>
+      <li style="--s:71.4"><b>Poses</b><span>COLMAP matches features and solves where every frame was taken.</span><i>71.4 s</i></li>
+      <li style="--s:54.7"><b>Depth</b><span>OpenMVS measures depth for every pixel on the GPU and fuses it.</span><i>54.7 s</i></li>
+      <li style="--s:37.9"><b>Surface</b><span>A mesh through the fused points.</span><i>37.9 s</i></li>
+      <li style="--s:65.9"><b>Texture</b><span>Each face takes the best photo of it; unseen faces take the cloud's colour.</span><i>65.9 s</i></li>
+      <li style="--s:5.6"><b>Level and export</b><span>Gravity up, then OBJ, GLB, FBX, PLY, LAS and GeoTIFF.</span><i>5.6 s</i></li>
     </ol>
   </section>
 

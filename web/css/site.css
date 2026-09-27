@@ -166,7 +166,7 @@ button.plain:hover { border-color: var(--ink); }
   left: 0;
   bottom: -1px;
   height: 2px;
-  width: calc(var(--s) / 71 * 100%);
+  width: calc(var(--s) / 71.4 * 100%);
   background: var(--ink);
 }
 
