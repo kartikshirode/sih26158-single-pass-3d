@@ -163,8 +163,17 @@ def run_cloud_job(job, env, label, expect_s, sid):
     # own exit code reported as 0. That is the platform, not the job: the first web run
     # lost its pose stage to one. Retry once, and only for that shape of failure, so a
     # genuine job failure still surfaces immediately rather than costing a second hour.
+    # Cloud Run sometimes accepts the execution and then fails to schedule its task,
+    # reporting 503 "Internal error running task" with the task's own exit code as 0 and
+    # no container logs at all. It is the platform, not the job: the same override, sent
+    # by hand a few minutes later, started normally and ran the container.
+    #
+    # Retrying immediately is not enough - two back-to-back attempts both failed that
+    # way and cost an hour. Back off between attempts so a bad moment in the region has
+    # time to pass, and only for that exact error, so a genuine job failure still
+    # surfaces at once rather than three times over.
     last = None
-    for attempt in (1, 2):
+    for attempt, wait in ((1, 60), (2, 180), (3, 0)):
         op = c.run_job(request=run_v2.RunJobRequest(name=name, overrides=overrides))
         print(f"  {label}: execution started (attempt {attempt})", flush=True)
         expect(sid, expect_s)
@@ -172,13 +181,25 @@ def run_cloud_job(job, env, label, expect_s, sid):
             res = op.result(timeout=4 * 3600)
         except Exception as e:
             last = e
-            if attempt == 1 and "Internal error running task" in str(e):
-                print(f"  {label}: transient platform error, retrying once", flush=True)
+            transient = ("Internal error running task" in str(e)
+                         or "The request failed because" in str(e))
+            if transient and wait:
+                print(f"  {label}: platform could not schedule the task; "
+                      f"waiting {wait}s then retrying", flush=True)
+                for s in _state["stages"]:
+                    if s["id"] == sid:
+                        s["note"] = (f"the platform could not start the task; "
+                                     f"retrying (attempt {attempt + 1} of 3)")
+                put_status()
+                time.sleep(wait)
                 continue
             raise
         ok = getattr(res, "succeeded_count", 0) or 0
         if ok < 1:
             raise RuntimeError(f"{label}: job reported no successful task")
+        for s in _state["stages"]:
+            if s["id"] == sid:
+                s.pop("note", None)
         return res
     raise RuntimeError(f"{label}: {last}")
 
