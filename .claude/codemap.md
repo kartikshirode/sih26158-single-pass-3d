@@ -898,3 +898,6 @@ Gotcha: launch from the repo root, e.g. `codex exec -s danger-full-access "Read 
 ### audit/codex-7of10/CONTEXT.md
 Facts for that run as of 2026-09-27 (codex-opt 4de9efa): the 7/10 scorecard with current values and bars, the four final runs and their files under out/runs, useful scratch under out/codex, the open problems and F19-F22, unfollowed leads (SRT focal_len, iso/shutter/ev and rel_alt in the real fixtures, the horizon as a pitch sensor, constant-light synthetic clips, levelling outside OpenMVS), disk (107 GB free, superseded runs listed), the shared GPU, licences and tests.
 Gotcha: disk, run folders and the scorecard's current values are a dated snapshot; refresh before reusing.
+
+### audit/codex-7of10/LOG.md
+CPU-only saved-output and test command ledger for this audit, including replay inputs, results and scratch paths under out/codex/7of10. Read before interpreting FINDINGS.md numbers.
