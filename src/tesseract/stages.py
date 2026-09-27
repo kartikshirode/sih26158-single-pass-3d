@@ -517,7 +517,7 @@ class Georeference(BaseStage):
     """
 
     id: str = "S5-georef"
-    version: str = "5"          # SRT track to F6; the gimbal pitch corrects the depth
+    version: str = "6"          # reject inconsistent gimbal pitch before depth correction
     needs: tuple = ("points", "cameras")
     produces: tuple = ("points_geo", "georef_transform")
     levels: tuple = ("L0", "L1", "L2", "L3", "L4")
@@ -698,6 +698,7 @@ PITCH_RANGE_DEG = (15.0, 75.0)
 PITCH_MAX_ATTITUDE_SPREAD_DEG = 10.0
 PITCH_MIN_CHANGE = 0.005       # 0.5%: smaller corrections are within the pitch's noise
 PITCH_K_RANGE = (0.6, 1.6)     # beyond this something else is wrong, not the focal length
+PITCH_MAX_K_SPREAD = 0.05      # p90-p10 of per-view k, relative to its median
 
 
 def _stretch(X: np.ndarray, st: dict) -> np.ndarray:
@@ -749,11 +750,20 @@ def _focal_from_pitch(cam: np.ndarray, ok: list, tel: list, tf: dict,
     if spread > PITCH_MAX_ATTITUDE_SPREAD_DEG:
         out["reason"] = f"view directions spread {spread:.1f} degrees; not one stretch"
         return out
-    k = float(np.median(np.tan(np.radians(srt)) / np.tan(np.radians(mod))))
+    k_per_view = np.tan(np.radians(srt)) / np.tan(np.radians(mod))
+    k = float(np.median(k_per_view))
     out["k"] = round(k, 5)
+    k_spread = float((np.percentile(k_per_view, 90) - np.percentile(k_per_view, 10))
+                     / abs(k)) if np.isfinite(k) and k != 0 else float("inf")
+    out["k_spread"] = round(k_spread, 4)
     if f_used:
         out["focal_used_px"] = round(float(f_used), 2)
-        out["focal_implied_px"] = round(float(f_used) / k, 2)
+        if np.isfinite(k) and k != 0:
+            out["focal_implied_px"] = round(float(f_used) / k, 2)
+    if not np.isfinite(k_spread) or k_spread > PITCH_MAX_K_SPREAD:
+        out["reason"] = (f"inconsistent gimbal pitch and camera attitudes: "
+                         f"k spread {k_spread:.1%} exceeds {PITCH_MAX_K_SPREAD:.0%}")
+        return out
     if not (PITCH_K_RANGE[0] <= k <= PITCH_K_RANGE[1]):
         out["reason"] = f"k = {k:.3f} is implausible for a focal-length error"
         return out

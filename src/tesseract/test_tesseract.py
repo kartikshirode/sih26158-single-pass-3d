@@ -833,10 +833,11 @@ def t_srt_pitch_focal():
     gl = _enu_to_geodetic(ground, 28.6, 77.2, 0.0)
     want = np.asarray(geodetic_to_enu(*gl, float(lat[0]), float(lon[0]), 0.0))
 
-    def run(with_pitch):
+    def run(with_pitch, pitch_values=None):
         tel = [{"latitude": float(la), "longitude": float(lo), "height": float(z),
-                "flags": [], **({"gb_pitch": -60.0} if with_pitch else {})}
-               for la, lo, z in zip(lat, lon, cams_enu[:, 2])]
+                "flags": [], **({"gb_pitch": -float(pitch_values[i] if pitch_values is not None else 60.0)}
+                               if with_pitch else {})}
+               for i, (la, lo, z) in enumerate(zip(lat, lon, cams_enu[:, 2]))]
         tmp = tempfile.mkdtemp(prefix="tess-")
         try:
             with io.open(os.path.join(tmp, "ingest.json"), "w", encoding="utf-8") as f:
@@ -872,6 +873,12 @@ def t_srt_pitch_focal():
     check("the implied focal length is the true one",
           abs(fp.get("focal_implied_px", 0) - 1194.0 / k) < 3, str(fp.get("focal_implied_px")))
     check("georef.json reproduces points_geo, stretch included", drift < 1e-6, f"{drift:.2e}")
+    # Half the SRT claims the gimbal moved by 5 degrees, but every reconstructed
+    # camera kept one attitude. A single median would apply a confident wrong stretch.
+    r, got, _ = run(with_pitch=True, pitch_values=[60.0]*30 + [65.0]*30)
+    fp = r.facts.get("focal_from_pitch") or {}
+    check("inconsistent gimbal telemetry cannot rescale the ground",
+          not fp.get("applied") and "inconsistent" in fp.get("reason", ""), str(fp))
 
 
 def t_unexpected_failure_manifest():
