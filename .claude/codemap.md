@@ -901,3 +901,6 @@ Gotcha: disk, run folders and the scorecard's current values are a dated snapsho
 
 ### audit/codex-7of10/LOG.md
 CPU-only saved-output and test command ledger for this audit, including replay inputs, results and scratch paths under out/codex/7of10. Read before interpreting FINDINGS.md numbers.
+
+### audit/codex-7of10/FINDINGS.md
+Phases 0-3: machine and tests, four-run manifest and export verification, the numeric 7/10 scorecard, CPU seam/hole/far-field and no-pitch analysis, and code findings C1/F19-F22. Replay and sampling limits are stated explicitly; source scripts and outputs are in LOG.md.
