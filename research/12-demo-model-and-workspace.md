@@ -84,9 +84,10 @@ floor, and the permission check refused the clean-up that would have made room. 
 measured increases on B1 and B3 (texture and fill about 10-25 s per run), B5v should land
 near 530 s, R 0.88, against 502 s before. That is a prediction.
 
-B2's held-out coverage is 61%, not the 72% Codex quoted from the final suite. The texture
-change doesn't move it (the same poses with the old flags give 61.09% too), so it comes
-with the current geometry and is still open.
+B2's held-out coverage came out 61% and then 71% from two identical builds, against the
+72% Codex quoted. The texture change doesn't move it (the same poses with the old flags
+give 61.09% too); B2, a long-lens pan with little parallax, simply varies by ten points
+from run to run. Its 80% bar is still open, and any B2 comparison needs several runs.
 
 ## 5. The workspace
 
@@ -140,7 +141,7 @@ vendored fonts (Archivo and Newsreader italic, OFL), one bundled script.
 - The far field is smeared by physics; the detail layer shows where.
 - Hole bridges behind trees and houses are coloured from the dense cloud: plausible, not
   photographed.
-- B2 coverage 61%, below the 80% bar.
+- B2 coverage 61-71% run to run, below the 80% bar.
 - The no-pitch accuracy bar (1 m on synthetic clips without a gimbal angle) was not
   worked on tonight; the demo clip was the target.
 - B5v not rerun (section 4).

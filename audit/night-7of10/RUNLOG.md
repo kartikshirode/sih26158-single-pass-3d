@@ -162,3 +162,18 @@ its seams are misregistration, not colour. Kept, in S3 after the fill (9c972c9).
 fill 8.2 s, levelling 5.7 s). The fill coloured 7,134 unseen faces. All four 7/10 bars that
 concern B1 alone are met: 23.3 dB, SSIM 0.66, 98% coverage, 300 s. The superseded
 `night-b1` run and its held-out build were deleted for disk; their numbers are above.
+
+## B2 coverage: variance, not a regression
+
+The same held-out build of B2 on the same code, run a second time (`b2-rep`):
+
+| Build | PSNR | SSIM | Coverage |
+|---|---:|---:|---:|
+| night-b2-ho | 27.098 | 0.8616 | 61.09% |
+| b2-rep, identical command | 27.510 | 0.8707 | 70.96% |
+
+Ten points of coverage between two identical runs. The 72.40% of the final suite and the
+61% here are the same distribution; nothing on master or tonight lost coverage. B2 is a
+long-lens pan with little parallax, where the mapper's and densify's run-to-run spread is
+large; B1 differed by 0.02-0.05 dB between identical runs. Any B2 comparison needs
+several runs each. The 80% bar stays open.

@@ -842,7 +842,7 @@ The local GPU optimisation write-up for branch codex-opt: benchmarks B1-B5v and 
 Gotcha: its numbers come from audit/codex-opt/RUNLOG.md; accuracy figures are synthetic, and the ten-minute 30 fps time is a prediction. Code comments cite its sections 9 and 10.
 
 ### research/12-demo-model-and-workspace.md
-The night of 2026-09-28: what stops a perfect model from one pass (one angle, backs never seen, the sky crop, seams, no GPS, video), the texture findings (unsharp mask off 22.82 to 24.21 dB, smoothness 0.5 to 24.42), the unseen-face fill and seam levelling (24.65 held out), end-to-end B1 293.4 s and 24.63 dB, B3 unchanged at 0.393 m, B2 coverage 61%, the workspace and the site, and what is still wrong.
+The night of 2026-09-28: what stops a perfect model from one pass (one angle, backs never seen, the sky crop, seams, no GPS, video), the texture findings (unsharp mask off 22.82 to 24.21 dB, smoothness 0.5 to 24.42), the unseen-face fill and seam levelling (24.65 held out), end-to-end B1 293.4 s and 24.63 dB, B3 unchanged at 0.393 m, B2 coverage 61-71% run to run, the workspace and the site, and what is still wrong.
 Gotcha: numbers come from audit/night-7of10/RUNLOG.md; B5v was not rerun (disk), its time is a prediction.
 
 ### research/08-web-upload.md
@@ -955,6 +955,9 @@ Gotcha: launch from the main checkout's root with its absolute path; saved outpu
 
 ### audit/night-7of10/PLAN.md
 The overnight plan of 2026-09-28: aims (B1 at 7/10 at the default view, a workspace that travels the whole pass, measurements for the problem statement's applications), what stops a perfect model, the three tracks (model on the GPU, Codex seams, web), the web design direction (drafting film, graphite, contour brown, chart magenta; Archivo and Newsreader italic; neatline frame) and the order of work.
+
+### audit/night-7of10/REPORT.md
+The owner's one-screen summary of the night: the demo model against every 7/10 bar (held out 24.63 dB, 0.709, 98.77%, 293.4 s, no orange faces; seams reduced; far field still smeared; B2 and B5v open), what changed, what stops a perfect model, how to open the pages, and the decisions left (disk, merge).
 
 ### audit/night-7of10/RUNLOG.md
 The night's measurements on B1's held-out views: baseline 22.866 dB on master, the TextureMesh sweeps X0-X10 (sharpness 0 plus smoothness ratio 0.5 kept: 24.415 dB, SSIM 0.7055), the unseen-face fill F1-F2, and the clean night-b1 run (287.6 s, verify PASS, held out 24.443 dB, 0.7037, 98.47%), plus the machine table.
