@@ -118,3 +118,10 @@ same fit to the GNSS-fitted centres as the reference.
 Rejected: on the synthetic flights (110 m up) MapAnything's scale is 40 times too small,
 so nothing on a real clip could be trusted from it. B1 keeps model units, and the
 workspace's one-length calibration is the only way to metres without GPS.
+
+## B3 on the new code, end to end
+
+`night-b3`: `data/test_flight.mp4` with its SRT, clean, no resume. 342.4 s (318.1 s on
+codex-b3-v2; the fill took 13.6 s for 3,457 unseen faces), verify PASS, cloud against the
+synthetic truth 0.393 m median and 95.2% within 1 m (0.394 m and 95.3% before). The
+texture change leaves geometry and georeferencing alone, as it should.
