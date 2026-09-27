@@ -74,3 +74,29 @@ noticed.
 Against tonight's baseline: +1.58 dB, +0.055 SSIM, coverage +0.08 points, 23 s slower
 (the fill 8 s, TextureMesh a little slower with larger patches). The 7/10 bars for held
 out views (23.3 dB, 0.66, 98%) and B1 time (300 s) are met.
+
+## OpenMVS seam levelling, one pass at a time
+
+| ID | Change | PSNR | SSIM | Kept |
+|---|---|---:|---:|---|
+| X11 | X5 + `--global-seam-leveling 1` | 9.167 | 0.0084 | No: the atlas is black |
+| X12 | X5 + `--local-seam-leveling 1` | 9.245 | 0.0278 | No: the atlas is black |
+
+Either pass alone still blackens the atlas with tonight's flags, as both together did in
+RUNLOG Q1 and TX2. Levelling has to happen outside OpenMVS.
+
+## B2 on the new texture settings
+
+Same poses (`night-b2-ho`, current code), held-out build twice, only the texture flags
+different.
+
+| Texture | PSNR | SSIM | Coverage |
+|---|---:|---:|---:|
+| Old flags (sharpness 0.5, ratio 0.1, no fill) | 25.317 | 0.8199 | 61.09% |
+| New defaults | **27.098** | **0.8616** | 61.09% |
+
+The texture change helps B2 as much as B1 (+1.8 dB). Coverage is the same both ways, so
+the fall from the 72.40% that Codex quoted (FINDINGS.md, from the final suite) is not
+tonight's doing: it comes with the current geometry. Per view it runs from 28% at the ends
+of the pan to 90% in the middle. Not investigated further tonight: the demo clip is the
+target, and B2's 80% bar stays open.
