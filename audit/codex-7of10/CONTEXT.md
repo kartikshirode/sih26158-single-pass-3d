@@ -131,8 +131,7 @@ As `audit/codex-opt/CONTEXT.md` section 5, with these changes:
   another process holds the GPU. Timings taken while it runs are marked in the log.
 - assimp 6.0.5 (`C:\Users\Kartik\gpu-tools\assimp\Release`) and pyassimp 5.2.5 are
   installed for FBX export.
-- A `python -m http.server` on port 8765 serves `out/runs/` for the run pages. Leave it
-  running.
+- No web server is running. Each run's `index.html` opens straight from disk.
 - `gh` is not installed and the GitHub repository is private, so there are no GitHub
   issues to read. The open problems are sections 3 and 4.
 

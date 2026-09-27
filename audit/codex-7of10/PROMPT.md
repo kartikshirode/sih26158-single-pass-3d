@@ -61,9 +61,9 @@ Forbidden, no exceptions:
 - Committing `.gitignore` (the owner's uncommitted edit), `.env`, anything under `out/`,
   the two GC-1 files in the repo root, `SIH DEMO.mp4`, or any frame, crop or render made
   from it. Pictures from B1 stay under `out/`.
-- Running `tools/build_*.py`, including `build_run_page.py` (it rewrites the pages the
-  server is showing), or `src/experiments/exp14_scale_audit.py`.
-- Stopping the web server on port 8765.
+- Running `tools/build_*.py`, including `build_run_page.py` (it overwrites the final
+  runs' pages), or `src/experiments/exp14_scale_audit.py`.
+- Starting a web server. The run pages open from disk as `file://` URLs.
 
 If a step needs something forbidden, write it into the next-run plan and carry on.
 
@@ -82,8 +82,7 @@ Commit at the end of each phase.
 
 ## Phase 0: the machine
 
-Record free disk on C:, whether another process holds the GPU (`nvidia-smi`), and whether
-the server on port 8765 answers. Run every test in CONTEXT.md section 7 and record pass or
+Record free disk on C: and whether another process holds the GPU (`nvidia-smi`). Run every test in CONTEXT.md section 7 and record pass or
 fail. A failure is a finding, not a reason to stop.
 
 ## Phase 1: audit the results
