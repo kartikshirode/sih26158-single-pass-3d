@@ -42,7 +42,8 @@ export function createSheet(S, nav, units) {
       const target = 90 * upx * f;
       const L = niceInterval(target * 0.66);
       const px = L / (upx * f);
-      const text = `about ${fmtNice(L)} ${units.unit()} at the centre of the view`;
+      const u = units.unit();
+      const text = `about ${fmtNice(L)} ${fmtNice(L) === '1' && u === 'units' ? 'unit' : u} at the centre of the view`;
       const key = `${Math.round(px)}|${text}`;
       if (key !== lastBar) {
         bar.hidden = false;
