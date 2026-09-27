@@ -69,16 +69,16 @@
 
   <section id="method" class="band" aria-labelledby="methodTitle">
     <h2 id="methodTitle">Method</h2>
-    <p class="prose">Every stage writes what it did and how long it took. These are the demo run's own timings on an RTX 4060 laptop.</p>
+    <p class="prose">Every stage writes what it did and how long it took. These are the demo run's own timings on an RTX 4060 laptop, 293 s in all.</p>
     <ol class="log" id="stageLog">
-      <li style="--s:1.7"><b>Screen</b><span>Refuse or repair a clip before spending time on it: horizon, sky, overlays, cuts.</span><i>1.7 s</i></li>
-      <li style="--s:4.0"><b>Ingest</b><span>Score every frame for blur and motion; keep a sharp, evenly spaced set.</span><i>4.0 s</i></li>
-      <li style="--s:39.5"><b>Camera</b><span>MapAnything reads the lens from 60 frames; no calibration needed.</span><i>39.5 s</i></li>
+      <li style="--s:3.3"><b>Screen</b><span>Refuse or repair a clip before spending time on it: horizon, sky, overlays, cuts.</span><i>3.3 s</i></li>
+      <li style="--s:4.1"><b>Ingest</b><span>Score every frame for blur and motion; keep a sharp, evenly spaced set.</span><i>4.1 s</i></li>
+      <li style="--s:42.6"><b>Camera</b><span>MapAnything reads the lens from 60 frames; no calibration needed.</span><i>42.6 s</i></li>
       <li style="--s:71.4"><b>Poses</b><span>COLMAP matches features and solves where every frame was taken.</span><i>71.4 s</i></li>
-      <li style="--s:54.7"><b>Depth</b><span>OpenMVS measures depth for every pixel on the GPU and fuses it.</span><i>54.7 s</i></li>
-      <li style="--s:37.9"><b>Surface</b><span>A mesh through the fused points.</span><i>37.9 s</i></li>
-      <li style="--s:65.9"><b>Texture</b><span>Each face takes the best photo of it; unseen faces take the cloud's colour.</span><i>65.9 s</i></li>
-      <li style="--s:5.6"><b>Level and export</b><span>Gravity up, then OBJ, GLB, FBX, PLY, LAS and GeoTIFF.</span><i>5.6 s</i></li>
+      <li style="--s:53.9"><b>Depth</b><span>OpenMVS measures depth for every pixel on the GPU and fuses it.</span><i>53.9 s</i></li>
+      <li style="--s:38.3"><b>Surface</b><span>A mesh through the fused points.</span><i>38.3 s</i></li>
+      <li style="--s:66.7"><b>Texture</b><span>Each face takes its best photo; seams are levelled and unseen faces take the cloud's colour.</span><i>66.7 s</i></li>
+      <li style="--s:10.2"><b>Level and export</b><span>Gravity up, then OBJ, GLB, FBX, PLY, LAS and GeoTIFF.</span><i>10.2 s</i></li>
     </ol>
   </section>
 
@@ -88,7 +88,7 @@
     <table class="evidence">
       <thead><tr><th scope="col">Check</th><th scope="col">Result</th><th scope="col">How it was measured</th></tr></thead>
       <tbody>
-        <tr><th scope="row">Looks like the photos</th><td id="evHeldOut">24.4 dB, SSIM 0.70</td><td>Every tenth frame is held back from the build, then the model is rendered into it and compared, pixel by pixel.</td></tr>
+        <tr><th scope="row">Looks like the photos</th><td id="evHeldOut">24.6 dB, SSIM 0.71</td><td>Every tenth frame is held back from the build, then the model is rendered into it and compared, pixel by pixel.</td></tr>
         <tr><th scope="row">Accurate to a metre</th><td>0.35 m median</td><td>A ten-minute synthetic flight with known ground truth and a DJI-style telemetry file; 98.5% of the cloud within 1 m.</td></tr>
         <tr><th scope="row">Ten minutes of video</th><td>502 s</td><td>The same ten-minute file end to end, inside the 15-minute budget.</td></tr>
         <tr><th scope="row">Every format asked for</th><td>6 of 6</td><td>OBJ, GLB, FBX, PLY, LAS and GeoTIFF from every run.</td></tr>

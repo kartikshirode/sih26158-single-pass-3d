@@ -125,3 +125,40 @@ workspace's one-length calibration is the only way to metres without GPS.
 codex-b3-v2; the fill took 13.6 s for 3,457 unseen faces), verify PASS, cloud against the
 synthetic truth 0.393 m median and 95.2% within 1 m (0.394 m and 95.3% before). The
 texture change leaves geometry and georeferencing alone, as it should.
+
+## Seam levelling outside OpenMVS
+
+`src/pipeline/texture_level.py`, Waechter et al.'s global adjustment on the finished OBJ
+and atlas (method in the codemap and the module). Tuned on B2 and B3 only (lambda 0.1,
+pull toward zero 0.03), then measured on B1. Seam step is the mean RGB step across patch
+borders (Codex's metric), before and after; scratch in `out/codex/seams/`.
+
+| Mesh | Seam step before (ratio) | After | Clipped texels |
+|---|---|---|---:|
+| night-b1 | 9.665 (2.290) | 7.968 (1.876) | 0.03% |
+| codex-b1-v2 (old texture) | 24.503 (4.397) | 21.966 (3.871) | 0.19% |
+| codex-b2-v2 | 11.510 (1.869) | 10.061 (1.616) | 0.64% |
+| codex-b3-v2 | 4.920 (3.096) | 4.495 (2.721) | 0.02% |
+| codex-b5v-v3 | 5.825 (2.027) | 5.782 (1.908) | 0.03% |
+| night-b1-ho | 9.577 (2.264) | 7.848 (1.844) | 0.02% |
+
+Held out on `night-b1-ho`: 24.443 to **24.650 dB**, SSIM 0.7037 to **0.7096**, coverage
+98.466% both. Side by side (`out/codex/seams/view08.jpg`), the bright blotches across the
+sand field in view 8 are gone, with no banding. Two findings from the tuning: sampling
+two texels inside a seam measured texture detail rather than colour (interior pairs
+differed as much as seams), so samples sit a quarter texel in; and without the pull
+toward zero brightness drifted across the model and cost 1.9 dB. B5v's step barely moves:
+its seams are misregistration, not colour. Kept, in S3 after the fill (9c972c9).
+
+## Final B1 run on the kept code (9c972c9)
+
+| Run | Wall | PSNR | SSIM | Coverage | Verify |
+|---|---:|---:|---:|---:|---|
+| Master baseline (`b1-base-ho`) | 264.5 s | 22.866 | 0.6490 | 98.39% | PASS |
+| `night-b1-final`, clean, no resume | 293.4 s | | | | PASS |
+| `night-b1-final` held-out build | | **24.634** | **0.7089** | **98.77%** | |
+
++1.77 dB, +0.060 SSIM and +0.38 coverage points over master for 29 s more (texture 61 s,
+fill 8.2 s, levelling 5.7 s). The fill coloured 7,134 unseen faces. All four 7/10 bars that
+concern B1 alone are met: 23.3 dB, SSIM 0.66, 98% coverage, 300 s. The superseded
+`night-b1` run and its held-out build were deleted for disk; their numbers are above.
