@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tesseract workspace</title>
+<meta name="description" content="Travel a single-pass drone reconstruction and measure it: distance, height, area, volume, profile, line of sight.">
+<link rel="stylesheet" href="css/base.css">
+<link rel="stylesheet" href="css/workspace.css">
+</head>
+<body class="ws">
+
+<header class="ws-top">
+  <a class="ws-brand wide" href="index.html">Tesseract</a>
+  <div class="ws-title">
+    <span id="modelTitle">Loading model</span>
+    <span class="note" id="modelSub"></span>
+  </div>
+  <div class="ws-units">
+    <span class="ws-units-label">Units</span>
+    <strong id="unitsValue">model units</strong>
+    <button type="button" class="ws-btn" id="calibrateBtn">Set scale</button>
+  </div>
+</header>
+
+<nav class="ws-rail" aria-label="Tools">
+  <!-- data-tool values are the ids the tool module registers; data-key is the shortcut. -->
+  <button type="button" class="ws-tool is-active" data-tool="navigate" data-key="Escape" aria-pressed="true">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3l13 8-6 1.5L9 19z"/></svg>
+    <span>Move</span>
+  </button>
+  <span class="ws-rail-gap" role="separator"></span>
+  <button type="button" class="ws-tool" data-tool="distance" data-key="d" aria-pressed="false">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 18L20 6M4 18v-3M4 18h3M20 6v3M20 6h-3"/></svg>
+    <span>Distance</span>
+  </button>
+  <button type="button" class="ws-tool" data-tool="height" data-key="h" aria-pressed="false">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v18M8 3h8M8 21h8M12 3l-2.5 3M12 3l2.5 3"/></svg>
+    <span>Height</span>
+  </button>
+  <button type="button" class="ws-tool" data-tool="area" data-key="a" aria-pressed="false">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 16l5-10 11 3-3 10z"/></svg>
+    <span>Area</span>
+  </button>
+  <button type="button" class="ws-tool" data-tool="volume" data-key="v" aria-pressed="false">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 17l6-9 4 5 3-3 5 7z M3 17h18"/></svg>
+    <span>Volume</span>
+  </button>
+  <button type="button" class="ws-tool" data-tool="profile" data-key="p" aria-pressed="false">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 18l4-6 3 3 4-8 3 5 4-2M3 21h18"/></svg>
+    <span>Profile</span>
+  </button>
+  <button type="button" class="ws-tool" data-tool="sight" data-key="l" aria-pressed="false">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="2"/><path d="M7 12h5M15 12h2M20 12h1"/><path d="M12 8v8"/></svg>
+    <span>Line of sight</span>
+  </button>
+  <button type="button" class="ws-tool" data-tool="point" data-key="c" aria-pressed="false">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 2v5M12 17v5M2 12h5M17 12h5"/></svg>
+    <span>Coordinates</span>
+  </button>
+  <button type="button" class="ws-tool" data-tool="note" data-key="n" aria-pressed="false">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s-6-6.5-6-11a6 6 0 0112 0c0 4.5-6 11-6 11z"/><circle cx="12" cy="10" r="2"/></svg>
+    <span>Note</span>
+  </button>
+</nav>
+
+<main class="ws-stage">
+  <div class="ws-neatline" id="neatline">
+    <canvas id="view" aria-label="3D model view"></canvas>
+    <canvas id="ticks" class="ws-ticks" aria-hidden="true"></canvas>
+    <div class="ws-minimap">
+      <canvas id="minimap" aria-label="Plan map of the pass. Click to move there."></canvas>
+    </div>
+    <div class="ws-views" role="group" aria-label="Views">
+      <button type="button" class="ws-btn" data-view="plan">Plan</button>
+      <button type="button" class="ws-btn" data-view="oblique">Oblique</button>
+      <button type="button" class="ws-btn" data-view="pilot">From the drone</button>
+      <button type="button" class="ws-btn" data-view="fit">Whole model</button>
+    </div>
+    <div class="ws-layers" role="group" aria-label="Layers">
+      <label><input type="checkbox" id="layerTexture" checked> Photo texture</label>
+      <label><input type="checkbox" id="layerContours"> Contours</label>
+      <label><input type="checkbox" id="layerPath" checked> Flight path</label>
+    </div>
+    <p class="ws-hint" id="hint">Drag to move across the ground. Right-drag to turn around the point under the cursor. Scroll to zoom toward it. Double-click to go there.</p>
+    <div class="ws-scalebar" id="scalebar" aria-live="polite"></div>
+  </div>
+</main>
+
+<aside class="ws-inspector" aria-label="Measurements">
+  <section class="ws-now" id="toolPanel">
+    <h2 id="toolName">Move</h2>
+    <p class="note" id="toolHelp">Pick a tool on the left to measure. Everything is measured on the reconstructed surface, not on the screen.</p>
+    <div class="ws-readout" id="readout"></div>
+    <div class="ws-chart" id="chart" hidden></div>
+  </section>
+  <section class="ws-list">
+    <div class="ws-list-head">
+      <h2>Measurements</h2>
+      <button type="button" class="ws-btn" id="exportBtn" disabled>Export</button>
+    </div>
+    <ol id="measureList" class="ws-items"></ol>
+    <p class="note ws-empty" id="measureEmpty">Nothing measured yet.</p>
+  </section>
+</aside>
+
+<footer class="ws-time">
+  <button type="button" class="ws-btn ws-play" id="playBtn" aria-label="Fly the pass">Fly the pass</button>
+  <div class="ws-strip" id="strip" role="slider" aria-label="Time in the flight" tabindex="0" aria-valuemin="0" aria-valuenow="0">
+    <div class="ws-frames" id="frames"></div>
+    <div class="ws-playhead" id="playhead"></div>
+  </div>
+  <output class="ws-clock" id="clock">0.0 s</output>
+</footer>
+
+<dialog class="ws-dialog" id="calibrateDialog">
+  <form method="dialog">
+    <h2>Set the scale from one known length</h2>
+    <p>This clip has no GPS, so lengths are in the model's own units. Draw a line along something whose real length you know, such as a road lane or a car, then type that length.</p>
+    <label>Real length in metres <input type="number" id="calibrateLength" min="0.01" step="0.01" required></label>
+    <p class="note" id="calibrateModel"></p>
+    <div class="ws-dialog-actions">
+      <button type="button" class="ws-btn" id="calibrateDraw">Draw the line</button>
+      <button type="submit" class="ws-btn ws-btn-strong" id="calibrateApply" value="apply">Apply</button>
+      <button type="submit" class="ws-btn" value="cancel">Cancel</button>
+    </div>
+  </form>
+</dialog>
+
+<div class="ws-loading" id="loading"><span class="wide">Tesseract</span><span class="note" id="loadingNote">Reading the model</span></div>
+
+<script src="data/model.js"></script>
+<script src="dist/workspace.js"></script>
+</body>
+</html>

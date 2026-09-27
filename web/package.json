@@ -1,0 +1,14 @@
+{
+  "name": "tesseract-web",
+  "private": true,
+  "description": "Tesseract workspace and site: static pages that open from disk.",
+  "scripts": {
+    "build": "esbuild src/workspace.js --bundle --format=iife --minify --target=es2020 --outfile=dist/workspace.js",
+    "test": "node --test test/"
+  },
+  "devDependencies": {
+    "esbuild": "0.25.10",
+    "three": "0.180.0",
+    "three-mesh-bvh": "0.9.1"
+  }
+}

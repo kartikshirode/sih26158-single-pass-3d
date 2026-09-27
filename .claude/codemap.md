@@ -554,6 +554,18 @@ Exports: ground_frame(P, cams) -> (centre, up); read_sparse(txt dir) -> (N,3); c
 Used by: run manually (research/10 section 1)
 Gotcha: assumes mostly flat ground under the flight; on a hill or a facade the plane numbers mean nothing. Needs sparse_txt/, which local_gpu keeps. NaN camera rows (unregistered views) are skipped.
 
+### tools/texture_fill.py
+Gives TextureMesh's unseen faces (all mapped to one empty-colour texel, 3.2% of B1's faces) their own 8 px cells in a strip appended to the bottom of their atlas, painted by barycentric interpolation of the nearest dense points' colours; rescales every existing vt v for the taller atlas and writes a copy of the OBJ, MTL and atlas (JPEG q97).
+Exports: fill(geometry, out, cloud=None) -> report dict; parse(obj) -> (lines, V, VT, faces); unseen(faces, VT) -> bool mask; paint_strip(width, cols) -> (strip, corners)
+Used by: run manually; audit/night-7of10
+Gotcha: needs points_fused.npy and colors_fused.npy in the same frame as the OBJ (--cloud when they live elsewhere). Codex's seam ratio is not comparable before and after: the filled faces add many smooth seam edges.
+
+### tools/pack_site.py
+Packs one run for web/workspace.html: export/model.glb (or --mesh, a textured F4 OBJ carried through the run's level.json or georef.json by mesh_export.export_textured) as base64 inside web/data/model.js (window.TESSERACT, the contract in web/SPEC.md), every registered keyframe camera in the Y-up export frame (time, position, forward, up, fovy, aspect) and 480 px thumbnails in web/data/frames/.
+Exports: frame_transform(run) -> (manifest, tf, to5); cameras(run, to5, fps, f_px, w, h) -> list
+Used by: run manually before opening web/workspace.html
+Gotcha: camera directions go through the same affine transform as points (by differences) so the depth stretch and axis swap match the mesh. web/data/ is gitignored because a model of the demo clip is a render of it.
+
 ### tools/build_run.py
 Generates demo/run/index.html (upload page) from run_template.html, injecting __DS_CSS__, __TITLE__, __DESC__, __LIMITS__.
 Exports: main(); TITLE, DESC, LIMITS
@@ -919,3 +931,30 @@ One-screen owner summary: current numeric 7/10 scorecard, three consequential au
 ### audit/codex-seams/PROMPT.md
 Brief for a CPU-only Codex job in its own worktree (branch codex-seams): build tools/texture_level.py, a Waechter-style global colour adjustment on a finished TextureMesh OBJ and atlases (per patch-vertex RGB offsets, seam plus smoothness least squares, barycentric application, gutter fill), with tools/test_texture_level.py; prove it with the FINDINGS.md seam metric on the four saved meshes and view_check (no --build) on out/codex/next7/b1-base-ho. No GPU, installs or edits to src/.
 Gotcha: launch from the main checkout's root with its absolute path; saved outputs are read from the main checkout because out/ is not in the worktree.
+
+## audit/night-7of10/
+
+### audit/night-7of10/PLAN.md
+The overnight plan of 2026-09-28: aims (B1 at 7/10 at the default view, a workspace that travels the whole pass, measurements for the problem statement's applications), what stops a perfect model, the three tracks (model on the GPU, Codex seams, web), the web design direction (drafting film, graphite, contour brown, chart magenta; Archivo and Newsreader italic; neatline frame) and the order of work.
+
+## web/
+
+### web/SPEC.md
+Behaviour spec for the workspace script: offline file:// constraint (classic scripts, esbuild IIFE), the window.TESSERACT data contract, rendering (unlit photo texture, BVH picking, contour shader, flight path), navigation that travels the pass (grab-pan, orbit and zoom about the cursor point, double-click fly-to, WASD, minimap, flight strip with chase camera and playback), the tools (distance, height, area, volume, profile, line of sight, coordinates, note), export, one-length scale calibration, neatline ticks, loading and tests.
+
+### web/workspace.html
+The workspace page: top bar (model, units, Set scale), tool rail (data-tool, data-key), the neatline stage (view, ticks, minimap, view buttons, layers, hint, scale bar), inspector (current tool readout, chart, measurement list, Export), flight strip, calibration dialog, loading screen. Loads data/model.js then dist/workspace.js.
+Gotcha: opens from disk; ids and classes are the contract with web/src and web/css/workspace.css.
+
+### web/css/base.css
+Shared tokens and type for the web pages: @font-face for the vendored Archivo (variable width) and Newsreader italic, the palette (--film, --paper, --ink, --slate, --rule, --contour, --magenta), a 1.25 type scale, tabular figures, focus ring, reduced-motion rule.
+
+### web/css/workspace.css
+Workspace layout: a 3 by 3 grid (top bar, rail, stage, inspector, flight strip), double neatline, minimap, tool rail tooltips and active bar, readout figures, measurement list, flight strip playhead, dialog, loading screen; folds the inspector under the view below 1100 px.
+
+### web/package.json
+esbuild, three 0.180.0 and three-mesh-bvh 0.9.1 as dev dependencies; npm run build bundles src/workspace.js to dist/workspace.js (IIFE, minified), npm test runs node --test test/.
+Gotcha: web/.gitignore keeps node_modules/ and data/ out of git.
+
+### web/fonts/
+archivo.woff2 and newsreader-italic.woff2 (latin subsets, SIL OFL 1.1) vendored for offline use; README.txt names the sources.

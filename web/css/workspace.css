@@ -1,0 +1,237 @@
+/* The workspace: a map sheet. The 3D view sits inside a double neatline whose ticks are
+   real graduations; tools on the left, readouts on the right, the flight along the foot. */
+
+body.ws {
+  height: 100vh;
+  overflow: hidden;
+  display: grid;
+  grid-template-columns: 64px minmax(0, 1fr) 320px;
+  grid-template-rows: 52px minmax(0, 1fr) 96px;
+  grid-template-areas:
+    "top top top"
+    "rail stage inspector"
+    "time time time";
+}
+
+/* ---- top bar ---- */
+.ws-top {
+  grid-area: top;
+  display: flex;
+  align-items: center;
+  gap: 28px;
+  padding: 0 20px;
+  border-bottom: 1px solid var(--rule);
+}
+.ws-brand {
+  font-weight: 300;
+  font-size: var(--t-lg);
+  letter-spacing: 0.02em;
+  text-decoration: none;
+}
+.ws-title { display: flex; align-items: baseline; gap: 12px; min-width: 0; }
+.ws-title #modelTitle { font-weight: 600; white-space: nowrap; }
+.ws-title .note { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ws-units { margin-left: auto; display: flex; align-items: center; gap: 10px; font-size: var(--t-sm); }
+.ws-units-label { color: var(--slate); }
+.ws-units strong { font-weight: 600; }
+.ws-units strong.is-calibrated { color: var(--magenta); }
+
+.ws-btn {
+  background: var(--paper);
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  padding: 5px 11px;
+  font-size: var(--t-sm);
+  cursor: pointer;
+}
+.ws-btn:hover { border-color: var(--ink); }
+.ws-btn[disabled] { opacity: 0.45; cursor: default; }
+.ws-btn[aria-pressed="true"], .ws-btn.is-on { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+.ws-btn-strong { background: var(--magenta); border-color: var(--magenta); color: #fff; }
+
+/* ---- tool rail ---- */
+.ws-rail {
+  grid-area: rail;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  padding: 10px 0;
+  border-right: 1px solid var(--rule);
+}
+.ws-rail-gap { height: 1px; background: var(--rule); margin: 8px 14px; }
+.ws-tool {
+  position: relative;
+  display: grid;
+  place-items: center;
+  height: 48px;
+  background: none;
+  border: 0;
+  cursor: pointer;
+  color: var(--slate);
+}
+.ws-tool svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.ws-tool span {
+  position: absolute;
+  left: 56px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: var(--ink);
+  color: var(--paper);
+  font-size: var(--t-xs);
+  padding: 3px 8px;
+  border-radius: 2px;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  z-index: 5;
+}
+.ws-tool:hover span, .ws-tool:focus-visible span { opacity: 1; }
+.ws-tool:hover { color: var(--ink); }
+.ws-tool.is-active { color: var(--magenta); }
+.ws-tool.is-active::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 10px;
+  bottom: 10px;
+  width: 3px;
+  background: var(--magenta);
+}
+
+/* ---- the sheet ---- */
+.ws-stage { grid-area: stage; padding: 14px; min-width: 0; min-height: 0; }
+.ws-neatline {
+  position: relative;
+  height: 100%;
+  border: 1px solid var(--ink);
+  outline: 1px solid var(--ink);
+  outline-offset: 5px;
+  margin: 6px;
+  background: var(--paper);
+}
+#view { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+body.is-picking #view { cursor: crosshair; }
+.ws-ticks { position: absolute; inset: -6px; width: calc(100% + 12px); height: calc(100% + 12px); pointer-events: none; }
+
+.ws-minimap {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  width: 220px;
+  height: 150px;
+  background: var(--film);
+  border: 1px solid var(--ink);
+}
+.ws-minimap canvas { width: 100%; height: 100%; display: block; cursor: pointer; }
+
+.ws-views { position: absolute; left: 14px; top: 14px; display: flex; gap: 6px; }
+.ws-layers {
+  position: absolute;
+  left: 14px;
+  bottom: 14px;
+  display: flex;
+  gap: 16px;
+  font-size: var(--t-sm);
+  background: rgba(245, 247, 246, 0.86);
+  padding: 5px 10px;
+  border: 1px solid var(--rule);
+}
+.ws-layers input { accent-color: var(--magenta); }
+.ws-hint {
+  position: absolute;
+  left: 50%;
+  bottom: 14px;
+  transform: translateX(-50%);
+  margin: 0;
+  max-width: 60ch;
+  font-size: var(--t-xs);
+  color: var(--slate);
+  text-align: center;
+  pointer-events: none;
+}
+.ws-scalebar { position: absolute; right: 14px; bottom: 14px; font-size: var(--t-xs); }
+
+/* ---- inspector ---- */
+.ws-inspector {
+  grid-area: inspector;
+  border-left: 1px solid var(--rule);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.ws-inspector h2 { font-size: var(--t-md); font-weight: 600; margin: 0; }
+.ws-now { padding: 18px 20px 20px; border-bottom: 1px solid var(--rule); }
+.ws-now .note { margin: 6px 0 0; font-size: var(--t-md); line-height: 1.4; }
+.ws-readout { margin-top: 14px; display: grid; gap: 10px; }
+.ws-readout .figure { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.ws-readout .figure span { color: var(--slate); font-size: var(--t-sm); }
+.ws-readout .figure strong { font-size: var(--t-xl); font-weight: 500; font-stretch: 90%; }
+.ws-readout .figure.lead strong { font-size: var(--t-2xl); color: var(--magenta); }
+.ws-readout .figure small { font-size: var(--t-sm); color: var(--slate); font-weight: 400; margin-left: 4px; }
+.ws-chart { margin-top: 14px; height: 150px; }
+.ws-chart svg { width: 100%; height: 100%; overflow: visible; }
+
+.ws-list { padding: 16px 20px; overflow-y: auto; flex: 1; min-height: 0; }
+.ws-list-head { display: flex; align-items: center; justify-content: space-between; }
+.ws-items { list-style: none; margin: 12px 0 0; padding: 0; display: grid; gap: 2px; }
+.ws-items li {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 10px;
+  align-items: baseline;
+  padding: 7px 8px;
+  border-radius: 2px;
+  cursor: pointer;
+  font-size: var(--t-sm);
+}
+.ws-items li:hover, .ws-items li.is-selected { background: var(--magenta-wash); }
+.ws-items li strong { font-weight: 600; }
+.ws-items li button { background: none; border: 0; color: var(--slate); cursor: pointer; padding: 0 2px; }
+.ws-empty { margin: 12px 0 0; font-size: var(--t-md); }
+
+/* ---- the flight ---- */
+.ws-time {
+  grid-area: time;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) 72px;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 20px;
+  border-top: 1px solid var(--rule);
+}
+.ws-strip { position: relative; height: 64px; overflow: hidden; border: 1px solid var(--ink); cursor: ew-resize; background: var(--ink); }
+.ws-frames { display: flex; height: 100%; }
+.ws-frames img { height: 100%; flex: 1 1 0; min-width: 0; object-fit: cover; opacity: 0.8; }
+.ws-playhead { position: absolute; top: -1px; bottom: -1px; width: 2px; background: var(--magenta); left: 0; box-shadow: 0 0 0 1px rgba(255,255,255,0.6); }
+.ws-clock { font-size: var(--t-lg); font-weight: 500; font-stretch: 90%; text-align: right; }
+
+/* ---- calibration and loading ---- */
+.ws-dialog { border: 1px solid var(--ink); border-radius: 3px; padding: 22px 24px; max-width: 460px; background: var(--paper); color: var(--ink); }
+.ws-dialog::backdrop { background: rgba(31, 38, 41, 0.35); }
+.ws-dialog h2 { margin: 0 0 8px; font-size: var(--t-lg); font-weight: 600; }
+.ws-dialog label { display: grid; gap: 4px; font-size: var(--t-sm); margin: 14px 0 6px; }
+.ws-dialog input { font: inherit; padding: 6px 8px; border: 1px solid var(--rule); border-radius: 2px; }
+.ws-dialog-actions { display: flex; gap: 8px; margin-top: 16px; }
+
+.ws-loading {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 6px;
+  background: var(--film);
+  z-index: 20;
+  transition: opacity 0.4s;
+}
+.ws-loading .wide { font-size: var(--t-3xl); font-weight: 200; }
+.ws-loading.is-done { opacity: 0; pointer-events: none; }
+
+/* A laptop screen at the finale may be 1366 px wide; below that the inspector folds under. */
+@media (max-width: 1100px) {
+  body.ws { grid-template-columns: 56px minmax(0, 1fr); grid-template-rows: 52px minmax(0, 1fr) 220px 96px;
+    grid-template-areas: "top top" "rail stage" "rail inspector" "time time"; }
+  .ws-inspector { border-left: 0; border-top: 1px solid var(--rule); flex-direction: row; }
+  .ws-now, .ws-list { flex: 1; border-bottom: 0; }
+  .ws-minimap { width: 160px; height: 110px; }
+}

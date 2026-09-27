@@ -1,0 +1,73 @@
+/* Tesseract web: shared tokens and type. Drafting film, graphite ink, contour brown for
+   what the model's own heights draw, chart magenta for whatever the user measures. */
+
+@font-face {
+  font-family: "Archivo";
+  src: url("../fonts/archivo.woff2") format("woff2");
+  font-weight: 100 900;
+  font-stretch: 62% 125%;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Newsreader";
+  src: url("../fonts/newsreader-italic.woff2") format("woff2");
+  font-style: italic;
+  font-weight: 300 600;
+  font-display: swap;
+}
+
+:root {
+  --film: #E8EDEB;
+  --film-deep: #DCE3E0;
+  --paper: #F5F7F6;
+  --ink: #1F2629;
+  --slate: #5C6A66;
+  --rule: #B9C4C0;
+  --contour: #7A4E26;
+  --magenta: #B0246E;
+  --magenta-wash: rgba(176, 36, 110, 0.10);
+  --ok: #2F6B4F;
+  --warn: #9A5B00;
+
+  --sans: "Archivo", "Segoe UI", system-ui, sans-serif;
+  --italic: "Newsreader", Georgia, serif;
+
+  /* Type scale: a 1.25 ratio from 15 px text. */
+  --t-xs: 12px;
+  --t-sm: 13px;
+  --t-md: 15px;
+  --t-lg: 19px;
+  --t-xl: 24px;
+  --t-2xl: 30px;
+  --t-3xl: 47px;
+  --t-4xl: 73px;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html, body { margin: 0; }
+
+body {
+  background: var(--film);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: var(--t-md);
+  line-height: 1.5;
+  font-variant-numeric: tabular-nums;
+  -webkit-font-smoothing: antialiased;
+}
+
+a { color: inherit; text-decoration-color: var(--rule); text-underline-offset: 3px; }
+a:hover { text-decoration-color: var(--magenta); }
+
+button { font: inherit; color: inherit; }
+
+:focus-visible { outline: 2px solid var(--magenta); outline-offset: 2px; }
+
+.wide { font-stretch: 125%; }
+.narrow { font-stretch: 85%; }
+.note { font-family: var(--italic); font-style: italic; font-weight: 400; color: var(--slate); }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+}
