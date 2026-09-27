@@ -21,10 +21,10 @@ function b64ToBuffer(b64) {
 function facts() {
   const s = data.stats || {};
   const set = (id, text) => { const el = $(id); if (el && text) el.textContent = text; };
-  set("factDuration", `${data.duration.toFixed(1)}00a0s`);
+  set("factDuration", `${data.duration.toFixed(1)} s`);
   set("factKeyframes", String(s.keyframes));
   if (s.triangles) set("factTriangles", s.triangles.toLocaleString("en-GB"));
-  set("factWall", `${Math.round(s.wall_s)}00a0s`);
+  set("factWall", `${Math.round(s.wall_s)} s`);
 }
 
 function sheet() {
