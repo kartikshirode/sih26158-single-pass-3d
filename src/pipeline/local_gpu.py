@@ -872,23 +872,34 @@ def dense(r: Runner, mvs: dict, colmap: str, img: str, sp_txt: str, names: list,
                   "--export-type", "obj", "-o", "scene_tex.mvs"], o["texture_extra"]),
                  "TextureMesh")
             result["textured_mesh"] = "scene_tex.obj"
+            # Both steps only improve a texture that is already complete, and both write to
+            # a temporary folder before replacing anything, so a failure in either on an
+            # unknown clip is logged and the run carries on with the texture it has.
             if o["texture_fill"]:
-                try:
-                    from pipeline.texture_fill import fill_in_place
-                except ImportError:
-                    from texture_fill import fill_in_place
                 t = time.perf_counter()
-                result["texture_fill"] = fill_in_place(r.work)
-                log(f"  texture fill: {result['texture_fill']['unseen_faces']} unseen faces "
-                    f"coloured from the dense cloud, {time.perf_counter() - t:.1f} s")
+                try:
+                    try:
+                        from pipeline.texture_fill import fill_in_place
+                    except ImportError:
+                        from texture_fill import fill_in_place
+                    result["texture_fill"] = fill_in_place(r.work)
+                    log(f"  texture fill: {result['texture_fill']['unseen_faces']} unseen "
+                        f"faces coloured from the dense cloud, {time.perf_counter() - t:.1f} s")
+                except Exception as e:
+                    result["texture_fill_error"] = f"{type(e).__name__}: {e}"[:300]
+                    log(f"  texture fill failed ({result['texture_fill_error']}); kept as textured")
             if o["texture_level"]:
-                try:
-                    from pipeline.texture_level import level_in_place
-                except ImportError:
-                    from texture_level import level_in_place
                 t = time.perf_counter()
-                result["texture_level"] = level_in_place(r.work)
-                log(f"  seam levelling: {time.perf_counter() - t:.1f} s")
+                try:
+                    try:
+                        from pipeline.texture_level import level_in_place
+                    except ImportError:
+                        from texture_level import level_in_place
+                    result["texture_level"] = level_in_place(r.work)
+                    log(f"  seam levelling: {time.perf_counter() - t:.1f} s")
+                except Exception as e:
+                    result["texture_level_error"] = f"{type(e).__name__}: {e}"[:300]
+                    log(f"  seam levelling failed ({result['texture_level_error']}); seams kept")
         except RuntimeError as e:
             result["texture_error"] = str(e)[-500:]
             log("  TextureMesh failed; continuing with the untextured mesh")
