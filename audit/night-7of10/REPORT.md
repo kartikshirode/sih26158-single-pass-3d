@@ -13,7 +13,7 @@ every number: `RUNLOG.md` beside this file.
 | Held-out coverage at least 98% | 98.39% | **98.77%** | met |
 | B1 wall time at most 300 s | 264.5 s | **293.4 s** | met |
 | No orange holes at the default view | 3.3% of faces orange | **none** | met |
-| No patchwork on roads and roofs | seam step 9.6 levels | **7.8**, the bright blotches gone | better, not zero |
+| No patchwork on roads and roofs | colour step across patch borders 25.6 levels | **7.8**, the bright blotches gone | much better, not zero |
 | Far-field houses read as blocks | smeared | still smeared at a grazing angle | physics; now shown on the map sheet and the Detail layer |
 | B3 accuracy with a gimbal pitch at most 0.5 m | 0.394 m | **0.393 m** | held |
 | B2 held-out coverage at least 80% | 72% quoted earlier | 61% and 71% in two identical builds | open; B2 varies run to run |
