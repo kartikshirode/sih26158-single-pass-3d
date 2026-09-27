@@ -92,9 +92,10 @@ export function createFlight(S, T, nav) {
     for (const c of cams) pos.push(c.p.x, c.p.y, c.p.z);
     const g = new LineGeometry();
     g.setPositions(pos);
-    const line = new Line2(g, mat(ink, 1.4));
+    // Half-strength ink: the path is context, the model is the subject.
+    const line = new Line2(g, mat(ink, 1.4, { transparent: true, opacity: 0.5 }));
     const ticks = [];
-    const tickLen = hag * 0.12;
+    const tickLen = hag * 0.06;
     for (let s = 1; s < duration; s += 1) {
       const a = sample(s).p, b = sample(Math.min(s + 0.05, duration)).p;
       const dir = new THREE.Vector3(b.x - a.x, 0, b.z - a.z);
@@ -105,7 +106,7 @@ export function createFlight(S, T, nav) {
     }
     const tg = new LineSegmentsGeometry();
     tg.setPositions(ticks.length ? ticks : [0, 0, 0, 0, 0, 0]);
-    const tickLines = new LineSegments2(tg, mat(ink, 1.4));
+    const tickLines = new LineSegments2(tg, mat(ink, 1.2, { transparent: true, opacity: 0.5 }));
     S.pathGroup.add(line, tickLines, frustum, playheadDot);
   }
   function updateFrustum() {
