@@ -740,7 +740,7 @@ Gotcha: own :root tokens and Google Fonts over the network. Keep the `const D = 
 ## docs/
 
 ### README.md
-Project front page: the six PDF targets and scoring weights, six design-changing findings (VGGT licensed out, straight-pass degeneracy, 1 m unreachable on consumer GNSS, facades cap completeness, India residency, geoid/UTM traps), run commands, measured synthetic results, a CORRECTED note that real video now runs end to end, open questions for the organisers, layout.
+Project front page: what runs today (Tesseract on the local GPU, its measured table with sources, the run, verify and pack_site commands, the web pages, the optional geometry prior), the six PDF targets and scoring weights, six design-changing findings (VGGT licensed out, straight-pass degeneracy, 1 m unreachable on consumer GNSS, facades cap completeness, India residency, geoid/UTM traps), run commands, measured synthetic results, the 2026-09-04 video gap with a note that it has closed, open questions for the organisers, layout. The Vercel console is described as the earlier, pre-GPU deployment.
 
 ### docs/SIH26158.pdf
 The binding problem statement (PS 17, pp. 37-39 of the NTRO document), image-only with no text layer; the sih.gov.in listing has a placeholder instead of the target tables.
