@@ -1068,7 +1068,14 @@ Workspace layout: a 3 by 3 grid (top bar, rail, stage, inspector, flight strip),
 
 ### web/package.json
 esbuild, three 0.180.0 and three-mesh-bvh 0.9.1 as dev dependencies; npm run build bundles src/workspace.js to dist/workspace.js (IIFE, minified), npm run build:site bundles src/site.js to dist/site.js, npm run build:run bundles src/run.js to dist/run.js, npm test runs node --test test/.
-Gotcha: web/.gitignore keeps node_modules/ and data/ out of git.
+Gotcha: web/.gitignore keeps node_modules/, data/, .vercel and .env* out of git.
+
+### web/vercel.json
+Static hosting of web/ on Vercel (project tesseract-sih26158): a day's cache on data/ and fonts/. Deploy with `vercel deploy --prod` from web/.
+Gotcha: data/ holds the demo clip's model, frames and cut clip, so a deploy publishes them.
+
+### web/.vercelignore
+Keeps .vercel, .env*, node_modules, src, test, package.json, package-lock.json and SPEC.md out of a deploy; without package.json Vercel serves the folder as is instead of running the build scripts.
 
 ### web/fonts/
 archivo.woff2 and newsreader-italic.woff2 (latin subsets, SIL OFL 1.1) vendored for offline use; README.txt names the sources.

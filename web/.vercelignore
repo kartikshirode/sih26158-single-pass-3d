@@ -1,0 +1,10 @@
+# Only the static pages go up. Without package.json Vercel serves the folder as it is
+# instead of running the esbuild scripts; dist/ is already built and committed.
+.vercel
+.env*
+node_modules
+src
+test
+package.json
+package-lock.json
+SPEC.md
