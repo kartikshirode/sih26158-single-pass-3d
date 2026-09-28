@@ -121,6 +121,21 @@ DEFAULTS = {
     # patches are levelled afterwards (texture_level.py, Waechter et al. 2014): on the
     # demo's held-out views 24.44 to 24.65 dB, the border step 9.6 to 7.8 levels.
     "texture_level": True,
+    # MapAnything's depth on keyframe tiles, given the solved poses, fused into the mesh
+    # that is textured (prior_depth.py): upright walls, flat roofs and standing trees where
+    # OpenMVS alone makes lumps. Off by default: on the demo it adds about 8 minutes
+    # (tiles 175 s at stride 2, fusion 50 s, RefineMesh 250 s) and moves the held-out
+    # score a little down with it (research/13). Sizes are in units of the views' median
+    # MVS depth.
+    "geometry_prior": False,
+    "prior_tiles": 3,
+    "prior_window": 8,
+    "prior_stride": 2,          # every Nth keyframe gets tiles; 1 is 0.06 dB up for 175 s
+    "prior_depth": 1.55,        # the network's depth is used out to this
+    "prior_fill_depth": 2.8,    # the MVS surface stands in out to this
+    "prior_voxel": 240,         # voxel = median depth / this
+    "prior_refine": True,       # OpenMVS RefineMesh on the fused mesh, photometric
+    "prior_refine_decimate": 0.35,
     # Extra arguments for one tool, split on spaces and appended last so they win; for
     # an operator or an experiment trying a flag no option above covers yet.
     "mapper_extra": "",
@@ -146,6 +161,8 @@ def find_tools() -> dict:
     tools = {n: os.path.join(mvs or "", n + exe) for n in
              ("InterfaceCOLMAP", "DensifyPointCloud", "ReconstructMesh", "TextureMesh")}
     missing = [n for n, t in tools.items() if not os.path.exists(t)]
+    # Optional: only the geometry_prior path uses it, and it falls back without it.
+    tools["RefineMesh"] = os.path.join(mvs or "", "RefineMesh" + exe)
     if missing:
         raise FileNotFoundError(f"OpenMVS {', '.join(missing)} not found: set SIH_OPENMVS "
                                 "to the folder of a CUDA build")
@@ -757,7 +774,9 @@ def reuse_sparse(src: str, work: str, names: list, o: dict) -> dict:
 DENSE_OPTIONS = ("dense_resolution_level", "dense_min_resolution", "dense_views_fuse", "dense_neighbours",
                  "dense_fusion_filter", "mesh_min_point_distance", "mesh", "texture",
                  "texture_decimate", "texture_sharpness", "texture_smoothness", "texture_fill",
-                 "texture_level",
+                 "texture_level", "geometry_prior", "prior_tiles", "prior_window", "prior_stride",
+                 "prior_depth", "prior_fill_depth", "prior_voxel", "prior_refine",
+                 "prior_refine_decimate",
                  "keep_intermediate", "densify_extra", "mesh_extra", "texture_extra")
 
 
@@ -872,6 +891,17 @@ def dense(r: Runner, mvs: dict, colmap: str, img: str, sp_txt: str, names: list,
         except RuntimeError as e:
             result["mesh_error"] = str(e)[-500:]
             log("  ReconstructMesh failed; continuing without a mesh")
+    textured_from, decimate = "scene_dense_mesh.ply", o["texture_decimate"]
+    if o["mesh"] and o["geometry_prior"] and "mesh_error" not in result:
+        # A failure here keeps the OpenMVS mesh; the run does not depend on the prior.
+        t = time.perf_counter()
+        try:
+            textured_from = prior_mesh(r, mvs, img, sp_txt, dense_names or names, o, result, log)
+            decimate = 1.0
+            result["prior_seconds"] = round(time.perf_counter() - t, 1)
+        except Exception as e:
+            result["prior_error"] = f"{type(e).__name__}: {e}"[:300]
+            log(f"  geometry prior failed ({result['prior_error']}); texturing the OpenMVS mesh")
     if o["mesh"] and o["texture"] and "mesh_error" not in result:
         # Colour from the photos, not from the nearest dense point: the page coloured
         # each vertex of a thinned mesh that way and the result was a smear. Textured
@@ -880,8 +910,8 @@ def dense(r: Runner, mvs: dict, colmap: str, img: str, sp_txt: str, names: list,
         # with it on, 73% of the demo's faces sampled black from the atlas (95% with
         # the global pass alone, 66% with the local one), and 0.2% with both off.
         try:
-            r.sh(with_extra([mvs["TextureMesh"], "scene.mvs", "-m", "scene_dense_mesh.ply",
-                  "-w", r.work, "--decimate", o["texture_decimate"],
+            r.sh(with_extra([mvs["TextureMesh"], "scene.mvs", "-m", textured_from,
+                  "-w", r.work, "--decimate", decimate,
                   "--global-seam-leveling", "0", "--local-seam-leveling", "0",
                   "--sharpness-weight", o["texture_sharpness"],
                   "--cost-smoothness-ratio", o["texture_smoothness"],
@@ -926,11 +956,68 @@ def dense(r: Runner, mvs: dict, colmap: str, img: str, sp_txt: str, names: list,
     return finish()
 
 
+def prior_mesh(r: Runner, mvs: dict, img: str, sp_txt: str, names: list, o: dict,
+               result: dict, log=print) -> str:
+    """
+    The prior_depth mesh, closed with the OpenMVS mesh and refined; returns its file name
+    in r.work. Needs a pinhole camera (the tiles are cut from the keyframes as they are).
+    """
+    import open3d as o3d
+    try:
+        import prior_depth as pd
+    except ImportError:
+        from pipeline import prior_depth as pd
+    cam = next(ln.split() for ln in open(os.path.join(sp_txt, "cameras.txt"), encoding="utf-8")
+               if ln.strip() and not ln.startswith("#"))
+    if cam[1] == "SIMPLE_PINHOLE":
+        f = float(cam[4])
+        K = np.array([[f, 0, float(cam[5])], [0, f, float(cam[6])], [0, 0, 1]])
+    elif cam[1] == "PINHOLE":
+        K = np.array([[float(cam[4]), 0, float(cam[6])], [0, float(cam[5]), float(cam[7])],
+                      [0, 0, 1]])
+    else:
+        raise RuntimeError(f"{cam[1]} camera: the prior needs a pinhole one")
+    poses = read_images_txt(os.path.join(sp_txt, "images.txt"))
+    names = [n for n in names if n in poses]
+    mvs_mesh = o3d.io.read_triangle_mesh(os.path.join(r.work, "scene_dense_mesh.ply"))
+    mV, mF = np.asarray(mvs_mesh.vertices), np.asarray(mvs_mesh.triangles)
+    tiles_dir = os.path.join(r.work, "prior_tiles")
+    shutil.rmtree(tiles_dir, ignore_errors=True)
+    info = r.timed("prior depth (MapAnything)", pd.tile_depths, img,
+                   names[::max(1, int(o["prior_stride"]))], poses, K, mV, mF,
+                   tiles_dir, tiles=o["prior_tiles"], window=o["prior_window"],
+                   checkpoint=CHECKPOINT, log=log)
+    med = pd.median_mvs_depth(tiles_dir)
+    info["median_depth"] = round(med, 4)
+    mesh, finfo = r.timed("prior fusion", pd.fuse, tiles_dir, img, names, poses,
+                          voxel=med / o["prior_voxel"], max_depth=o["prior_depth"] * med,
+                          fill_depth=o["prior_fill_depth"] * med, log=log)
+    info.update(finfo)
+    P = np.load(os.path.join(r.work, "points_fused.npy"))
+    up = pd.ground_up(P, np.stack([poses[n][:3, 3] for n in names]))
+    mesh, info["hole_faces"] = pd.close_holes(mesh, mV, mF, up, cell=med / 190)
+    o3d.io.write_triangle_mesh(os.path.join(r.work, "scene_prior.ply"), mesh)
+    out = "scene_prior.ply"
+    if o["prior_refine"] and os.path.exists(mvs.get("RefineMesh", "")):
+        try:
+            r.sh([mvs["RefineMesh"], "scene.mvs", "-m", "scene_prior.ply", "-w", r.work,
+                  "-o", "scene_prior_refined.mvs", "--decimate", o["prior_refine_decimate"],
+                  "--resolution-level", "1", "--min-resolution", "320", "--scales", "2",
+                  "--max-face-area", "16", "--cuda-device", "0", "--export-type", "ply"],
+                 "RefineMesh")
+            out = "scene_prior_refined.ply"
+        except RuntimeError as e:
+            info["refine_error"] = str(e)[-300:]
+            log("  RefineMesh failed; texturing the unrefined prior mesh")
+    result["prior"] = info
+    return out
+
+
 # Rebuilt by any rerun and read by nothing after S3. scene_dense.ply is the same cloud
 # as points_fused.npy plus colors_fused.npy with OpenMVS's per-point view lists, 3.7
 # times their size: 376 MB of a 1.24 GB demo run, and S6 exports the cloud again.
 INTERMEDIATE = ("db.db", "dense", "sparse_in", "sparse_tri", "sparse_ba",
-                "sparse_dense", "sparse_g", "sparse_gf", "scene_dense.ply")
+                "sparse_dense", "sparse_g", "sparse_gf", "scene_dense.ply", "prior_tiles")
 
 
 def clear_products(work: str) -> list[str]:
