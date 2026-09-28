@@ -67,6 +67,8 @@ DEFAULTS = {
     # passes that turn 0.1, the demo 6.5, Nicosia 111. Hence 30, well clear of both.
     "camera_model": "SIMPLE_PINHOLE",
     "refine_focal": True,
+    "refine_distortion": False,
+    "principal_point": "fit",
     "refine_focal_min_turn_deg": 30.0,
     "pose_window": 0,           # views per MapAnything call; 0 sizes it to the GPU
     "pose_overlap": 8,          # shared views between windows, for the Sim(3) stitch
@@ -445,8 +447,10 @@ def global_sparse(r: Runner, colmap: str, img: str, db: str, cam: dict, o: dict)
     mapanything path does, before the model is measured; the poses do not change.
     """
     model = o["camera_model"]
-    params = ([cam["f"]] if model == "SIMPLE_PINHOLE" else [cam["f"], cam["f"]]) \
-        + [cam["cx"], cam["cy"]]
+    params = {"SIMPLE_PINHOLE": [cam["f"], cam["cx"], cam["cy"]],
+              "PINHOLE": [cam["f"], cam["f"], cam["cx"], cam["cy"]],
+              "SIMPLE_RADIAL": [cam["f"], cam["cx"], cam["cy"], 0.0],
+              "RADIAL": [cam["f"], cam["cx"], cam["cy"], 0.0, 0.0]}[model]
     r.sh([colmap, "feature_extractor", "--database_path", db, "--image_path", img,
           "--ImageReader.single_camera", "1",
           "--ImageReader.camera_model", model,
@@ -467,7 +471,7 @@ def global_sparse(r: Runner, colmap: str, img: str, db: str, cam: dict, o: dict)
           "--output_path", out,
           "--GlobalMapper.ba_refine_focal_length", "1" if o["refine_focal"] else "0",
           "--GlobalMapper.ba_refine_principal_point", "0",
-          "--GlobalMapper.ba_refine_extra_params", "0",
+          "--GlobalMapper.ba_refine_extra_params", "1" if o["refine_distortion"] else "0",
           "--GlobalMapper.skip_retriangulation", "0" if o["mapper_retriangulate"] else "1"],
          o["mapper_extra"]),
          "global_mapper")
@@ -675,7 +679,9 @@ def run(images_dir: str, work: str, *, crop_trbl=None, dense_names: list | None 
                         if ln.strip() and not ln.startswith("#")).split()
         result["camera_model"] = cam_line[1]
         result["focal_after_mapper_px"] = [round(float(x), 2) for x in
-                                           cam_line[4:5 if cam_line[1] == "SIMPLE_PINHOLE" else 6]]
+                                           cam_line[4:6 if cam_line[1] == "PINHOLE" else 5]]
+        if cam_line[1] in ("SIMPLE_RADIAL", "RADIAL"):
+            result["radial_after_mapper"] = [round(float(x), 5) for x in cam_line[7:]]
         log(f"  focal length: MapAnything {result['camera']['f']} px, after the mapper "
             f"{result['focal_after_mapper_px']} px")
         # The mapper's own poses measure the turn far better than MapAnything's (0.1
@@ -776,6 +782,13 @@ def sparse(r: Runner, colmap: str, img: str, names: list, h0: int, w0: int, crop
                      log=log)
         cam, resid = r.timed("intrinsics fit", fit_camera, ma, h0, w0, crop_trbl,
                              views=o["intrinsics_views"], log=log)
+        if o["principal_point"] == "source" and crop_trbl and any(crop_trbl):
+            t, b, lft, rgt = crop_trbl
+            Ws, Hs = w0 / (1.0 - lft - rgt), h0 / (1.0 - t - b)
+            cam = dict(cam, cx=Ws / 2 - lft * Ws, cy=Hs / 2 - t * Hs,
+                       pp_reference="source centre, shifted by the crop")
+            log(f"  principal point moved to the source centre: ({cam['cx']:.1f}, "
+                f"{cam['cy']:.1f}) px in the {w0}x{h0} keyframe")
         cams_ma = ma.pop("cams")
         stitch, ma_load, ma_peak = ma["windows"], ma["split_s"], ma["peak_gib"]
         turn = attitude_turn_deg(cams_ma)
