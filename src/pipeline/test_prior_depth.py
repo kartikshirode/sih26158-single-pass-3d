@@ -1,6 +1,7 @@
 """
 prior_depth.py's pieces that need no GPU: tiling, windows, the ratio field, projection and
-the z-buffer, the fusion of a synthetic plane, hole closing and the far field.
+the z-buffer, the fusion of a synthetic plane, hole closing, the far field, the Poisson
+remesh and the gap fill.
 
 Run:  python src/pipeline/test_prior_depth.py
 """
@@ -124,6 +125,28 @@ check("the far field is added within reach", n_far > 0, str(n_far))
 Cf = np.asarray(far.vertices)[len(Vf):]
 check("and only within reach", np.linalg.norm(Cf - [0.5, 0.5, 1.0], axis=1).max() < 1.8,
       f"{np.linalg.norm(Cf - [0.5, 0.5, 1.0], axis=1).max():.2f}")
+
+print("\nT6: the Poisson remesh and the gap fill")
+Vp, Fp = grid_mesh(0, 1, 0, 1, 81)
+Vp[:, 2] = 0.05 * np.sin(4 * Vp[:, 0])                     # a gentle wave, not a flat sheet
+plane = o3d.geometry.TriangleMesh(o3d.utility.Vector3dVector(Vp), o3d.utility.Vector3iVector(Fp))
+pm, pinfo = pd.poisson_remesh(plane, 0.0125, depth=7, faces=4000)
+Vq = np.asarray(pm.vertices)
+from scipy.spatial import cKDTree  # noqa: E402
+
+dq = cKDTree(Vp).query(Vq)[0]
+check("Poisson keeps a surface", len(pm.triangles) > 500, str(pinfo))
+check("nothing past the trim distance", dq.max() <= 3 * 0.0125 + 1e-9, f"{dq.max():.4f}")
+check("decimated to the face budget", len(pm.triangles) <= 4000, str(len(pm.triangles)))
+filled, n_gap = pd.gap_fill(fused, Vm, Fm, up, 0.025)
+Cg = Vm[Fm].mean(1)
+Ca = np.asarray(filled.vertices)[np.asarray(filled.triangles)[len(Ff):]].mean(1)
+check("the gap fill fills the hole", ((abs(Ca[:, 0] - 0.5) < 0.05) & (abs(Ca[:, 1] - 0.5) < 0.05)).any())
+check("and the ground past the edge", (Ca[:, 0] > 1.5).any() and (Ca[:, 1] < -0.5).any())
+core = (Cg[:, 0] > 0.1) & (Cg[:, 0] < 0.3) & (Cg[:, 1] > 0.1) & (Cg[:, 1] < 0.3)
+covered = ((Ca[:, 0] > 0.1) & (Ca[:, 0] < 0.3) & (Ca[:, 1] > 0.1) & (Ca[:, 1] < 0.3)).sum()
+check("but nothing where the prior has faces", covered == 0 and core.sum() > 0, str(covered))
+check("the count matches the faces added", n_gap == len(filled.triangles) - len(Ff))
 
 print()
 if FAILED:

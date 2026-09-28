@@ -15,9 +15,13 @@ a depth map with flat roofs, upright walls and trees that stand. This module:
    detail from the network (ratio_field);
 3. fuses every corrected tile in a TSDF (Open3D's voxel block grid), with MVS depth
    standing in where MapAnything has nothing it trusts and grazing rays dropped (fuse);
-4. closes the holes the fused mesh surrounds with the MVS mesh's faces (close_holes).
+4. closes the holes the fused mesh surrounds with the MVS mesh's faces (close_holes);
+5. remeshes it with screened Poisson, trimmed back to it, which closes the thin ribbons
+   the TSDF leaves at grazing range (poisson_remesh).
 
-local_gpu then refines the result photometrically (OpenMVS RefineMesh) and textures it.
+local_gpu then refines the result photometrically (OpenMVS RefineMesh), adds the MVS
+mesh's faces wherever the refined mesh left plan-view ground empty (gap_fill) and
+textures it.
 research/13 has the measurements. Sizes are relative to the median MVS depth of the views,
 so the same settings serve any scale of model.
 """
@@ -407,6 +411,67 @@ def add_far_field(mesh, mvs_V: np.ndarray, mvs_F: np.ndarray, up: np.ndarray, ce
     k = np.floor((plan(cen) - lo) / cell).astype(int)
     near = cKDTree(cams).query(cen)[0] < reach
     take = near & ~cov[k[:, 0], k[:, 1]]
+    F2 = mvs_F[take]
+    used = np.unique(F2)
+    remap = -np.ones(len(mvs_V), np.int64)
+    remap[used] = np.arange(len(used)) + len(Vf)
+    out = o3d.geometry.TriangleMesh(
+        o3d.utility.Vector3dVector(np.vstack([Vf, mvs_V[used]])),
+        o3d.utility.Vector3iVector(np.vstack([Ff, remap[F2]])))
+    return out, int(take.sum())
+
+
+def poisson_remesh(mesh, voxel: float, *, depth: int = 11, trim: float = 3.0,
+                   faces: int = 900_000):
+    """
+    Screened Poisson over the fused mesh's vertices and normals. At grazing range the TSDF
+    breaks into thin parallel ribbons that RefineMesh keeps (research/13 section 6a); the
+    Poisson surface is one sheet there. Its vertices more than `trim` voxels from the
+    fused mesh go, so it adds no surface the fusion had no evidence for.
+    """
+    import open3d as o3d
+    from scipy.spatial import cKDTree
+
+    mesh.compute_vertex_normals()
+    pc = o3d.geometry.PointCloud(mesh.vertices)
+    pc.normals = mesh.vertex_normals
+    p, _ = o3d.geometry.TriangleMesh.create_from_point_cloud_poisson(
+        pc, depth=depth, scale=1.05, n_threads=-1)
+    n_raw = len(p.triangles)
+    d, _ = cKDTree(np.asarray(mesh.vertices)).query(np.asarray(p.vertices))
+    p.remove_vertices_by_mask(d > trim * voxel)
+    if faces and len(p.triangles) > faces:
+        p = p.simplify_quadric_decimation(faces)
+    p.remove_unreferenced_vertices()
+    return p, {"poisson_depth": depth, "poisson_raw_faces": n_raw,
+               "poisson_faces": len(p.triangles)}
+
+
+def gap_fill(mesh, mvs_V: np.ndarray, mvs_F: np.ndarray, up: np.ndarray, cell: float):
+    """
+    Add the MVS mesh's faces whose centre falls in a plan-view cell of `cell` with no face
+    of `mesh`: ground the prior dropped or RefineMesh thinned out, past the edges as well
+    as inside. A prior face covers the cells of its centre and its three corners.
+    """
+    import open3d as o3d
+
+    Vf, Ff = np.asarray(mesh.vertices), np.asarray(mesh.triangles)
+    e1 = np.cross(up, [1.0, 0, 0] if abs(up[0]) < 0.9 else [0, 1.0, 0])
+    e1 /= np.linalg.norm(e1)
+    e2 = np.cross(up, e1)
+
+    def plan(X):
+        return np.column_stack([X @ e1, X @ e2])
+    T = Vf[Ff]
+    pf = plan(np.vstack([T.mean(1), T[:, 0], T[:, 1], T[:, 2]]))
+    pm = plan(mvs_V)
+    lo = np.minimum(pf.min(0), pm.min(0))
+    shape = tuple(np.floor((np.maximum(pf.max(0), pm.max(0)) - lo) / cell).astype(int) + 2)
+    cov = np.zeros(shape, bool)
+    ij = np.floor((pf - lo) / cell).astype(int)
+    cov[ij[:, 0], ij[:, 1]] = True
+    k = np.floor((plan(mvs_V[mvs_F].mean(1)) - lo) / cell).astype(int)
+    take = ~cov[k[:, 0], k[:, 1]]
     F2 = mvs_F[take]
     used = np.unique(F2)
     remap = -np.ones(len(mvs_V), np.int64)

@@ -134,8 +134,11 @@ DEFAULTS = {
     "prior_depth": 1.55,        # the network's depth is used out to this
     "prior_fill_depth": 2.8,    # the MVS surface stands in out to this
     "prior_voxel": 240,         # voxel = median depth / this
+    "prior_upsample": 2,        # depth upsampled this much before fusion
+    "prior_poisson": 11,        # Poisson octree depth for the remesh; 0 skips it
     "prior_refine": True,       # OpenMVS RefineMesh on the fused mesh, photometric
     "prior_refine_decimate": 0.35,
+    "prior_gap_cell": 120,      # MVS faces fill plan cells of median depth / this; 0 skips
     # Extra arguments for one tool, split on spaces and appended last so they win; for
     # an operator or an experiment trying a flag no option above covers yet.
     "mapper_extra": "",
@@ -775,8 +778,8 @@ DENSE_OPTIONS = ("dense_resolution_level", "dense_min_resolution", "dense_views_
                  "dense_fusion_filter", "mesh_min_point_distance", "mesh", "texture",
                  "texture_decimate", "texture_sharpness", "texture_smoothness", "texture_fill",
                  "texture_level", "geometry_prior", "prior_tiles", "prior_window", "prior_stride",
-                 "prior_depth", "prior_fill_depth", "prior_voxel", "prior_refine",
-                 "prior_refine_decimate",
+                 "prior_depth", "prior_fill_depth", "prior_voxel", "prior_upsample",
+                 "prior_poisson", "prior_refine", "prior_refine_decimate", "prior_gap_cell",
                  "keep_intermediate", "densify_extra", "mesh_extra", "texture_extra")
 
 
@@ -989,13 +992,21 @@ def prior_mesh(r: Runner, mvs: dict, img: str, sp_txt: str, names: list, o: dict
                    checkpoint=CHECKPOINT, log=log)
     med = pd.median_mvs_depth(tiles_dir)
     info["median_depth"] = round(med, 4)
+    voxel = med / o["prior_voxel"]
     mesh, finfo = r.timed("prior fusion", pd.fuse, tiles_dir, img, names, poses,
-                          voxel=med / o["prior_voxel"], max_depth=o["prior_depth"] * med,
-                          fill_depth=o["prior_fill_depth"] * med, log=log)
+                          voxel=voxel, max_depth=o["prior_depth"] * med,
+                          fill_depth=o["prior_fill_depth"] * med,
+                          up=int(o["prior_upsample"]), log=log)
     info.update(finfo)
     P = np.load(os.path.join(r.work, "points_fused.npy"))
     up = pd.ground_up(P, np.stack([poses[n][:3, 3] for n in names]))
     mesh, info["hole_faces"] = pd.close_holes(mesh, mV, mF, up, cell=med / 190)
+    if o["prior_poisson"]:
+        # The TSDF's ribbons at grazing range survive RefineMesh; the Poisson sheet
+        # does not have them (research/13 section 6a). 40 s on the demo.
+        mesh, pinfo = r.timed("prior Poisson", pd.poisson_remesh, mesh, voxel,
+                              depth=int(o["prior_poisson"]))
+        info.update(pinfo)
     o3d.io.write_triangle_mesh(os.path.join(r.work, "scene_prior.ply"), mesh)
     out = "scene_prior.ply"
     if o["prior_refine"] and os.path.exists(mvs.get("RefineMesh", "")):
@@ -1009,6 +1020,13 @@ def prior_mesh(r: Runner, mvs: dict, img: str, sp_txt: str, names: list, o: dict
         except RuntimeError as e:
             info["refine_error"] = str(e)[-300:]
             log("  RefineMesh failed; texturing the unrefined prior mesh")
+    if o["prior_gap_cell"]:
+        # Ground the prior left out, the photos' own coarse surface: held-out coverage
+        # 97.27% to 97.86% alone, 98.68% with the Poisson step.
+        m = o3d.io.read_triangle_mesh(os.path.join(r.work, out))
+        m, info["gap_faces"] = pd.gap_fill(m, mV, mF, up, med / o["prior_gap_cell"])
+        o3d.io.write_triangle_mesh(os.path.join(r.work, "scene_prior_filled.ply"), m)
+        out = "scene_prior_filled.ply"
     result["prior"] = info
     return out
 
