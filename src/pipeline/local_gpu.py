@@ -130,15 +130,21 @@ DEFAULTS = {
     "geometry_prior": False,
     "prior_tiles": 3,
     "prior_window": 8,
-    "prior_stride": 2,          # every Nth keyframe gets tiles; 1 is 0.06 dB up for 175 s
+    # Every Nth keyframe gets tiles. Held out on the demo, 1 was 0.06 dB over 2 for
+    # 175 s more, and 3 scored as 2 (24.39 dB, coverage 98.4% against 98.6%) for
+    # about 60 s less.
+    "prior_stride": 3,
     "prior_depth": 1.55,        # the network's depth is used out to this
     "prior_fill_depth": 2.8,    # the MVS surface stands in out to this
     "prior_voxel": 240,         # voxel = median depth / this
     "prior_upsample": 2,        # depth upsampled this much before fusion
-    "prior_poisson": 11,        # Poisson octree depth for the remesh; 0 skips it
+    "prior_poisson": 10,        # Poisson octree depth for the remesh (11: same score,
+                                # twice the 15 s); 0 skips it
     "prior_refine": True,       # OpenMVS RefineMesh on the fused mesh, photometric
     "prior_refine_decimate": 0.35,
     "prior_gap_cell": 120,      # MVS faces fill plan cells of median depth / this; 0 skips
+    "prior_gap_below": 120,     # and ground more than median depth / this under the prior
+    "prior_gap_ring": 1,        # rings of neighbouring MVS faces grown onto each patch
     # Extra arguments for one tool, split on spaces and appended last so they win; for
     # an operator or an experiment trying a flag no option above covers yet.
     "mapper_extra": "",
@@ -780,6 +786,7 @@ DENSE_OPTIONS = ("dense_resolution_level", "dense_min_resolution", "dense_views_
                  "texture_level", "geometry_prior", "prior_tiles", "prior_window", "prior_stride",
                  "prior_depth", "prior_fill_depth", "prior_voxel", "prior_upsample",
                  "prior_poisson", "prior_refine", "prior_refine_decimate", "prior_gap_cell",
+                 "prior_gap_below", "prior_gap_ring",
                  "keep_intermediate", "densify_extra", "mesh_extra", "texture_extra")
 
 
@@ -1024,7 +1031,9 @@ def prior_mesh(r: Runner, mvs: dict, img: str, sp_txt: str, names: list, o: dict
         # Ground the prior left out, the photos' own coarse surface: held-out coverage
         # 97.27% to 97.86% alone, 98.68% with the Poisson step.
         m = o3d.io.read_triangle_mesh(os.path.join(r.work, out))
-        m, info["gap_faces"] = pd.gap_fill(m, mV, mF, up, med / o["prior_gap_cell"])
+        below = med / o["prior_gap_below"] if o["prior_gap_below"] else 0.0
+        m, info["gap_faces"] = pd.gap_fill(m, mV, mF, up, med / o["prior_gap_cell"],
+                                           below=below, ring=int(o["prior_gap_ring"]))
         o3d.io.write_triangle_mesh(os.path.join(r.work, "scene_prior_filled.ply"), m)
         out = "scene_prior_filled.ply"
     result["prior"] = info

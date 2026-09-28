@@ -147,6 +147,28 @@ core = (Cg[:, 0] > 0.1) & (Cg[:, 0] < 0.3) & (Cg[:, 1] > 0.1) & (Cg[:, 1] < 0.3)
 covered = ((Ca[:, 0] > 0.1) & (Ca[:, 0] < 0.3) & (Ca[:, 1] > 0.1) & (Ca[:, 1] < 0.3)).sum()
 check("but nothing where the prior has faces", covered == 0 and core.sum() > 0, str(covered))
 check("the count matches the faces added", n_gap == len(filled.triangles) - len(Ff))
+# A crown the prior kept at z 0.5 over (0.4-0.6), with no ground under it; MVS has the ground.
+Vc, Fc = grid_mesh(0.4, 0.6, 0.4, 0.6, 9, z=0.5)
+crown = o3d.geometry.TriangleMesh(o3d.utility.Vector3dVector(np.vstack([Vf, Vc])),
+                                  o3d.utility.Vector3iVector(np.vstack([Ff, Fc + len(Vf)])))
+under = (abs(Cg[:, 0] - 0.5) < 0.08) & (abs(Cg[:, 1] - 0.5) < 0.08)
+_, n_flat = pd.gap_fill(crown, Vm, Fm, up, 0.025)
+g2, n_low = pd.gap_fill(crown, Vm, Fm, up, 0.025, below=0.1)
+Cl = np.asarray(g2.vertices)[np.asarray(g2.triangles)[len(crown.triangles):]].mean(1)
+check("the plan test leaves the ground under a crown", n_low > n_flat, f"{n_flat} {n_low}")
+check("the height test fills it", ((abs(Cl[:, 0] - 0.5) < 0.08) & (abs(Cl[:, 1] - 0.5) < 0.08)).sum()
+      >= under.sum() > 0, f"{under.sum()}")
+check("but not the ground next to the prior's own floor",
+      ((Cl[:, 0] > 0.1) & (Cl[:, 0] < 0.3) & (Cl[:, 1] > 0.1) & (Cl[:, 1] < 0.3)).sum() == 0)
+# A long sail from a vertex in the hole to two points under the prior: only the ring
+# could reach it, since its centre is covered.
+a = int(np.argmin(np.linalg.norm(Vm[:, :2] - [0.5, 0.5], axis=1)))
+Vs = np.vstack([Vm, [[0.15, 0.2, 0.01], [0.2, 0.15, 0.01]]])
+Fs = np.vstack([Fm, [[a, len(Vm), len(Vm) + 1]]])
+g3, n_r = pd.gap_fill(fused, Vs, Fs, up, 0.025, ring=1)
+Va = np.asarray(g3.vertices)[np.unique(np.asarray(g3.triangles)[len(Ff):])]
+check("a ring grows each patch", n_r > n_gap, f"{n_gap} {n_r}")
+check("but not into a long face", np.linalg.norm(Va - [0.15, 0.2, 0.01], axis=1).min() > 1e-9)
 
 print()
 if FAILED:

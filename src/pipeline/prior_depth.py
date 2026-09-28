@@ -447,11 +447,15 @@ def poisson_remesh(mesh, voxel: float, *, depth: int = 11, trim: float = 3.0,
                "poisson_faces": len(p.triangles)}
 
 
-def gap_fill(mesh, mvs_V: np.ndarray, mvs_F: np.ndarray, up: np.ndarray, cell: float):
+def gap_fill(mesh, mvs_V: np.ndarray, mvs_F: np.ndarray, up: np.ndarray, cell: float,
+             below: float = 0.0, ring: int = 0):
     """
     Add the MVS mesh's faces whose centre falls in a plan-view cell of `cell` with no face
     of `mesh`: ground the prior dropped or RefineMesh thinned out, past the edges as well
-    as inside. A prior face covers the cells of its centre and its three corners.
+    as inside. A prior face covers the cells of its centre and its three corners. With
+    `below` > 0, a face lower than every prior face in its cell by more than `below` is
+    added too: ground under a tree whose crown the prior kept and whose floor it lost.
+    `ring` grows every added patch by that many rings of neighbouring MVS faces.
     """
     import open3d as o3d
 
@@ -470,8 +474,25 @@ def gap_fill(mesh, mvs_V: np.ndarray, mvs_F: np.ndarray, up: np.ndarray, cell: f
     cov = np.zeros(shape, bool)
     ij = np.floor((pf - lo) / cell).astype(int)
     cov[ij[:, 0], ij[:, 1]] = True
-    k = np.floor((plan(mvs_V[mvs_F].mean(1)) - lo) / cell).astype(int)
+    cen = mvs_V[mvs_F].mean(1)
+    k = np.floor((plan(cen) - lo) / cell).astype(int)
     take = ~cov[k[:, 0], k[:, 1]]
+    if below > 0:
+        low = np.full(shape, np.inf)
+        h = np.concatenate([T.mean(1), T[:, 0], T[:, 1], T[:, 2]]) @ up
+        np.minimum.at(low, (ij[:, 0], ij[:, 1]), h)
+        take |= cen @ up < low[k[:, 0], k[:, 1]] - below
+    if ring:
+        # Faces sharing a vertex with an added one, so a patch overlaps the prior's
+        # edge instead of leaving a sliver between them. Long faces are the sails
+        # ReconstructMesh spans unseen gaps with, so they are not grown into.
+        E = mvs_V[mvs_F]
+        edge = np.linalg.norm(E - np.roll(E, 1, axis=1), axis=2).max(1)
+        small = edge < 4 * np.median(edge)
+    for _ in range(ring):
+        v = np.zeros(len(mvs_V), bool)
+        v[mvs_F[take].ravel()] = True
+        take |= v[mvs_F].any(1) & small
     F2 = mvs_F[take]
     used = np.unique(F2)
     remap = -np.ones(len(mvs_V), np.int64)
