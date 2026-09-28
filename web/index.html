@@ -28,7 +28,7 @@
   <section class="hero" aria-labelledby="heroTitle">
     <div class="hero-copy">
       <h1 id="heroTitle" class="wide">One pass in.<br>A measured model out.</h1>
-      <p class="lede">Tesseract turns a single drone flight into a textured 3D model on one laptop, with no second pass and no ground survey. Left of the line is the drone's own video. Right of it is the model, seen from exactly where the drone was. Drag the line to compare.</p>
+      <p class="lede">Tesseract turns a single drone flight into a textured 3D model on one laptop, with no second pass and no ground survey. Left of the line is the drone's own video. Right of it is the model, seen from where the drone was. Drag the line to compare.</p>
     </div>
 
     <figure class="wipe" id="wipe" aria-label="The drone video on the left, the reconstructed model on the right, from the same camera at the same moment">
@@ -53,7 +53,7 @@
     <div class="cols">
       <div class="prose">
         <p>The problem statement asks for something drone mapping usually avoids: one flight, one angle, and a model accurate enough to measure. Survey workflows fly a grid, twice, with markers on the ground. Disaster response, border mapping and reconnaissance rarely get that chance.</p>
-        <p>The demo clip is <strong id="factDuration">18.9 s</strong> of a consumer drone gliding over a construction site. Tesseract keeps <strong id="factKeyframes">177</strong> sharp, well-spaced frames of the 568, works out where the camera was for each one, and builds <strong id="factTriangles">210,307</strong> textured triangles from them in <strong id="factWall">264 s</strong>.</p>
+        <p>The demo clip is <strong id="factDuration">18.9 s</strong> of a consumer drone gliding over a construction site. Tesseract keeps <strong id="factKeyframes">177</strong> sharp, well-spaced frames of the 568, works out where the camera was for each one, and builds <strong id="factTriangles">214,550</strong> textured triangles from them in <strong id="factWall">293 s</strong>.</p>
       </div>
       <aside class="margin note">The clip carries no GPS, so this model is in its own units until one known length sets the scale. Clips with a DJI telemetry file come out in metres and on the map.</aside>
     </div>
@@ -88,14 +88,14 @@
     <table class="evidence">
       <thead><tr><th scope="col">Check</th><th scope="col">Result</th><th scope="col">How it was measured</th></tr></thead>
       <tbody>
-        <tr><th scope="row">Looks like the photos</th><td id="evHeldOut">24.6 dB, SSIM 0.71</td><td>Every tenth frame is held back from the build, then the model is rendered into it and compared, pixel by pixel.</td></tr>
-        <tr><th scope="row">Accurate to a metre</th><td>0.35 m median</td><td>A ten-minute synthetic flight with known ground truth and a DJI-style telemetry file; 98.5% of the cloud within 1 m.</td></tr>
-        <tr><th scope="row">Ten minutes of video</th><td>502 s</td><td>The same ten-minute file end to end, inside the 15-minute budget.</td></tr>
+        <tr><th scope="row">Looks like the photos</th><td id="evHeldOut">24.6 dB, SSIM 0.71</td><td>Every tenth keyframe is held back from the build, then the model is rendered into it and compared, pixel by pixel.</td></tr>
+        <tr><th scope="row">Accurate to a metre</th><td>0.34 m median</td><td>A ten-minute synthetic flight with known ground truth and a DJI-style telemetry file; 98.6% of the cloud within 1 m.</td></tr>
+        <tr><th scope="row">Ten minutes of video</th><td>547 s</td><td>The same ten-minute file end to end, inside the 15-minute budget.</td></tr>
         <tr><th scope="row">Every format asked for</th><td>6 of 6</td><td>OBJ, GLB, FBX, PLY, LAS and GeoTIFF from every run.</td></tr>
       </tbody>
     </table>
-    <p class="note">The accuracy figures come from synthetic clips, because a real flight with surveyed ground truth wasn't available. They need a gimbal angle in the telemetry, which many consumer drones don't record.</p>
-    <p class="cta-line"><a class="plain-link" href="workspace.html?model=b3">Measure the synthetic flight in metres, with latitude and longitude</a></p>
+    <p class="note">The accuracy figures come from synthetic clips, because a real flight with surveyed ground truth wasn't available. Metre-level results need a gimbal angle in the telemetry, which many consumer drones don't record.</p>
+    <p class="cta-line"><a class="plain-link" href="workspace.html?model=b3">Measure a 20-second synthetic flight in metres, with latitude and longitude</a></p>
   </section>
 
   <section id="uses" class="band" aria-labelledby="usesTitle">
@@ -128,7 +128,7 @@
         <li><b>One angle.</b> A single pass sees the far field only at a grazing angle, and never sees the back of anything. That's physics, not software.</li>
         <li><b>The sky crop.</b> Frames with a horizon lose their top third to keep the sky out of the depth maps, and with it most of the distant houses.</li>
         <li><b>Seams.</b> Each patch of texture comes from a different photo, so exposure changes can show at patch borders.</li>
-        <li><b>Scale.</b> Without GPS, or a gimbal angle in the telemetry, heights are only as good as the lens estimate.</li>
+        <li><b>Scale.</b> Without GPS the model has no metres until one known length is given. With GPS but no gimbal angle, the scale is only as good as the lens estimate.</li>
       </ul>
       <aside class="margin note">We'd rather show these than hide them. The workspace labels every number with where its scale came from.</aside>
     </div>
@@ -138,7 +138,7 @@
 
 <footer class="colophon">
   <p>Tesseract, for Smart India Hackathon 2026, problem statement SIH26158 from the National Technical Research Organisation.</p>
-  <p class="note">Built with MapAnything (Apache 2.0), COLMAP (BSD), OpenMVS (AGPL 3.0, run as a separate program) and three.js (MIT). Runs offline.</p>
+  <p class="note">Built with MapAnything (Apache 2.0), COLMAP (BSD), OpenMVS (AGPL 3.0, run as a separate program), Open Asset Import Library for FBX (BSD), three.js and three-mesh-bvh (both MIT). Runs offline.</p>
 </footer>
 
 <script src="data/models.js"></script>

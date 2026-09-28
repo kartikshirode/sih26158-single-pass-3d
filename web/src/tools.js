@@ -341,7 +341,7 @@ export function createTools(S, units, T) {
       rows(m) {
         const eyeText = units.isMetric()
           ? { text: '1.7', unit: 'm' }
-          : { text: fmt(m.r.eyeH), unit: 'units', note: 'no scale yet: 1.7 % of the model’s width stands in for 1.7 m' };
+          : { text: fmt(m.r.eyeH), unit: 'units', note: 'no scale yet: 1.7% of the model’s horizontal diagonal stands in for 1.7 m' };
         return [
           { label: 'Target is', text: m.r.blocked ? 'Blocked' : 'Visible', unit: '', lead: true },
           { label: 'Eye to target', ...L(m.r.total) },
