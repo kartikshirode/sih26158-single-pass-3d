@@ -1,7 +1,7 @@
 """
 Image figures for the research paper, rendered from the demo runs on this machine.
 
-Reads out/runs/night-b1-final (the demo model) and out/runs/demo-prior (the same clip
+Reads out/runs/night-b1-final (the demo model) and out/runs/demo-prior2 (the same clip
 with the depth prior), plus a few saved evidence images, and writes paper/fig/.
 The demo clip is third-party footage, so fig/ is gitignored like web/data/.
 
@@ -24,7 +24,7 @@ from pipeline.local_gpu import read_images_txt  # noqa: E402
 
 OUT = os.path.join(HERE, "fig")
 B1 = os.path.join(ROOT, "out", "runs", "night-b1-final")
-PRIOR = os.path.join(ROOT, "out", "runs", "demo-prior")
+PRIOR = os.path.join(ROOT, "out", "runs", "demo-prior2")
 EVIDENCE = os.path.join(ROOT, "out", "evidence", "quality-2026-09-25")
 JPG = [cv2.IMWRITE_JPEG_QUALITY, 88]
 
@@ -127,7 +127,10 @@ def main():
     b = cv2.resize(b, (a.shape[1], int(b.shape[0] * a.shape[1] / b.shape[1])))
     cv2.imwrite(os.path.join(OUT, "fig_posefix.jpg"),
                 np.vstack([label(a, "(a) before"), white(16, a.shape[1]), label(b, "(b) after")]), JPG)
-    cv2.imwrite(os.path.join(OUT, "fig_sheet.jpg"), half(cv2.imread(os.path.join(ROOT, "web", "data", "sheet.jpg")), 0.6), JPG)
+    cv2.imwrite(os.path.join(OUT, "fig_sheet.jpg"), half(cv2.imread(os.path.join(ROOT, "out", "evidence", "b1-final-sheet.jpg")), 0.6), JPG)
+    # The web workspace measuring on the georeferenced test flight (tools/site_shots.py)
+    cv2.imwrite(os.path.join(OUT, "fig_workspace.jpg"),
+                half(cv2.imread(os.path.join(ROOT, "out", "evidence", "workspace-measure.png")), 0.8), JPG)
     cv2.imwrite(os.path.join(OUT, "fig_kolu.jpg"),
                 half(cv2.imread(os.path.join(ROOT, "research", "run-evidence", "kolu-reconstruction.png")), 0.6), JPG)
     print(sorted(f for f in os.listdir(OUT) if f.startswith("fig_")))

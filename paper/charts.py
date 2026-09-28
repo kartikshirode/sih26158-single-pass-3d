@@ -76,22 +76,24 @@ def gnss_flat():
 
 # 3. Stage time per benchmark run (manifest and local_gpu_result.json)
 def runtime():
-    runs = ["B1 demo clip\n(18.9 s)", "B2 Nicosia\n(40 s)", "B3 test flight\n(20 s)",
-            "B5v ten-minute\n(600 s)"]
-    ingest = [3.307 + 4.074, 1.711 + 6.522, 1.672 + 3.593, 1.872 + 6.667]
+    runs = ["B1 demo clip\n(18.9 s)", "B1 with the\ndepth prior", "B2 Nicosia\n(40 s)",
+            "B3 test flight\n(20 s)", "B5v ten-minute\n(600 s)"]
+    ingest = [3.307 + 4.074, 3.274 + 4.055, 1.711 + 6.522, 1.672 + 3.593, 1.787 + 6.656]
     poses = [41.85 + .76 + 5.37 + 7.13 + 56.44 + .5 + .28 + 1.67,
+             41.72 + .75 + 5.68 + 7.11 + 58.77 + .49 + .29 + 1.67,
              28.69 + .71 + 3.81 + 13.09 + 181.56 + .54 + .29 + 1.81,
              58.38 + 1.69 + 6.09 + 16.17 + 22.89 + .29 + .19 + 1.0,
-             44.26 + 1.74 + 11.83 + 30.44 + 44.62 + .42 + .24 + 1.48]
-    dense = [2.11 + .38 + 51.37, 2.31 + .29 + 16.02, 1.23 + .16 + 77.82,
-             .43 + 1.68 + .23 + 135.89]
-    mesh = [38.34, 6.95, 50.45, 78.72]
-    tex = [52.78, 15.03, 63.11, 111.05]
-    total = [293.4, 282.6, 349.0, 502.2]
+             40.94 + 1.71 + 11.91 + 30.8 + 43.58 + .42 + .24 + 1.44]
+    dense = [2.11 + .38 + 51.37, 2.16 + .27 + 51.62, 2.31 + .29 + 16.02, 1.23 + .16 + 77.82,
+             .39 + 1.71 + .22 + 140.03]
+    # With the prior, its tiles, fusion, Poisson and RefineMesh count as mesh time.
+    mesh = [38.34, 37.54 + 123.61 + 38.07 + 15.17 + 237.8, 6.95, 50.45, 78.94]
+    tex = [52.78, 62.56, 15.03, 63.11, 116.38]
+    total = [293.4, 752.7, 282.6, 349.0, 548.2]
     rest = [t - a - b - c - d - e for t, a, b, c, d, e in zip(total, ingest, poses, dense, mesh, tex)]
     parts = [("Screen and ingest", ingest), ("Camera and poses", poses), ("Dense", dense),
-             ("Mesh", mesh), ("Texture", tex), ("Fill, level, georef, export", rest)]
-    fig, ax = plt.subplots(figsize=(6.4, 2.9))
+             ("Mesh, or depth prior", mesh), ("Texture", tex), ("Fill, level, georef, export", rest)]
+    fig, ax = plt.subplots(figsize=(6.4, 3.4))
     y = np.arange(len(runs))[::-1]
     left = np.zeros(len(runs))
     for i, (lab, vals) in enumerate(parts):
