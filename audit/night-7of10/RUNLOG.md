@@ -184,3 +184,17 @@ several runs each. The 80% bar stays open.
 difference, levelling 15.0 s on its 8192 px atlas), verify PASS, cloud 0.391 m median and
 95.35% within 1 m of the synthetic truth. Packed as the workspace's second model
 (`web/data/b3`). This run and `night-b1-final` are the ones to keep.
+
+## Final B5v run (b8eaf6c, morning)
+
+The owner cleared the eight superseded runs (C: from 100.7 to 113.1 GB), so the
+ten-minute clip could run. `night-b5v-final`: `out/codex/b5v.mp4` with its SRT, clean, no
+resume. 547.1 s, R 0.91 (502.2 s and R 0.84 on codex-b5v-v3), S3 514.3 s: Densify 135.0 s,
+ReconstructMesh 76.7 s, TextureMesh 123.7 s, fill 17.7 s for 4,412 unseen faces,
+levelling 16.5 s. Focal held at 1091 px, scale gnss x64.412, verify PASS. Against the
+synthetic truth: cameras 0.140 m RMS, cloud 0.344 m median and 98.56% within 1 m (0.346 m
+and 98.54% before). The prediction was about 530 s; the real cost is 45 s, most of it the
+slower TextureMesh with larger patches plus the two new steps. Still inside the budget.
+
+The first attempt ran from a shell without `SIH_COLMAP` and `SIH_OPENMVS` set, fell down
+the ladder to L5 in 43 s, and was deleted.

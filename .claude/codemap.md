@@ -842,8 +842,8 @@ The local GPU optimisation write-up for branch codex-opt: benchmarks B1-B5v and 
 Gotcha: its numbers come from audit/codex-opt/RUNLOG.md; accuracy figures are synthetic, and the ten-minute 30 fps time is a prediction. Code comments cite its sections 9 and 10.
 
 ### research/12-demo-model-and-workspace.md
-The night of 2026-09-28: what stops a perfect model from one pass (one angle, backs never seen, the sky crop, seams, no GPS, video), the texture findings (unsharp mask off 22.82 to 24.21 dB, smoothness 0.5 to 24.42), the unseen-face fill and seam levelling (24.65 held out), end-to-end B1 293.4 s and 24.63 dB, B3 unchanged at 0.391 m, B2 coverage 61-71% run to run, the workspace and the site, and what is still wrong.
-Gotcha: numbers come from audit/night-7of10/RUNLOG.md; B5v was not rerun (disk), its time is a prediction.
+The night of 2026-09-28: what stops a perfect model from one pass (one angle, backs never seen, the sky crop, seams, no GPS, video), the texture findings (unsharp mask off 22.82 to 24.21 dB, smoothness 0.5 to 24.42), the unseen-face fill and seam levelling (24.65 held out), end-to-end B1 293.4 s and 24.63 dB, B3 unchanged at 0.391 m, B5v 547.1 s (R 0.91) at 0.344 m, B2 coverage 61-71% run to run, the workspace and the site, and what is still wrong.
+Gotcha: numbers come from audit/night-7of10/RUNLOG.md; accuracy figures are against synthetic truth.
 
 ### research/08-web-upload.md
 Design of the upload feature (one Cloud Run job per upload, preview before final, status.json contract, limits, uploads kept off curated pages) and two defects it exposed: packing scripts pinned to one laptop, and S1 retaining every full-res frame (~112 GB for a 10-min clip) now fixed with a two-pass decode. A 10-minute clip was first ingested on 2026-09-25 (402 s as the code stood, 55 s after research/09). A 2026-09-24 addendum records the start claim, daily slots and signed byte bound (audit F-04, F-05) and the CORS dependency.
@@ -957,10 +957,10 @@ Gotcha: launch from the main checkout's root with its absolute path; saved outpu
 The overnight plan of 2026-09-28: aims (B1 at 7/10 at the default view, a workspace that travels the whole pass, measurements for the problem statement's applications), what stops a perfect model, the three tracks (model on the GPU, Codex seams, web), the web design direction (drafting film, graphite, contour brown, chart magenta; Archivo and Newsreader italic; neatline frame) and the order of work.
 
 ### audit/night-7of10/REPORT.md
-The owner's one-screen summary of the night: the demo model against every 7/10 bar (held out 24.63 dB, 0.709, 98.77%, 293.4 s, no orange faces; seams reduced; far field still smeared; B2 and B5v open), what changed, what stops a perfect model, how to open the pages, and the decisions left (disk, merge).
+The owner's one-screen summary of the night: the demo model against every 7/10 bar (held out 24.63 dB, 0.709, 98.77%, 293.4 s, no orange faces; seams reduced; far field still smeared; B5v 547.1 s, R 0.91; B2 open), what changed, what stops a perfect model, how to open the pages, and the morning's disk clean-up and fast-forward merge (not pushed).
 
 ### audit/night-7of10/RUNLOG.md
-The night's measurements on B1's held-out views: baseline 22.866 dB on master, the TextureMesh sweeps X0-X10 (sharpness 0 plus smoothness ratio 0.5 kept: 24.415 dB, SSIM 0.7055), the unseen-face fill F1-F2, and the clean night-b1 run (287.6 s, verify PASS, held out 24.443 dB, 0.7037, 98.47%), plus the machine table.
+The night's measurements on B1's held-out views: baseline 22.866 dB on master, the TextureMesh sweeps X0-X10 (sharpness 0 plus smoothness ratio 0.5 kept: 24.415 dB, SSIM 0.7055), the unseen-face fill F1-F2, and the clean night-b1 run (287.6 s, verify PASS, held out 24.443 dB, 0.7037, 98.47%), the machine table, and the final runs: B3 349.0 s at 0.391 m, B5v 547.1 s (R 0.91) at 0.344 m.
 
 ## web/
 

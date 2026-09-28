@@ -78,11 +78,12 @@ than colour.
 | B1 `night-b1-final` | 293.4 s (264.5 s before) | 24.63 dB, 0.709, 98.77% | none (no GPS) | PASS |
 | B3 `night-b3-final` | 349.0 s (318.1 s before) | | 0.391 m median, 95.4% within 1 m | PASS |
 | B2 held-out build | | 27.10 dB, 0.862, 61.09% | | |
+| B5v `night-b5v-final` | 547.1 s (502.2 s before) | | 0.344 m median, 98.6% within 1 m | PASS |
 
-The ten-minute clip was not rerun: its 2.9 GB would have taken C: under the owner's 100 GB
-floor, and the permission check refused the clean-up that would have made room. From the
-measured increases on B1 and B3 (texture and fill about 10-25 s per run), B5v should land
-near 530 s, R 0.88, against 502 s before. That is a prediction.
+The ten-minute clip had to wait for the morning, when the owner cleared the old runs off
+C:. I'd predicted about 530 s from the B1 and B3 increases; it took 547.1 s, R 0.91,
+since TextureMesh with larger patches costs more on 300 views than on 134. Still inside
+the budget, and its accuracy didn't move (0.346 m before).
 
 B2's held-out coverage came out 61% and then 71% from two identical builds, against the
 72% Codex quoted. The texture change doesn't move it (the same poses with the old flags
@@ -144,4 +145,4 @@ vendored fonts (Archivo and Newsreader italic, OFL), one bundled script.
 - B2 coverage 61-71% run to run, below the 80% bar.
 - The no-pitch accuracy bar (1 m on synthetic clips without a gimbal angle) was not
   worked on tonight; the demo clip was the target.
-- B5v not rerun (section 4).
+- B5v now takes 547 s, 45 s more than before (section 4); inside the budget but closer to it.
