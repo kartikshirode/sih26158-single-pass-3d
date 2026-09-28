@@ -305,19 +305,19 @@ add(P("A single drone pass is a weaker input than a survey grid in specific, mea
 
 // Data credits
 add(H1("Acknowledgements and data"));
-add(P("The Nicosia footage is from Wikimedia Commons under CC BY 3.0 (The Track Record, BTS) [22]. The demonstration clip was supplied for this work and carries a third-party watermark; its frames appear here only as the worked example. MapAnything is used under Apache 2.0; COLMAP (BSD) and assimp (BSD 3-clause) are used as released; OpenMVS (AGPL 3.0) is run unmodified as a separate process."));
+add(P("The Nicosia footage is from Wikimedia Commons under CC BY 3.0 (The Track Record - BTS) [22]. The demonstration clip was supplied for this work and carries a third-party watermark; its frames appear here only as the worked example. MapAnything is used under Apache 2.0; COLMAP (BSD) and assimp (BSD 3-clause) are used as released; OpenMVS (AGPL 3.0) is run unmodified as a separate process."));
 
 // References
 add(H1("References"));
 const refs = [
   "J. L. Schönberger and J.-M. Frahm, \"Structure-from-motion revisited,\" in Proc. IEEE CVPR, 2016, pp. 4104-4113.",
   "J. L. Schönberger, E. Zheng, M. Pollefeys and J.-M. Frahm, \"Pixelwise view selection for unstructured multi-view stereo,\" in Proc. ECCV, 2016, pp. 501-518.",
-  "L. Pan, D. Baráth, M. Pollefeys and J. L. Schönberger, \"Global structure-from-motion revisited,\" in Proc. ECCV, 2024.",
+  "L. Pan, D. Baráth, M. Pollefeys and J. L. Schönberger, \"Global structure-from-motion revisited,\" in Proc. ECCV, 2024, pp. 58-77.",
   "D. Cernea, \"OpenMVS: Multi-view stereo reconstruction library,\" 2020. [Online]. Available: https://cdcseacave.github.io/openMVS",
-  "N. Keetha et al., \"MapAnything: Universal feed-forward metric 3D reconstruction,\" arXiv:2509.13414, 2025.",
-  "J. Wang, M. Chen, N. Karaev, A. Vedaldi, C. Rupprecht and D. Novotny, \"VGGT: Visual geometry grounded transformer,\" in Proc. IEEE/CVF CVPR, 2025.",
-  "S. Wang, V. Leroy, Y. Cabon, B. Chidlovskii and J. Revaud, \"DUSt3R: Geometric 3D vision made easy,\" in Proc. IEEE/CVF CVPR, 2024.",
-  "V. Leroy, Y. Cabon and J. Revaud, \"Grounding image matching in 3D with MASt3R,\" in Proc. ECCV, 2024.",
+  "N. Keetha et al., \"MapAnything: Universal feed-forward metric 3D reconstruction,\" in Proc. Int. Conf. 3D Vision (3DV), 2026, arXiv:2509.13414.",
+  "J. Wang, M. Chen, N. Karaev, A. Vedaldi, C. Rupprecht and D. Novotny, \"VGGT: Visual geometry grounded transformer,\" in Proc. IEEE/CVF CVPR, 2025, pp. 5294-5306.",
+  "S. Wang, V. Leroy, Y. Cabon, B. Chidlovskii and J. Revaud, \"DUSt3R: Geometric 3D vision made easy,\" in Proc. IEEE/CVF CVPR, 2024, pp. 20697-20709.",
+  "V. Leroy, Y. Cabon and J. Revaud, \"Grounding image matching in 3D with MASt3R,\" in Proc. ECCV, 2024, pp. 71-91.",
   "M. Waechter, N. Moehrle and M. Goesele, \"Let there be color! Large-scale texturing of 3D reconstructions,\" in Proc. ECCV, 2014, pp. 836-850.",
   "B. Curless and M. Levoy, \"A volumetric method for building complex models from range images,\" in Proc. SIGGRAPH, 1996, pp. 303-312.",
   "Q.-Y. Zhou, J. Park and V. Koltun, \"Open3D: A modern library for 3D data processing,\" arXiv:1801.09847, 2018.",
@@ -330,8 +330,8 @@ const refs = [
   "Department of Science and Technology, Government of India, \"Guidelines for acquiring and producing geospatial data and geospatial data services including maps,\" 15 Feb. 2021.",
   "Z. Wang, A. C. Bovik, H. R. Sheikh and E. P. Simoncelli, \"Image quality assessment: From error visibility to structural similarity,\" IEEE Trans. Image Process., vol. 13, no. 4, pp. 600-612, 2004.",
   "M. Oquab et al., \"DINOv2: Learning robust visual features without supervision,\" Trans. Mach. Learn. Res., 2024.",
-  "Smart India Hackathon 2026, \"Problem statement SIH26158,\" National Technical Research Organisation, 2026.",
-  "The Track Record, \"BTS,\" drone footage of Nicosia, Cyprus, Wikimedia Commons, CC BY 3.0.",
+  "Smart India Hackathon 2026, \"Single-pass drone video to accurate 3D model generation system,\" Problem Statement SIH26158, National Technical Research Organisation, 2026.",
+  "The Track Record - BTS, \"Central Nicosia drone footage overlooking UN buffer zone,\" Wikimedia Commons, 13 Jan. 2022, CC BY 3.0. [Online]. Available: https://commons.wikimedia.org/wiki/File:Central_Nicosia_drone_footage_overlooking_UN_buffer_zone.webm",
   "R. Hartley and A. Zisserman, Multiple View Geometry in Computer Vision, 2nd ed. Cambridge, U.K.: Cambridge Univ. Press, 2004.",
 ];
 const refNums = refs.map((_, i) => i + 1);
