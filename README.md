@@ -19,8 +19,9 @@ With a DJI telemetry file the model comes out in metres and on the map.
 |---|---|---|
 | Demo clip (18.9 s, 177 keyframes) end to end | 293 s | `research/12` |
 | Held-out keyframes rendered from the model | 24.6 dB, SSIM 0.71 | `research/12` |
-| Ten-minute synthetic clip with telemetry, end to end | 547 s of the 900 s budget | `audit/night-7of10/RUNLOG.md` |
-| Same clip against its ground truth | 0.344 m median, 98.6% within 1 m | `audit/night-7of10/RUNLOG.md` |
+| Demo clip with the depth prior (roofs, walls, trees) | 753 s; held out 24.4 dB, SSIM 0.69, 98.5% covered | `research/13` |
+| Ten-minute synthetic clip with telemetry, end to end | 548 s of the 900 s budget | `audit/overnight-2026-09-29/RUNLOG.md` |
+| Same clip against its ground truth | 0.344 m median, 98.5% within 1 m | `audit/overnight-2026-09-29/RUNLOG.md` |
 
 ```bash
 # COLMAP, OpenMVS and (for FBX) assimp are found through these; MapAnything runs offline
@@ -35,8 +36,10 @@ and measure on the surface) straight from disk in Chrome or Edge. `web/README.md
 details. The packed model isn't in git.
 
 An optional geometry prior (`geometry_prior`, `research/13`) gives the demo's houses flat roofs
-and upright walls where OpenMVS alone makes lumps. It's off by default because it costs about
-8 minutes.
+and upright walls and its tree a crown, where OpenMVS alone makes lumps. It's off by default
+because it adds about 460 s, which a ten-minute clip can't spare; the demo takes 753 s with it.
+Turn it on with `--config prior.json`, where the file holds
+`{"local_gpu": {"geometry_prior": true}}`. The site's demo model is built this way.
 
 ---
 

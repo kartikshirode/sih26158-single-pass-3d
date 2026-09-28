@@ -740,7 +740,7 @@ Gotcha: own :root tokens and Google Fonts over the network. Keep the `const D = 
 ## docs/
 
 ### README.md
-Project front page: what runs today (Tesseract on the local GPU, its measured table with sources, the run, verify and pack_site commands, the web pages, the optional geometry prior), the six PDF targets and scoring weights, six design-changing findings (VGGT licensed out, straight-pass degeneracy, 1 m unreachable on consumer GNSS, facades cap completeness, India residency, geoid/UTM traps), run commands, measured synthetic results, the 2026-09-04 video gap with a note that it has closed, open questions for the organisers, layout. The Vercel console is described as the earlier, pre-GPU deployment.
+Project front page: what runs today (Tesseract on the local GPU, its measured table with sources, the run, verify and pack_site commands, the web pages, the optional geometry prior with its cost and how to turn it on; the site's demo model is built with it), the six PDF targets and scoring weights, six design-changing findings (VGGT licensed out, straight-pass degeneracy, 1 m unreachable on consumer GNSS, facades cap completeness, India residency, geoid/UTM traps), run commands, measured synthetic results, the 2026-09-04 video gap with a note that it has closed, open questions for the organisers, layout. The Vercel console is described as the earlier, pre-GPU deployment.
 
 ### docs/SIH26158.pdf
 The binding problem statement (PS 17, pp. 37-39 of the NTRO document), image-only with no text layer; the sih.gov.in listing has a placeholder instead of the target tables.
@@ -965,6 +965,11 @@ One-screen owner summary: current numeric 7/10 scorecard, three consequential au
 Brief for a CPU-only Codex job in its own worktree (branch codex-seams): build tools/texture_level.py, a Waechter-style global colour adjustment on a finished TextureMesh OBJ and atlases (per patch-vertex RGB offsets, seam plus smoothness least squares, barycentric application, gutter fill), with tools/test_texture_level.py; prove it with the FINDINGS.md seam metric on the four saved meshes and view_check (no --build) on out/codex/next7/b1-base-ho. No GPU, installs or edits to src/.
 Gotcha: launch from the main checkout's root with its absolute path; saved outputs are read from the main checkout because out/ is not in the worktree.
 
+## audit/overnight-2026-09-29/
+
+### audit/overnight-2026-09-29/RUNLOG.md
+The overnight queue's runs: demo-prior2 (the demo with the depth prior, 752.7 s, the site's b1 model), night-b1-six (B1 again with assimp, 291.8 s, six formats), night-b5v-2 (548.2 s, 0.344 m median, 98.54% within 1 m), and the Nicosia repeats, baselines and ablation rows as they finished.
+
 ## audit/night-7of10/
 
 ### audit/night-7of10/PLAN.md
@@ -1020,7 +1025,7 @@ Gotcha: opens from disk; ids and classes are the contract with web/src and web/c
 
 ### web/index.html
 The presentation page: masthead, hero (headline, then the wipe: the drone video against the model rendered from the same camera at the same moment, with play and scrub), The pass (facts filled from data), The site (the plan-view map sheet), Method (stage log with bars sized by time), Evidence (held-out, synthetic accuracy, ten-minute time, formats), Uses (the eight PS applications against the eight tools), Limits, colophon; the evidence links to the workspace on the GPS test flight (?model=b3), and both "Open the workspace" buttons go to run.html. Loads data/models.js, the chosen model and dist/site.js.
-Gotcha: evidence figures are typed in the HTML from audit/night-7of10/RUNLOG.md and research/11; refresh them when those change. The packed runs exported FBX only where SIH_ASSIMP was set, hence the formats row's wording.
+Gotcha: evidence figures and the Method stage log are typed in the HTML from audit/overnight-2026-09-29/RUNLOG.md, research/13 and research/11 (the stage log is the demo-prior2 run, 753 s, whose model is b1); refresh them when those change. The packed runs exported FBX only where SIH_ASSIMP was set, hence the formats row's wording.
 
 ### web/run.html
 The run page: masthead back to the presentation; a choice between a processed flight (list filled from data/models.js entries with a replay) and a drop zone for a new video, with a note that the hosted copy only previews the upload; then the run view (title and file, speed buttons, overall bar with elapsed, total and budget, the stage list, and a ready panel with a countdown link to the workspace and Stay here). Loads data/models.js then dist/run.js.
@@ -1037,7 +1042,7 @@ Gotcha: the clock advances at most 1 s per frame, so a hidden tab pauses the run
 Built bundle of web/src/run.js. Committed so the page opens without npm.
 
 ### web/css/site.css
-Presentation layout: sticky masthead, hero type, the wipe figure (clip-path photo or video over the canvas, magenta handle), bands with a wide title column, prose and margin notes, the sheet figure, the stage log, the evidence and application tables; single column below 860 px.
+Presentation layout: sticky masthead, hero type, the wipe figure (clip-path photo or video over the canvas, magenta handle), bands with a wide title column, prose and margin notes, the sheet figure, the stage log (bar width is seconds over the longest stage, 452.2), the evidence and application tables; single column below 860 px.
 
 ### web/src/site.js
 The presentation page's script (bundled to dist/site.js by npm run build:site): fills the facts, loads the sheet image and caption, renders the GLB unlit behind the wipe from the camera path at any time (flightPath: centripetal Catmull-Rom through keyframe positions, slerp between their orientations), pointer and keyboard wipe, play and scrub. With data.clip the photo side is a looping muted video and the model draws on each presented video frame (requestVideoFrameCallback, rAF fallback); without it, the nearest keyframe still at or before t.
