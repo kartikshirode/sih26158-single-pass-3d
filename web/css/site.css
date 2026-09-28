@@ -56,7 +56,7 @@ a.go:hover { background: #951d5d; }
 }
 .wipe canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
 .wipe-photo { position: absolute; inset: 0; clip-path: inset(0 50% 0 0); }
-.wipe-photo img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.wipe-photo img, .wipe-photo video { width: 100%; height: 100%; object-fit: cover; display: block; }
 .wipe-handle {
   position: absolute;
   top: 0;

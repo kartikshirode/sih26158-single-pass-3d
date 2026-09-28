@@ -2,7 +2,7 @@
 
 Two pages that open straight from disk, no server and no network:
 
-- `index.html`, the presentation: the drone's photos wiped against the model from the same
+- `index.html`, the presentation: the drone's video wiped against the model from the same
   camera, the site as a map sheet, the method, the evidence, the uses and the limits.
 - `workspace.html`, the model itself: travel along the pass and measure on the surface.
 

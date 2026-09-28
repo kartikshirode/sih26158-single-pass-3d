@@ -1,10 +1,13 @@
-// The presentation page's hero: each keyframe photo wiped against the model rendered
-// from that keyframe's own camera. The photo is shown only at real keyframes, never at an
-// interpolated pose, so the two halves are always the same moment from the same place.
+// The presentation page's hero: the drone's video wiped against the model, rendered from
+// the camera's path at the same instant. The keyframes are only 5-7 a second, so the
+// camera between them is interpolated (a centripetal spline through the positions, slerp
+// for the turn) and the photo side plays the video itself, cut to the keyframes' crop.
+// The model follows the video's clock frame by frame. Without a packed clip the photo
+// side falls back to the nearest keyframe at or before the moment shown.
 
 import {
   WebGLRenderer, Scene, PerspectiveCamera, MeshBasicMaterial, SRGBColorSpace,
-  NoToneMapping, Color, Vector3,
+  NoToneMapping, Color, Vector3, Matrix4, Quaternion, CatmullRomCurve3,
 } from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 
@@ -63,6 +66,39 @@ function wipe() {
   place(50);
 }
 
+function flightPath(cams) {
+  const keys = cams.map((c) => {
+    const p = new Vector3(...c.p);
+    const m = new Matrix4().lookAt(p, p.clone().add(new Vector3(...c.f)), new Vector3(...c.u));
+    return { t: c.t, p, q: new Quaternion().setFromRotationMatrix(m), fovy: c.fovy };
+  });
+  // Neighbouring quaternions on the same side, or slerp takes the long way round.
+  for (let i = 1; i < keys.length; i++) {
+    const a = keys[i - 1].q, b = keys[i].q;
+    if (a.dot(b) < 0) b.set(-b.x, -b.y, -b.z, -b.w);
+  }
+  const curve = keys.length > 1 ? new CatmullRomCurve3(keys.map((k) => k.p), false, "centripetal") : null;
+  // The index of the last keyframe at or before t.
+  const before = (t) => {
+    let lo = 0, hi = keys.length - 1;
+    if (t <= keys[0].t) return 0;
+    if (t >= keys[hi].t) return hi;
+    while (hi - lo > 1) { const mid = (lo + hi) >> 1; if (keys[mid].t <= t) lo = mid; else hi = mid; }
+    return lo;
+  };
+  const place = (camera, t) => {
+    const i = before(t), a = keys[i], b = keys[Math.min(i + 1, keys.length - 1)];
+    const k = b === a ? 0 : Math.min(1, Math.max(0, (t - a.t) / (b.t - a.t)));
+    if (curve) camera.position.copy(curve.getPoint((i + k) / (keys.length - 1)));
+    else camera.position.copy(a.p);
+    camera.quaternion.slerpQuaternions(a.q, b.q, k);
+    camera.fov = a.fovy + (b.fovy - a.fovy) * k;
+    camera.updateProjectionMatrix();
+    return i;
+  };
+  return { keys, before, place };
+}
+
 function start() {
   if (!data) {
     $("wipeNote").textContent = "No model packed. Run python tools/pack_site.py out/runs/<run> first.";
@@ -71,7 +107,6 @@ function start() {
   facts();
   sheet();
   wipe();
-  $("wipeNote").textContent = "These photos helped build the model. The evidence below scores it against photos held back from the build.";
 
   const canvas = $("wipeModel");
   const renderer = new WebGLRenderer({ canvas, antialias: true, preserveDrawingBuffer: false });
@@ -81,11 +116,38 @@ function start() {
   const scene = new Scene();
   scene.background = new Color(getComputedStyle(document.documentElement).getPropertyValue("--film").trim() || "#E8EDEB");
   const camera = new PerspectiveCamera(30, 3.2, 0.01, 1000);
+  camera.near = 0.005 * Math.hypot(...[0, 1, 2].map((k) => data.bounds.max[k] - data.bounds.min[k]));
 
   const cams = data.cameras;
-  const photos = cams.map((c) => { const im = new Image(); im.decoding = "async"; im.src = c.file; return im; });
-  let index = 0, playing = !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const path = flightPath(cams);
+  const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   let ready = false;
+  let playing = !reduced, scrubbing = false;
+  let t0 = performance.now(), base = 0;
+
+  // The photo side: the packed clip if there is one, else the keyframe stills.
+  let video = null;
+  const img = $("wipeImg");
+  if (data.clip) {
+    video = document.createElement("video");
+    video.muted = true;
+    video.loop = true;
+    video.playsInline = true;
+    video.preload = "auto";
+    video.setAttribute("muted", "");
+    video.setAttribute("aria-label", "The drone video");
+    video.src = data.clip.file;
+    img.replaceWith(video);
+    $("wipeNote").textContent = "The left side is the drone's own video. Its keyframes built the model; the evidence below scores the model against photos held back from the build.";
+  } else {
+    $("wipeNote").textContent = "These photos helped build the model. The evidence below scores it against photos held back from the build.";
+  }
+  const stills = video ? null : cams.map((c) => { const im = new Image(); im.decoding = "async"; im.src = c.file; return im; });
+  const duration = () => (video && isFinite(video.duration) ? video.duration : data.duration);
+  const now = () => {
+    if (video) return video.currentTime;
+    return playing ? (base + (performance.now() - t0) / 1000) % data.duration : base;
+  };
 
   const size = () => {
     const w = canvas.clientWidth, h = canvas.clientHeight;
@@ -94,18 +156,13 @@ function start() {
     camera.updateProjectionMatrix();
   };
 
-  const show = (i) => {
-    index = (i + cams.length) % cams.length;
-    const c = cams[index];
-    camera.fov = c.fovy;
-    camera.near = 0.005 * Math.hypot(...[0, 1, 2].map((k) => data.bounds.max[k] - data.bounds.min[k]));
-    camera.updateProjectionMatrix();
-    camera.position.set(...c.p);
-    camera.up.set(...c.u);
-    camera.lookAt(new Vector3(...c.p).add(new Vector3(...c.f)));
-    $("wipeImg").src = photos[index].src;
-    $("wipeTime").textContent = `${c.t.toFixed(1)} s into the pass`;
-    $("wipeScrub").value = String(Math.round((c.t / data.duration) * 1000));
+  let shownStill = -1, lastLabel = "";
+  const draw = (t) => {
+    const i = path.place(camera, t);
+    if (stills && i !== shownStill) { img.src = stills[i].src; shownStill = i; }
+    const label = `${t.toFixed(1)} s into the pass`;
+    if (label !== lastLabel) { $("wipeTime").textContent = label; lastLabel = label; }
+    if (!scrubbing) $("wipeScrub").value = String(Math.round((t / duration()) * 1000));
     if (ready) renderer.render(scene, camera);
   };
 
@@ -120,39 +177,48 @@ function start() {
     scene.add(gltf.scene);
     ready = true;
     size();
-    show(index);
+    draw(now());
   }, (err) => { $("wipeNote").textContent = `The model did not load: ${err && err.message ? err.message : err}`; });
 
-  window.addEventListener("resize", () => { size(); show(index); });
+  window.addEventListener("resize", () => { size(); draw(now()); });
 
-  // Keyframes are played at their own timestamps, looping.
-  let t0 = performance.now(), base = 0;
-  const tick = (now) => {
-    if (playing && ready) {
-      const t = (base + (now - t0) / 1000) % data.duration;
-      let i = cams.findIndex((c) => c.t > t) - 1;
-      if (i < 0) i = cams.length - 1;
-      if (i !== index) show(i);
+  // One clock. With a clip it is the video's own, read on every frame the video presents,
+  // so the model never runs ahead of or behind the picture beside it.
+  if (video) {
+    if (video.requestVideoFrameCallback) {
+      const onFrame = (_, meta) => { draw(meta.mediaTime); video.requestVideoFrameCallback(onFrame); };
+      video.requestVideoFrameCallback(onFrame);
+    } else {
+      const loop = () => { if (!video.paused) draw(video.currentTime); requestAnimationFrame(loop); };
+      requestAnimationFrame(loop);
     }
-    requestAnimationFrame(tick);
-  };
-  requestAnimationFrame(tick);
+    video.addEventListener("seeked", () => draw(video.currentTime));
+    video.addEventListener("loadeddata", () => draw(video.currentTime));
+  } else {
+    const loop = () => { if (playing) draw(now()); requestAnimationFrame(loop); };
+    requestAnimationFrame(loop);
+  }
 
   const playBtn = $("wipePlay");
   const setPlaying = (p) => {
+    if (!video) { base = now(); t0 = performance.now(); }
     playing = p;
+    if (video) {
+      if (p) video.play().catch(() => setPlaying(false));
+      else video.pause();
+    }
     playBtn.textContent = p ? "Pause the pass" : "Play the pass";
-    t0 = performance.now();
-    base = cams[index].t;
   };
   setPlaying(playing);
   playBtn.addEventListener("click", () => setPlaying(!playing));
-  $("wipeScrub").addEventListener("input", (e) => {
+  const scrub = $("wipeScrub");
+  scrub.addEventListener("pointerdown", () => { scrubbing = true; });
+  scrub.addEventListener("pointerup", () => { scrubbing = false; });
+  scrub.addEventListener("input", (e) => {
     setPlaying(false);
-    const t = (Number(e.target.value) / 1000) * data.duration;
-    let best = 0;
-    cams.forEach((c, i) => { if (Math.abs(c.t - t) < Math.abs(cams[best].t - t)) best = i; });
-    show(best);
+    const t = (Number(e.target.value) / 1000) * duration();
+    if (video) video.currentTime = t;
+    else { base = t; draw(t); }
   });
 }
 
