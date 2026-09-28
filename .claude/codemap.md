@@ -989,23 +989,23 @@ The night's measurements on B1's held-out views: baseline 22.866 dB on master, t
 ## paper/
 
 ### paper/build_paper.js
-Builds the research paper (paper/Tesseract-research-paper.docx) with the docx npm package: title block, abstract, sections 1-11, eight tables, twelve figures from paper/fig/, IEEE references and a reproduce appendix. All prose and every number is typed in this file, copied from research/05-13, docs/05 and 14, audit/night-7of10/RUNLOG.md and the run manifests.
+Builds the research paper (paper/Tesseract-research-paper.docx) with the docx npm package: title block, abstract, sections 1-11 (7.7 baselines and ablation, 8.5 the workspace), ten tables, thirteen figures from paper/fig/, 24 IEEE references and a reproduce appendix. All prose and every number is typed in this file, copied from research/05-13, docs/05 and 14, audit/night-7of10/RUNLOG.md, audit/overnight-2026-09-29/RUNLOG.md and the run manifests.
 Exports: none (CLI `node paper/build_paper.js [out.docx]`)
 Used by: run manually after paper/figures.py and paper/charts.py
 Gotcha: figure and table numbers come from the order of the figure()/table() calls, and the text cites them by number, so moving a figure means renumbering the prose. References are numbered by list position. Needs `npm install` in paper/ (docx 9, image-size 1).
 
 ### paper/figures.py
-Renders the paper's image figures into paper/fig/: the demo model (out/runs/night-b1-final) into keyframe cameras and a new viewpoint with view_check's rasterizer, a Lambert-shaded comparison against out/runs/demo-prior, and composites of saved evidence (the pose fix, web/data/sheet.jpg, the Kolu render).
+Renders the paper's image figures into paper/fig/: the demo model (out/runs/night-b1-final) into keyframe cameras and a new viewpoint with view_check's rasterizer, a Lambert-shaded comparison against out/runs/demo-prior2, and composites of saved evidence (the pose fix, out/evidence/b1-final-sheet.jpg, the Kolu render, out/evidence/workspace-measure.png for Figure 13).
 Exports: load(run); render(mesh, c2w, K, w, h, up, shade=False); novel(c2w, up, back, lift, pitch_deg); main()
 Used by: run manually (`python paper/figures.py`)
-Gotcha: needs the gitignored runs, out/evidence and web/data on this laptop. Shading passes a 256-texel grey atlas through rasterize() instead of a second rasterizer. The up vector is row 1 of level.json's basis.
+Gotcha: needs the gitignored runs and out/evidence on this laptop; web/data's sheet is the prior model's now, so Figure 8 reads the saved base sheet. Shading passes a 256-texel grey atlas through rasterize() instead of a second rasterizer. The up vector is row 1 of level.json's basis.
 
 ### paper/charts.py
-Matplotlib charts and the pipeline diagram for the paper (EXP-09 degeneracy, EXP-05 GNSS floor, stage times for B1, B2, B3 and B5v, Kolu plane residuals), written to paper/fig/ at 300 dpi. Numbers are typed in, not read from runs.
+Matplotlib charts and the pipeline diagram for the paper (EXP-09 degeneracy, EXP-05 GNSS floor, stage times for B1, B1 with the depth prior, B2, B3 and B5v from night-b5v-2, Kolu plane residuals), written to paper/fig/ at 300 dpi. Numbers are typed in, not read from runs.
 Used by: run manually (`python paper/charts.py`)
 
 ### paper/HANDOFF.md
-State of the research paper for the next session: rebuild steps (Word COM for the PDF), where each section's numbers come from, what is done, what the owner must settle (names, clip rights, sources) and a ranked list of what would improve it.
+State of the research paper for the next session: rebuild steps (Word COM for the PDF), where each section's numbers come from, what is done, what the owner must settle (names, clip rights, sources) and a ranked list of what would improve it, plus the overnight update of 2026-09-29/30 (prior in the pipeline, baselines, ablation, reruns, Figure 13).
 
 ### paper/package.json
 npm manifest for build_paper.js (docx, image-size).

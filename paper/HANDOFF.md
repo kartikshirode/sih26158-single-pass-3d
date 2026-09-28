@@ -1,13 +1,13 @@
 # The research paper: state and handoff
 
-Written 2026-09-29, at master 2914563 plus the owner's .gitignore commit f57bdc7. Read this
+Written 2026-09-29, at master 2914563 plus the owner's .gitignore commit f57bdc7, and brought up to date overnight on 2026-09-29/30 (section "Overnight update" at the end). Read this
 before touching `paper/`. It says what the paper is, where each part comes from, what's
 done, what's left and what would make it better.
 
 ## What it is
 
-`paper/Tesseract-research-paper.docx` (and a PDF beside it): an 18-page research paper on
-SIH26158, about 7,700 words, 12 figures, 8 tables, 23 references, written for the SIH
+`paper/Tesseract-research-paper.docx` (and a PDF beside it): a 19-page research paper on
+SIH26158, about 8,800 words, 13 figures, 10 tables, 24 references, written for the SIH
 judges and technical reviewers.
 
 The owner was asked which report to write, because the template in the repo at the time
@@ -24,8 +24,9 @@ the worked example in section 7, and nothing that wasn't measured is claimed.
 
 ```
 cd paper && npm install          # once: docx 9.8.1, image-size 1.2.1
-python paper/figures.py          # needs out/runs/night-b1-final, out/runs/demo-prior,
-                                 # out/evidence/quality-2026-09-25, web/data/sheet.jpg
+python paper/figures.py          # needs out/runs/night-b1-final, out/runs/demo-prior2,
+                                 # out/evidence/quality-2026-09-25, out/evidence/b1-final-sheet.jpg,
+                                 # out/evidence/workspace-measure.png
 python paper/charts.py           # numbers are typed in, no runs needed
 node paper/build_paper.js        # writes paper/Tesseract-research-paper.docx
 ```
@@ -137,3 +138,34 @@ In order of how much each would change the paper:
     statement's exact title are from memory, not checked against a source.
 11. **Run the prose through ZeroGPT** as the humanizer skill targets (under 10%). It
     hasn't been scored.
+
+## Overnight update (2026-09-29/30)
+
+The owner settled these before the night: the demo clip's frames stay in (figures 4 to 9),
+team names, the Kolu and Village sources and any SIH format stay as placeholders, and the
+prose is not to be pasted into ZeroGPT (a third-party site). What changed:
+
+- **The depth prior's Poisson remesh and gap fill are in the pipeline** (research/13
+  section 9). Section 5.5, Table 6 (new last row: 24.429 dB, 0.687, 98.53%), section 7.5,
+  section 7.6 (752.7 s end to end, 420.9 s of it the prior), Figure 9 (from
+  `out/runs/demo-prior2`) and the limitation bullet follow it. New reference [24],
+  Kazhdan and Hoppe's screened Poisson.
+- **New section 7.7 with Table 7 (baselines) and Table 8 (ablation).** The old Tables 7
+  and 8 are now 9 and 10. The numbers and their caveats are in
+  `audit/overnight-2026-09-29/RUNLOG.md`; the scripts (`classical.py`, `ma_alone.py`,
+  `ablate.py`) are local, in `out/exp/scripts/`.
+- **B1 rerun with SIH_ASSIMP** (`night-b1-six`, 291.8 s, six formats): section 8.4.
+- **B5v rerun** (`night-b5v-2`, 548.2 s, 0.344 m, 98.54%): Table 9, sections 8.1 and 8.2,
+  Table 10 and Figure 10 now come from one run. Figure 10 gains a bar for the demo with the
+  prior.
+- **Nicosia three times** (27.48 dB, 0.870, coverage 69.3-70.9%; over six builds 61.1-72.4%,
+  mean 69.2%, SD 4.1): Table 9 and section 8.3.
+- **Figure 13, the workspace measuring on B3** (`tools/site_shots.py`), in new section 8.5.
+- **References checked** against their sources (commit 5b35084): the problem statement's
+  printed title, the Nicosia file on Commons, MapAnything at 3DV 2026, page numbers.
+- The site's b1 model is now the prior run, so `web/data/sheet.jpg` is the prior model's
+  sheet; Figure 8 reads the base model's saved copy, `out/evidence/b1-final-sheet.jpg`.
+
+Still open from the improvement list: items 1 to 3 (real footage with survey, a real
+ten-minute clip, a DJI log with gimbal pitch) need data we don't have, and item 11 (a
+detector score) was not approved. The owner's items 1, 3 and 4 above are unchanged.
