@@ -1,7 +1,7 @@
 # Night of 2026-09-28: report
 
-Branch `night-7of10`, not merged and not pushed. Master is untouched and was checked
-green before the night started. Details: `research/12-demo-model-and-workspace.md`;
+Branch `night-7of10`, fast-forwarded into master on the morning of 2026-09-28 at the
+owner's word; not pushed. Master was checked green before the night started. Details: `research/12-demo-model-and-workspace.md`;
 every number: `RUNLOG.md` beside this file.
 
 ## The demo model against the 7/10 bars
@@ -17,7 +17,7 @@ every number: `RUNLOG.md` beside this file.
 | Far-field houses read as blocks | smeared | still smeared at a grazing angle | physics; now shown on the map sheet and the Detail layer |
 | B3 accuracy with a gimbal pitch at most 0.5 m | 0.394 m | **0.391 m** (349 s) | held |
 | B2 held-out coverage at least 80% | 72% quoted earlier | 61% and 71% in two identical builds | open; B2 varies run to run |
-| B5v R at most 1.0 | 0.84 | not rerun (disk) | predicted about 0.88 |
+| B5v R at most 1.0 | 0.84 (502.2 s) | **0.91** (547.1 s), cloud 0.344 m median | met |
 
 ## What changed
 
@@ -58,11 +58,9 @@ double-clicking.
 
 ## Decisions for you
 
-- **Disk.** C: sits at 102 GB. Deleting the eight superseded runs Codex listed was refused
-  by the permission check; they are still in `out/runs/`. Deleting them frees about
-  12.8 GB and lets the ten-minute clip be rerun.
-- **Merge.** The branch passes every CI test locally. Merge it into master when you've
-  looked at the pages.
+- **Disk.** Done in the morning: the eight superseded runs are deleted and C: has
+  110 GB free after the B5v rerun.
+- **Merge.** Done: master fast-forwarded to this branch. Pushing it is still your call.
 - **The Codex seam job** (`audit/codex-seams/PROMPT.md`) is done, by a subagent instead;
   don't launch it.
 
