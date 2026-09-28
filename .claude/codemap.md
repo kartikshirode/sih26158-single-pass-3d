@@ -997,6 +997,9 @@ Used by: run manually (`python paper/charts.py`)
 ### paper/package.json
 npm manifest for build_paper.js (docx, image-size).
 
+### paper/package-lock.json
+Lockfile for paper/package.json (docx 9.8.1, image-size 1.2.1).
+
 ### paper/.gitignore
 Keeps node_modules/, fig/, the .docx and the .pdf out of git: the figures and the paper carry frames of the third-party demo clip (the rule research/09 set for web/data).
 
