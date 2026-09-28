@@ -1,0 +1,119 @@
+/* The run page: pick or upload a flight, then watch the stage log fill in. The stage rows
+   are the method section's log brought to life, so they share its order and names. */
+
+.run-main { padding: clamp(32px, 5vw, 72px) clamp(16px, 4vw, 56px) 80px; max-width: 1180px; }
+.run-main h1 { font-size: clamp(32px, 4.6vw, var(--t-3xl)); font-weight: 250; line-height: 1.05; margin: 0; }
+.run-main h2 { font-size: var(--t-lg); font-weight: 500; margin: 0 0 14px; }
+.small { font-size: var(--t-sm); }
+
+.choices {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 28px;
+  margin-top: 40px;
+}
+.choice { border-top: 2px solid var(--ink); padding-top: 18px; }
+
+.flights { list-style: none; margin: 0; padding: 0; }
+.flights li { border-bottom: 1px solid var(--rule); }
+.flights button {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 2px 16px;
+  width: 100%;
+  padding: 14px 0;
+  text-align: left;
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+.flights button b { font-weight: 500; font-size: var(--t-md); }
+.flights button span { grid-column: 1; color: var(--slate); font-size: var(--t-sm); }
+.flights button em {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  align-self: center;
+  font-style: normal;
+  font-size: var(--t-sm);
+  color: var(--magenta);
+}
+.flights button:hover b { color: var(--magenta); }
+
+.drop {
+  border: 1px dashed var(--slate);
+  background: var(--paper);
+  padding: 28px 20px;
+  text-align: center;
+}
+.drop.over { border-color: var(--magenta); background: var(--magenta-wash); }
+.drop p { margin: 0 0 14px; }
+.drop input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+.drop .pick {
+  display: inline-block;
+  cursor: pointer;
+  color: #fff;
+  background: var(--magenta);
+  padding: 7px 14px;
+  border-radius: 3px;
+}
+.drop .pick:hover { background: #951d5d; }
+.drop .pick:focus-within, .drop input:focus-visible + .limits { outline: 2px solid var(--magenta); }
+.drop .limits { margin: 16px auto 0; max-width: 46ch; color: var(--slate); font-size: var(--t-sm); }
+.choice > .note { margin: 12px 0 0; }
+
+/* ---- the run ---- */
+.run-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 20px; flex-wrap: wrap; }
+.run-file { margin: 10px 0 0; color: var(--slate); font-size: var(--t-sm); }
+.speed { display: inline-flex; border: 1px solid var(--rule); background: var(--paper); }
+.speed button {
+  border: 0;
+  background: none;
+  padding: 7px 12px;
+  font-size: var(--t-sm);
+  color: var(--slate);
+  cursor: pointer;
+}
+.speed button[aria-pressed="true"] { background: var(--ink); color: var(--film); }
+
+.overall { margin-top: 28px; }
+.overall-bar { height: 4px; background: var(--film-deep); }
+.overall-bar i { display: block; height: 100%; width: 0; background: var(--magenta); }
+.overall-text { margin: 8px 0 0; font-size: var(--t-sm); color: var(--slate); }
+.overall-text span:first-child { color: var(--ink); font-weight: 500; }
+.budget { margin-left: 14px; }
+
+.stages { list-style: none; margin: 24px 0 0; padding: 0; border-top: 1px solid var(--rule); }
+.stage {
+  display: grid;
+  grid-template-columns: 14px minmax(9em, 14em) 1fr auto;
+  gap: 4px 16px;
+  align-items: baseline;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--rule);
+}
+.stage .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--rule); align-self: center; }
+.stage b { font-weight: 500; }
+.stage .what { color: #3b4844; font-size: var(--t-sm); }
+.stage .step { grid-column: 3; font-size: var(--t-sm); color: var(--slate); font-stretch: 85%; }
+.stage .t { text-align: right; font-size: var(--t-sm); color: var(--slate); white-space: nowrap; }
+.stage .bar { grid-column: 2 / -1; height: 2px; background: var(--film-deep); }
+.stage .bar i { display: block; height: 100%; width: 0; background: var(--magenta); }
+
+.stage[data-s="waiting"] { opacity: 0.45; }
+.stage[data-s="running"] .dot { background: var(--magenta); animation: pulse 1.2s infinite; }
+.stage[data-s="running"] .t { color: var(--ink); }
+.stage[data-s="done"] .dot { background: var(--ok); }
+.stage[data-s="done"] .step { color: var(--ok); font-stretch: 100%; }
+.stage[data-s="done"] .bar i { background: var(--ok); }
+@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
+
+.ready { margin-top: 28px; padding: 18px 20px; background: var(--paper); border-left: 3px solid var(--ok); }
+.ready p { margin: 0; }
+.ready-actions { display: flex; align-items: center; gap: 16px; margin-top: 14px !important; }
+.quiet { background: none; border: 0; color: var(--slate); text-decoration: underline; text-decoration-color: var(--rule); cursor: pointer; padding: 0; }
+
+@media (max-width: 640px) {
+  .stage { grid-template-columns: 14px 1fr auto; }
+  .stage .what { grid-column: 2 / -1; grid-row: 2; }
+  .stage .step { grid-column: 2 / -1; }
+}

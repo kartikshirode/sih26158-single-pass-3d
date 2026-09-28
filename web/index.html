@@ -19,7 +19,7 @@
     <a href="#evidence">Evidence</a>
     <a href="#uses">Uses</a>
     <a href="#limits">Limits</a>
-    <a class="go" href="workspace.html">Open the workspace</a>
+    <a class="go" href="run.html">Open the workspace</a>
   </nav>
 </header>
 
@@ -91,7 +91,7 @@
         <tr><th scope="row">Looks like the photos</th><td id="evHeldOut">24.6 dB, SSIM 0.71</td><td>Every tenth keyframe is held back from the build, then the model is rendered into it and compared, pixel by pixel.</td></tr>
         <tr><th scope="row">Accurate to a metre</th><td>0.34 m median</td><td>A ten-minute synthetic flight with known ground truth and a DJI-style telemetry file; 98.6% of the cloud within 1 m.</td></tr>
         <tr><th scope="row">Ten minutes of video</th><td>547 s</td><td>The same ten-minute file end to end, inside the 15-minute budget.</td></tr>
-        <tr><th scope="row">Every format asked for</th><td>6 of 6</td><td>OBJ, GLB, FBX, PLY, LAS and GeoTIFF from every run.</td></tr>
+        <tr><th scope="row">Every format asked for</th><td>6 of 6</td><td>OBJ, GLB, PLY, LAS and GeoTIFF from every run, and FBX where the Open Asset Import Library is installed.</td></tr>
       </tbody>
     </table>
     <p class="note">The accuracy figures come from synthetic clips, because a real flight with surveyed ground truth wasn't available. Metre-level results need a gimbal angle in the telemetry, which many consumer drones don't record.</p>
@@ -118,7 +118,7 @@
         </tbody>
       </table>
     </div>
-    <p class="cta-line"><a class="go" href="workspace.html">Open the workspace</a> <span class="note">Everything you measure exports as GeoJSON and CSV.</span></p>
+    <p class="cta-line"><a class="go" href="run.html">Open the workspace</a> <span class="note">Everything you measure exports as GeoJSON and CSV.</span></p>
   </section>
 
   <section id="limits" class="band" aria-labelledby="limitsTitle">

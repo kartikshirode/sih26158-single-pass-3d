@@ -975,7 +975,7 @@ The night's measurements on B1's held-out views: baseline 22.866 dB on master, t
 ## web/
 
 ### web/README.md
-How to pack a run (tools/pack_site.py, a second model with --out web/data/<id>), open the two pages from disk, the workspace controls and shortcuts, and the npm build and test commands.
+How to pack a run (tools/pack_site.py, a second model with --out web/data/<id>), what run.html does, open the pages from disk, the workspace controls and shortcuts, and the npm build and test commands.
 
 ### web/SPEC.md
 Behaviour spec for the workspace script: offline file:// constraint (classic scripts, esbuild IIFE), the window.TESSERACT data contract, rendering (unlit photo texture, BVH picking, contour shader, flight path), navigation that travels the pass (grab-pan, orbit and zoom about the cursor point, double-click fly-to, WASD, minimap, flight strip with chase camera and playback), the tools (distance, height, area, volume, profile, line of sight, coordinates, note), export, one-length scale calibration, neatline ticks, loading and tests.
@@ -985,8 +985,22 @@ The workspace page: top bar (model, units, Set scale), tool rail (data-tool, dat
 Gotcha: opens from disk; ids and classes are the contract with web/src and web/css/workspace.css.
 
 ### web/index.html
-The presentation page: masthead, hero (headline, then the wipe: the drone video against the model rendered from the same camera at the same moment, with play and scrub), The pass (facts filled from data), The site (the plan-view map sheet), Method (stage log with bars sized by time), Evidence (held-out, synthetic accuracy, ten-minute time, formats), Uses (the eight PS applications against the eight tools), Limits, colophon; the evidence links to the workspace on the GPS test flight (?model=b3). Loads data/models.js, the chosen model and dist/site.js.
-Gotcha: evidence figures are typed in the HTML from audit/night-7of10/RUNLOG.md and research/11; refresh them when those change.
+The presentation page: masthead, hero (headline, then the wipe: the drone video against the model rendered from the same camera at the same moment, with play and scrub), The pass (facts filled from data), The site (the plan-view map sheet), Method (stage log with bars sized by time), Evidence (held-out, synthetic accuracy, ten-minute time, formats), Uses (the eight PS applications against the eight tools), Limits, colophon; the evidence links to the workspace on the GPS test flight (?model=b3), and both "Open the workspace" buttons go to run.html. Loads data/models.js, the chosen model and dist/site.js.
+Gotcha: evidence figures are typed in the HTML from audit/night-7of10/RUNLOG.md and research/11; refresh them when those change. The packed runs exported FBX only where SIH_ASSIMP was set, hence the formats row's wording.
+
+### web/run.html
+The run page: masthead back to the presentation; a choice between a processed flight (list filled from data/models.js entries with a replay) and a drop zone for a new video, with a note that the hosted copy only previews the upload; then the run view (title and file, speed buttons, overall bar with elapsed, total and budget, the stage list, and a ready panel with a countdown link to the workspace and Stay here). Loads data/models.js then dist/run.js.
+Gotcha: ids are the contract with web/src/run.js.
+
+### web/css/run.css
+Run page layout on base.css tokens: the two choices, flight rows, the drop zone and its magenta pick button, speed toggle, overall bar, stage rows (dot, name, what, time, current step or result, bar) in waiting, running and done states, the ready panel; stage rows fold to two columns below 640 px.
+
+### web/src/run.js
+The run page's script (bundled to dist/run.js by npm run build:run, no imports): lists the models with a replay, takes a dropped or chosen video, and plays the replay on a requestAnimationFrame clock at 1x, 4x or 16x (?speed=, ?replay=<id> starts at once). A video adds an Upload stage (3-30 s from its size) and plays the first model's replay; running stages show elapsed over recorded seconds and the current tool step, done ones their result. At the end a 5 s countdown opens workspace.html?model=<id>.
+Gotcha: the clock advances at most 1 s per frame, so a hidden tab pauses the run instead of finishing it.
+
+### web/dist/run.js
+Built bundle of web/src/run.js. Committed so the page opens without npm.
 
 ### web/css/site.css
 Presentation layout: sticky masthead, hero type, the wipe figure (clip-path photo or video over the canvas, magenta handle), bands with a wide title column, prose and margin notes, the sheet figure, the stage log, the evidence and application tables; single column below 860 px.
@@ -1053,7 +1067,7 @@ Shared tokens and type for the web pages: @font-face for the vendored Archivo (v
 Workspace layout: a 3 by 3 grid (top bar, rail, stage, inspector, flight strip), double neatline, minimap, tool rail tooltips and active bar, readout figures, measurement list, flight strip playhead, dialog, loading screen; folds the inspector under the view below 1100 px.
 
 ### web/package.json
-esbuild, three 0.180.0 and three-mesh-bvh 0.9.1 as dev dependencies; npm run build bundles src/workspace.js to dist/workspace.js (IIFE, minified), npm run build:site bundles src/site.js to dist/site.js, npm test runs node --test test/.
+esbuild, three 0.180.0 and three-mesh-bvh 0.9.1 as dev dependencies; npm run build bundles src/workspace.js to dist/workspace.js (IIFE, minified), npm run build:site bundles src/site.js to dist/site.js, npm run build:run bundles src/run.js to dist/run.js, npm test runs node --test test/.
 Gotcha: web/.gitignore keeps node_modules/ and data/ out of git.
 
 ### web/fonts/

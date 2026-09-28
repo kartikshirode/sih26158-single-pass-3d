@@ -5,7 +5,8 @@
   "scripts": {
     "build": "esbuild src/workspace.js --bundle --format=iife --minify --target=es2020 --outfile=dist/workspace.js",
     "test": "node --test test/",
-    "build:site": "esbuild src/site.js --bundle --format=iife --minify --target=es2020 --outfile=dist/site.js"
+    "build:site": "esbuild src/site.js --bundle --format=iife --minify --target=es2020 --outfile=dist/site.js",
+    "build:run": "esbuild src/run.js --bundle --format=iife --minify --target=es2020 --outfile=dist/run.js"
   },
   "devDependencies": {
     "esbuild": "0.25.10",

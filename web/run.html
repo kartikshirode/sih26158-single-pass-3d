@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tesseract run</title>
+<meta name="description" content="Open a processed drone pass or upload a new one, and watch every stage of the pipeline before the model opens.">
+<link rel="stylesheet" href="css/base.css">
+<link rel="stylesheet" href="css/site.css">
+<link rel="stylesheet" href="css/run.css">
+</head>
+<body class="site run-page">
+
+<header class="masthead">
+  <a class="mark wide" href="index.html">Tesseract</a>
+  <nav aria-label="Pages">
+    <a href="index.html">Presentation</a>
+    <a href="index.html#method">Method</a>
+  </nav>
+</header>
+
+<main class="run-main">
+
+  <section id="choose" aria-labelledby="chooseTitle">
+    <h1 id="chooseTitle" class="wide">Open a model</h1>
+    <p class="lede">Pick a flight that has already been through the pipeline, or bring a new one. Either way you watch each stage run before the model opens in the workspace.</p>
+
+    <div class="choices">
+      <div class="choice" aria-labelledby="pickTitle">
+        <h2 id="pickTitle">A processed flight</h2>
+        <ul class="flights" id="flights"></ul>
+      </div>
+
+      <div class="choice" aria-labelledby="dropTitle">
+        <h2 id="dropTitle">A new video</h2>
+        <div class="drop" id="drop">
+          <p>Drop a drone video here</p>
+          <label class="go pick" for="file">Choose a video</label>
+          <input id="file" type="file" accept="video/*">
+          <p class="limits">One continuous pass, up to 10 minutes. MP4 or MOV. A DJI .SRT file beside it puts the model in metres and on the map.</p>
+        </div>
+        <p class="note small">This hosted copy shows the upload flow. The GPU pipeline runs on the laptop, so after the upload the page plays back the demo clip's recorded run and opens its model.</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="progress" aria-labelledby="runTitle" hidden>
+    <div class="run-head">
+      <div>
+        <h1 id="runTitle" class="wide">Reconstructing</h1>
+        <p class="run-file" id="runFile"></p>
+      </div>
+      <div class="speed" role="group" aria-label="Playback speed">
+        <button type="button" data-speed="1" aria-pressed="true">Real time</button>
+        <button type="button" data-speed="4" aria-pressed="false">4x</button>
+        <button type="button" data-speed="16" aria-pressed="false">16x</button>
+      </div>
+    </div>
+
+    <div class="overall">
+      <div class="overall-bar"><i id="overallBar"></i></div>
+      <p class="overall-text"><span id="elapsed">0:00</span> of <span id="total">0:00</span><span class="budget" id="budget"></span></p>
+    </div>
+
+    <ol class="stages" id="stages" aria-live="polite"></ol>
+
+    <div class="ready" id="ready" hidden>
+      <p><b id="readyText">Model ready.</b> <span class="note" id="readyNote"></span></p>
+      <p class="ready-actions">
+        <a class="go" id="openWs" href="workspace.html">Open in the workspace</a>
+        <button type="button" class="quiet" id="stay">Stay here</button>
+      </p>
+    </div>
+  </section>
+
+</main>
+
+<script src="data/models.js"></script>
+<script src="dist/run.js"></script>
+</body>
+</html>

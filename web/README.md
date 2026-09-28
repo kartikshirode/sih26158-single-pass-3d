@@ -5,6 +5,10 @@ Two pages that open straight from disk, no server and no network:
 - `index.html`, the presentation: the drone's video wiped against the model from the same
   camera, the site as a map sheet, the method, the evidence, the uses and the limits.
 - `workspace.html`, the model itself: travel along the pass and measure on the surface.
+- `run.html`, the way into the workspace from the presentation: pick a processed flight or
+  drop a new video, watch the run's recorded stages play back in real time (4x and 16x to
+  hurry it; `?replay=b1&speed=16` starts one straight away), then the workspace opens. A
+  dropped video is only a preview of the upload flow: the page plays the demo clip's run.
 
 ## Before opening them
 
