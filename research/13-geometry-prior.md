@@ -4,15 +4,16 @@ On master, 2026-09-28. The owner watched the demo model fly by and named what wa
 the houses, the tree in the first couple of seconds, the far end and the terrain. This
 note covers what those faults turned out to be, the fix (`src/pipeline/prior_depth.py`,
 wired into `local_gpu.py` as the `geometry_prior` option) and what it costs. The option is
-off by default. The demo run that uses it is `out/runs/demo-prior`.
+off by default. The demo run that uses it is `out/runs/demo-prior2` (section 9); the
+first one, `out/runs/demo-prior`, is section 6.
 
 The short version. OpenMVS can't shape the houses on this clip, because it sees them from
 far away with almost no change of angle. MapAnything can, once it's given the solved
 poses. Its depth, pulled onto the MVS surface and fused in a TSDF, then refined by
 OpenMVS, gives the houses flat roofs and upright walls and makes the tree stand. The
-held-out score drops by 0.3 dB and 0.03 SSIM, still over the 23.3 dB and 0.66 bars.
-Coverage is the one number that gets worse in a way that matters: 97.27% against the 98%
-bar.
+held-out score drops by 0.2 dB and 0.02 SSIM, still over the 23.3 dB and 0.66 bars, and
+coverage stays over the 98% bar (98.53%) since the Poisson remesh and the gap fill went
+in. The demo runs end to end in 752.7 s of the 900 s budget with it on.
 
 ## 1. What was actually wrong
 
@@ -161,9 +162,8 @@ their shape; a few holes remain behind the tree.
 
 The Poisson version meets the 98% coverage bar the prior used to miss. Poisson and the
 decimation took 40 s and the gap fill 1 s; RefineMesh at 1 scale ran slower here (393 s
-against 257 s), so it doesn't buy the time back. These two steps are still experiment
-scripts, not in `prior_depth.py`: with the demo run at 892.8 s, they need about 40 s found
-elsewhere before the prior fits the budget with them.
+against 257 s), so it doesn't buy the time back. Section 9 has how both went into the
+pipeline and fit the budget.
 
 ## 7. What changed on the laptop
 
@@ -177,11 +177,76 @@ pip uninstall -y open3d dash ConfigArgParse retrying janus
 
 ## 8. What is still open
 
-- Coverage 97.27% against the 98% bar, until the Poisson step (section 6a) goes in.
-- The time: 892.8 s of 900 s on the demo, before Poisson.
 - The back of every house is still a guess. The prior makes it a plausible wall instead
   of a sail, but no photo shows it.
 - The far edge is still smeared. That's the photos, not the mesh (research/12, section
   1).
 - The prior needs a pinhole camera. A run with refine_distortion on falls back to the
   OpenMVS mesh and records `prior_error`.
+- A few small gaps are left at the far edge of the crop, much as in the base model, and
+  a few shard triangles at the tree's left flank.
+- 18.8% of the demo model's faces are coloured from the cloud, not a photo. Most of them
+  are the ring of MVS faces under the prior (section 9), hidden by it from any view.
+
+## 9. Into the pipeline, and a demo run inside the budget
+
+On master, 2026-09-29. Both steps from section 6a are now in `prior_depth.py`
+(`poisson_remesh`, `gap_fill`) with tests, and `prior_mesh` runs them: fuse, close holes,
+Poisson, RefineMesh, gap fill, then TextureMesh. New options: `prior_upsample` (2),
+`prior_poisson` (octree depth, 10), `prior_gap_cell` (120), `prior_gap_below` (120) and
+`prior_gap_ring` (1).
+
+### What the held-out runs said
+
+Same setup as section 4 (`out/exp/scripts/hochain.py`, through the module's own
+functions). Times are for the held-out scene, 159 views.
+
+| Setup | Fusion | Poisson | RefineMesh | PSNR (dB) | SSIM | Coverage |
+|---|---:|---:|---:|---:|---:|---:|
+| Stride 2, upsample 2, Poisson 11 | 50.1 s | 31.4 s | 224.2 s | 24.390 | 0.686 | 98.62% |
+| Stride 2, no upsampling, Poisson 11 | 42.3 s | 30.4 s | 220.5 s | 24.370 | 0.684 | 98.72% |
+| Stride 2, upsample 2, Poisson 10 | 44.3 s | 15.3 s | 217.1 s | 24.409 | 0.687 | 98.63% |
+| Stride 2, no upsampling, Poisson 10 | 42.4 s | 16.8 s | 245.6 s | 24.405 | 0.685 | 98.72% |
+| Stride 3, upsample 2, Poisson 11 | 37.0 s | 32.2 s | 259.2 s | 24.392 | 0.685 | 98.43% |
+| Stride 2, Poisson 11, RefineMesh decimate 0.25 | 44.7 s | 31.8 s | 206.4 s | 24.396 | 0.687 | 98.62% |
+| **Stride 3, Poisson 10, height test and ring (the defaults)** | 38.0 s | 16.0 s | 220.1 s | **24.429** | **0.687** | **98.53%** |
+
+Two RefineMesh times ran beside other GPU work and read high. The handoff's two ideas for
+finding time did less than hoped: dropping the upsampling saved 8 s of fusion, because
+the TSDF's cost is in the tiles, not the rays. Poisson depth 10 halved the remesh with no
+change in score or in the close renders, and tiling every third keyframe scored like
+every second while skipping a third of the network's views, about 60 s on the demo.
+RefineMesh at decimate 0.25 saved 15 s but keeps fewer faces for the houses, and it
+wasn't needed.
+
+### Ground under the trees
+
+Rendered from off the flight line, the first chain still showed black holes on the ground
+beside the trees. The prior kept the crown and lost the floor under its edge, so the
+plan-view test saw a covered cell and added nothing. `gap_fill` now also takes an MVS
+face lower than every prior face in its cell by more than the median depth / 120. That
+filled the holes but left slivers along each patch's border, so every patch grows by one
+ring of MVS faces sharing a vertex with it. The first ring also took in ReconstructMesh's
+long sails, which poked up through the roofs; faces with an edge over 4 times the median
+aren't grown into. Held out: the height test alone scored 24.407 dB, 0.687, 98.66%, the
+ring 24.430, 0.688, 98.66%.
+
+### The demo run
+
+`out/runs/demo-prior2`: `SIH DEMO.mp4` end to end with `{"local_gpu": {"geometry_prior":
+true}}` and the defaults above, clean, no resume, `SIH_ASSIMP` set. **752.7 s** of the 900 s
+budget (892.8 s for the run in section 6), level L0, verify PASS, all six formats.
+
+| Step | Seconds |
+|---|---:|
+| MapAnything on 177 tile views (load 15.7 s) | 123.6 |
+| Fusion, 177 tiles, 2,183,793 faces kept to 900,000 | 38.1 |
+| Poisson, depth 10 | 15.2 |
+| RefineMesh | 237.8 |
+| TextureMesh, 458,297 faces | 62.6 |
+| Texture fill (86,204 faces), seam levelling | 16.0, 15.6 |
+
+The gap fill added 186,929 MVS faces. Rendered from the same off-path views as section 6
+beside `night-b1-final` and `demo-prior`, the houses keep their roof steps and walls, the
+tree is one crown, and the stripes and black holes of the section 6 run are gone. This is
+the model the site shows now.

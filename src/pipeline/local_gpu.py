@@ -123,10 +123,11 @@ DEFAULTS = {
     "texture_level": True,
     # MapAnything's depth on keyframe tiles, given the solved poses, fused into the mesh
     # that is textured (prior_depth.py): upright walls, flat roofs and standing trees where
-    # OpenMVS alone makes lumps. Off by default: on the demo it adds about 8 minutes
-    # (tiles 175 s at stride 2, fusion 50 s, RefineMesh 250 s) and moves the held-out
-    # score a little down with it (research/13). Sizes are in units of the views' median
-    # MVS depth.
+    # OpenMVS alone makes lumps. Off by default: on the demo it takes the run from 293 s
+    # to 753 s (tiles 124 s at stride 3, fusion 38 s, Poisson 15 s, RefineMesh 238 s)
+    # and the held-out score from 24.64 to 24.43 dB, coverage 98.5% (research/13), and a
+    # ten-minute clip has no room for it. Sizes are in units of the views' median MVS
+    # depth.
     "geometry_prior": False,
     "prior_tiles": 3,
     "prior_window": 8,
