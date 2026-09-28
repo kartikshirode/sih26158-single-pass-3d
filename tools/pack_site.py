@@ -330,7 +330,10 @@ def replay(run: str) -> dict:
          "steps": steps("image_undistorter", "InterfaceCOLMAP", "DensifyPointCloud"),
          "done": f"{(geo.get('dense_points') or 0) / 1e6:.1f} million points"},
         {"label": "Surface", "what": "A mesh through the fused points.",
-         "steps": steps("ReconstructMesh"), "done": "surface built"},
+         "steps": steps("ReconstructMesh", "prior depth (MapAnything)", "prior fusion",
+                        "prior Poisson", "RefineMesh"),
+         "done": "surface built, roofs and walls shaped by the depth prior"
+         if geo.get("prior") and "prior_error" not in geo else "surface built"},
         {"label": "Texture", "what": "Each face takes its best photo; seams are levelled.",
          "steps": steps("TextureMesh") + [
              {"label": "fill unseen faces", "seconds": float(fill.get("seconds") or 0)},
