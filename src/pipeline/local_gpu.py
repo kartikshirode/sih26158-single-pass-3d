@@ -732,8 +732,11 @@ def reuse_sparse(src: str, work: str, names: list, o: dict) -> dict:
         raise SparseError(f"{src} solved {prev.get('n_views')} views, not {len(names)}")
     if not (prev.get("ba_gate") or {}).get("passed"):
         raise SparseError(f"{src} did not pass the S3b gate")
+    # An option the earlier run did not know yet ran at its default, which reproduces
+    # the behaviour from before the option existed.
     pose_opts = [k for k in DEFAULTS if k not in DENSE_OPTIONS]
-    changed = [k for k in pose_opts if (prev.get("options") or {}).get(k) != o.get(k)]
+    had = prev.get("options") or {}
+    changed = [k for k in pose_opts if had.get(k, DEFAULTS[k]) != o.get(k)]
     if changed:
         raise SparseError(f"pose options differ from {src}: {', '.join(changed)}")
     for f in ("sparse_txt", "cameras.npy"):
