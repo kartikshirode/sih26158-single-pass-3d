@@ -284,6 +284,80 @@ def glb_bounds(glb_path: str) -> dict:
     return {"min": [round(float(x), 4) for x in lo], "max": [round(float(x), 4) for x in hi]}
 
 
+def replay(run: str) -> dict:
+    """
+    The run's own stage log in the eight groups the presentation page names, for run.html
+    to play back: each group's recorded seconds, the tool steps inside it, and one line on
+    what it produced. Groups sum to the run's wall clock; S3's time outside the named
+    tools (reading and writing files) is counted with Texture, its last step.
+    """
+    man = json.load(open(os.path.join(run, "run_manifest.json"), encoding="utf-8"))
+    geo = json.load(open(os.path.join(run, "geometry", "local_gpu_result.json"),
+                         encoding="utf-8"))
+    st = {s["id"]: s for s in man["stages"]}
+    tool = {s["stage"]: float(s["seconds"]) for s in geo.get("stages", [])}
+
+    def sec(*ids):
+        return sum(float(st[i]["seconds"]) for i in ids if i in st)
+
+    def steps(*names):
+        return [{"label": n, "seconds": round(tool[n], 2)} for n in names if n in tool]
+
+    ing = st.get("S1-ingest", {}).get("facts", {})
+    scr = st.get("S0-screen", {}).get("facts", {}).get("screen", {})
+    ba = geo.get("sparse_after_bundle_adjustment", {})
+    fill = geo.get("texture_fill") or {}
+    exports = st.get("S6-export", {}).get("facts", {}).get("exports", [])
+    groups = [
+        {"label": "Screen", "what": "Refuse or repair a clip before spending time on it.",
+         "seconds": sec("S0-screen"),
+         "done": st.get("S0-screen", {}).get("note")
+         or f"{scr.get('resolution', '')} at {scr.get('fps', 0):.0f} fps, admissible"},
+        {"label": "Ingest", "what": "Score every frame for blur and motion; keep a sharp set.",
+         "seconds": sec("S1-ingest", "S2-plan"),
+         "done": f"{ing.get('keyframes')} keyframes from {ing.get('frames_in')} frames"
+         + (f", {ing['srt_records']} telemetry records" if ing.get("srt_records") else "")},
+        {"label": "Camera", "what": "MapAnything reads the lens from the frames.",
+         "steps": steps("poses (MapAnything)", "intrinsics fit"),
+         "done": f"focal length {geo['camera']['f']:.0f} px from "
+         f"{geo.get('mapanything_views', 0)} views"},
+        {"label": "Poses", "what": "COLMAP matches features and solves where every frame was.",
+         "steps": steps("feature_extractor", "sequential_matcher", "global_mapper",
+                        "point_filtering", "analyze_adjusted", "model_converter"),
+         "done": f"{ba.get('Registered images')} of {geo.get('n_views')} views placed, "
+         f"{float(str(ba.get('Mean reprojection error', '0')).rstrip('px')):.2f} px error"},
+        {"label": "Depth", "what": "OpenMVS measures depth for every pixel and fuses it.",
+         "steps": steps("image_undistorter", "InterfaceCOLMAP", "DensifyPointCloud"),
+         "done": f"{(geo.get('dense_points') or 0) / 1e6:.1f} million points"},
+        {"label": "Surface", "what": "A mesh through the fused points.",
+         "steps": steps("ReconstructMesh"), "done": "surface built"},
+        {"label": "Texture", "what": "Each face takes its best photo; seams are levelled.",
+         "steps": steps("TextureMesh") + [
+             {"label": "fill unseen faces", "seconds": float(fill.get("seconds") or 0)},
+             {"label": "level seams",
+              "seconds": float((geo.get("texture_level") or {}).get("seconds") or 0)}],
+         "done": f"{fill.get('faces', 0):,} textured triangles"},
+        {"label": "Level and export", "what": "Gravity up, then the export formats.",
+         "seconds": sec("S4-scale", "S5-georef", "S5b-level", "S6-export", "S7-score",
+                        "S8-verdict"),
+         "done": (st.get("S5-georef", {}).get("note", "").split(";")[0] + "; "
+                  if man.get("georeferenced") else "")
+         + ", ".join(e.upper() if e != "geotiff" else "GeoTIFF" for e in exports)},
+    ]
+    for g in groups:
+        if "steps" in g:
+            g["seconds"] = sum(s["seconds"] for s in g["steps"])
+    s3 = sec("S3-geometry") - sum(g["seconds"] for g in groups[2:7])
+    if s3 > 0:
+        groups[6]["seconds"] += s3
+        groups[6]["steps"].append({"label": "write results", "seconds": round(s3, 2)})
+    for g in groups:
+        g["seconds"] = round(g["seconds"], 2)
+    return {"wall_s": round(float(man["seconds"]), 1), "budget_s": man.get("budget_s"),
+            "file": scr.get("file"), "duration_s": scr.get("duration_s"),
+            "stages": groups}
+
+
 def register(prefix: str, data: dict):
     """List the packed models in web/data/models.js for the pages' model switcher."""
     path = os.path.join(ROOT, "web", "data", "models.js")
@@ -293,7 +367,8 @@ def register(prefix: str, data: dict):
         models = json.loads(txt[txt.index("=") + 1:].strip().rstrip(";"))
     models = [m for m in models if m["src"] != f"{prefix}/model.js"]
     models.append({"id": data["id"], "title": data["title"], "src": f"{prefix}/model.js",
-                   "units": data["units"], "georef": bool(data["georef"])})
+                   "units": data["units"], "georef": bool(data["georef"]),
+                   "replay": data.get("replay")})
     models.sort(key=lambda m: (m["src"] != "data/model.js", m["title"]))
     os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(path, "w", encoding="utf-8", newline="\n") as f:
@@ -310,9 +385,21 @@ def main():
     ap.add_argument("--no-sheet", action="store_true", help="skip the plan-view map sheet")
     ap.add_argument("--video", help="the source video, if the manifest's path has moved")
     ap.add_argument("--no-clip", action="store_true", help="skip the cropped video clip")
+    ap.add_argument("--registry-only", action="store_true",
+                    help="refresh this run's entry in models.js (its replay) without repacking")
     a = ap.parse_args()
 
     run = os.path.abspath(a.run)
+    if a.registry_only:
+        prefix = os.path.relpath(os.path.abspath(a.out), os.path.join(ROOT, "web")).replace(os.sep, "/")
+        path = os.path.join(ROOT, "web", "data", "models.js")
+        txt = open(path, encoding="utf-8").read()
+        entry = next(m for m in json.loads(txt[txt.index("=") + 1:].strip().rstrip(";"))
+                     if m["src"] == f"{prefix}/model.js")
+        entry["replay"] = replay(run)
+        register(prefix, entry)
+        print(f"{entry['id']}: replay of {entry['replay']['wall_s']} s registered")
+        return
     man, tf, to5 = frame_transform(run)
     ingest = json.load(open(os.path.join(run, "ingest.json"), encoding="utf-8"))
     stats = ingest["stats"]
@@ -376,6 +463,7 @@ def main():
                   "triangles": tri, "dense_points": geo_res.get("dense_points"),
                   "level": man.get("level"), "frame": man.get("frame")},
         "cameras": cams,
+        "replay": replay(run),
     }
     video = a.video or next((os.path.join(ROOT, i["path"]) for i in man.get("inputs", [])
                              if os.path.exists(os.path.join(ROOT, i["path"]))), None)
