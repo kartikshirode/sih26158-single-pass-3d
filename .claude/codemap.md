@@ -994,6 +994,9 @@ Gotcha: needs the gitignored runs, out/evidence and web/data on this laptop. Sha
 Matplotlib charts and the pipeline diagram for the paper (EXP-09 degeneracy, EXP-05 GNSS floor, stage times for B1, B2, B3 and B5v, Kolu plane residuals), written to paper/fig/ at 300 dpi. Numbers are typed in, not read from runs.
 Used by: run manually (`python paper/charts.py`)
 
+### paper/HANDOFF.md
+State of the research paper for the next session: rebuild steps (Word COM for the PDF), where each section's numbers come from, what is done, what the owner must settle (names, clip rights, sources) and a ranked list of what would improve it.
+
 ### paper/package.json
 npm manifest for build_paper.js (docx, image-size).
 
