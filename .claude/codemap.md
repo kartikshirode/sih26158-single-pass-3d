@@ -70,7 +70,7 @@ Ignores caches, venvs, out/, viewer/model.glb and viewer/run_manifest.json, data
 ## .github/workflows/
 
 ### .github/workflows/ci.yml
-CI gate on push and PR (ubuntu, Python 3.12, PROJ_NETWORK=ON): compileall; test_metrics, test_srt, test_frames, test_local_gpu, test_mesh_export, test_texture_fill, test_texture_level, test_prior_depth (pip installs open3d and numba first), test_window_fuse, mvs_job/test_ba_gate.py, src/pipeline/test_colmap_export.py, test_tesseract; a synthetic `tesseract.py run` then `verify`; tools/test_console.py (Playwright chromium); tools/check_onboarding.py; the upload API tests (`node --test "demo/test/*.test.js"`); a licence check that every requirements.txt pin is named in docs/11-state-of-the-art.md.
+CI gate on push and PR (ubuntu, Python 3.12, PROJ_NETWORK=ON): compileall; test_metrics, test_srt, test_frames, test_local_gpu, test_mesh_export, test_texture_fill, test_texture_level, test_prior_depth (apt installs libgl1 and libgomp1, pip open3d and numba first; a failure's last 1,500 characters go out as an ::error annotation), test_window_fuse, mvs_job/test_ba_gate.py, src/pipeline/test_colmap_export.py, test_tesseract; a synthetic `tesseract.py run` then `verify`; tools/test_console.py (Playwright chromium); tools/check_onboarding.py; the upload API tests (`node --test "demo/test/*.test.js"`); a licence check that every requirements.txt pin is named in docs/11-state-of-the-art.md.
 Gotcha: needs network for the geoid grid and a Playwright install. The demo build and audit gates are local only.
 
 ## src/tesseract/

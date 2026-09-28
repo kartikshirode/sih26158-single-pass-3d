@@ -55,8 +55,13 @@ jobs:
 
       - name: MapAnything depth prior, the parts that need no GPU
         run: |
+          # Open3D's Linux wheel loads libGL and OpenMP at import.
+          sudo apt-get install -y --no-install-recommends libgl1 libgomp1
           pip install open3d numba
-          python src/pipeline/test_prior_depth.py
+          python src/pipeline/test_prior_depth.py 2>&1 | tee prior.log; s=${PIPESTATUS[0]}
+          # The tail as an annotation, which the checks API shows without a login.
+          if [ "$s" -ne 0 ]; then echo "::error title=test_prior_depth::$(tail -c 1500 prior.log | tr '\n' '|')"; fi
+          exit $s
 
       - name: window fusion
         run: python src/pipeline/test_window_fuse.py
