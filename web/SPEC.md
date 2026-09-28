@@ -43,7 +43,7 @@ window.TESSERACT = {
 };
 ```
 
-Two optional fields:
+Three optional fields:
 
 - `detail`: `{ b64, counts, lo, hi, median }`. One uint8 per GLB vertex in accessor order
   (mesh after mesh, `counts` each): v in 0..254 means one photo pixel covers
@@ -51,6 +51,10 @@ Two optional fields:
   keyframe that sees the vertex inside its frame; 255 means none does. Drawn by the
   Detail layer.
 - `sheet`: the presentation page's plan-view map; the workspace ignores it.
+- `clip`: `{ file }`, the source video cut to the keyframes' crop (`data/pass.mp4`, H.264,
+  1280 px wide). Frame n of it is the source frame n, so its clock is the cameras' `t`.
+  The presentation page plays it on the photo side of the wipe and renders the model
+  from the camera path interpolated to the video's own time; the workspace ignores it.
 
 Several packed models: `tools/pack_site.py --out web/data/<id>` packs into a subfolder
 (paths inside stay relative to `web/`) and lists every model in `web/data/models.js` as

@@ -577,7 +577,7 @@ Gotcha: assumes mostly flat ground under the flight; on a hill or a facade the p
 ### tools/pack_site.py
 Packs one run for web/workspace.html and web/index.html: export/model.glb (or --mesh, a textured F4 OBJ carried through the run's level.json or georef.json by mesh_export.export_textured) as base64 inside web/data/model.js (window.TESSERACT, the contract in web/SPEC.md), every registered keyframe camera in the Y-up export frame (time, position, forward, up, fovy, aspect) and 1280 px keyframe images in web/data/frames/.
 It also writes data["detail"] (detail_map: per GLB vertex, the finest photo pixel footprint over keyframes that frame it, dist / (f cos incidence), log-scaled to uint8) and data["sheet"] (render_sheet: an orthographic top render through view_check.rasterize, contours from points_llf.npy, hatching where the photo pixel footprint is over 4x the median, read back by rasterising a grey ramp as the atlas, and the flight path, to data/sheet.jpg). pixel_footprint(V, N, cams, f_px) is the shared per-point computation.
-Exports: frame_transform(run) -> (manifest, tf, to5); cameras(run, to5, fps, f_px, w, h) -> list; pixel_footprint(V, N, cams, f_px); detail_map(glb, cams, f_px, w, h) -> dict; render_sheet(obj_dir, run, cams, out, f_px=None) -> dict
+Exports: frame_transform(run) -> (manifest, tf, to5); cameras(run, to5, fps, f_px, w, h) -> list; pixel_footprint(V, N, cams, f_px); detail_map(glb, cams, f_px, w, h) -> dict; render_sheet(obj_dir, run, cams, out, f_px=None) -> dict; pass_clip(video, crop_tblr, out) -> bool (ffmpeg, or imageio-ffmpeg's; the source video cut to the ingest crop, 1280 px H.264, written as data/pass.mp4 and listed as data["clip"]; --video overrides the manifest's input path, --no-clip skips it)
 Used by: run manually before opening web/workspace.html
 Gotcha: camera directions go through the same affine transform as points (by differences) so the depth stretch and axis swap match the mesh. --out web/data/<id> packs a second model with paths relative to web/, and register() lists every model in web/data/models.js for the pages' ?model= switch. web/data/ is gitignored because a model of the demo clip is a render of it.
 
@@ -975,15 +975,15 @@ The workspace page: top bar (model, units, Set scale), tool rail (data-tool, dat
 Gotcha: opens from disk; ids and classes are the contract with web/src and web/css/workspace.css.
 
 ### web/index.html
-The presentation page: masthead, hero (headline, then the wipe: a keyframe photo against the model rendered from that keyframe's camera, with play and scrub), The pass (facts filled from data), The site (the plan-view map sheet), Method (stage log with bars sized by time), Evidence (held-out, synthetic accuracy, ten-minute time, formats), Uses (the eight PS applications against the eight tools), Limits, colophon; the evidence links to the workspace on the GPS test flight (?model=b3). Loads data/models.js, the chosen model and dist/site.js.
+The presentation page: masthead, hero (headline, then the wipe: the drone video against the model rendered from the same camera at the same moment, with play and scrub), The pass (facts filled from data), The site (the plan-view map sheet), Method (stage log with bars sized by time), Evidence (held-out, synthetic accuracy, ten-minute time, formats), Uses (the eight PS applications against the eight tools), Limits, colophon; the evidence links to the workspace on the GPS test flight (?model=b3). Loads data/models.js, the chosen model and dist/site.js.
 Gotcha: evidence figures are typed in the HTML from audit/night-7of10/RUNLOG.md and research/11; refresh them when those change.
 
 ### web/css/site.css
-Presentation layout: sticky masthead, hero type, the wipe figure (clip-path photo over the canvas, magenta handle), bands with a wide title column, prose and margin notes, the sheet figure, the stage log, the evidence and application tables; single column below 860 px.
+Presentation layout: sticky masthead, hero type, the wipe figure (clip-path photo or video over the canvas, magenta handle), bands with a wide title column, prose and margin notes, the sheet figure, the stage log, the evidence and application tables; single column below 860 px.
 
 ### web/src/site.js
-The presentation page's script (bundled to dist/site.js by npm run build:site): fills the facts, loads the sheet image and caption, renders the GLB unlit from each keyframe's camera behind the wipe, plays the keyframes at their own timestamps, pointer and keyboard wipe, scrub to the nearest keyframe.
-Gotcha: shows the photo only at real keyframes, never an interpolated pose, so both halves are the same moment.
+The presentation page's script (bundled to dist/site.js by npm run build:site): fills the facts, loads the sheet image and caption, renders the GLB unlit behind the wipe from the camera path at any time (flightPath: centripetal Catmull-Rom through keyframe positions, slerp between their orientations), pointer and keyboard wipe, play and scrub. With data.clip the photo side is a looping muted video and the model draws on each presented video frame (requestVideoFrameCallback, rAF fallback); without it, the nearest keyframe still at or before t.
+Gotcha: the clip's frame n must be the source frame n (pack_site cuts from frame 0), or the halves drift apart.
 
 ### web/dist/site.js
 Built bundle of web/src/site.js (esbuild IIFE with three). Committed so the page opens without npm.

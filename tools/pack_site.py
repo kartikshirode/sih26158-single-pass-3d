@@ -81,6 +81,36 @@ def cameras(run: str, to5, fps: float, f_px: float, w: int, h: int, prefix: str 
     return out
 
 
+def pass_clip(video: str, crop_tblr, out_path: str, width: int = THUMB_W) -> bool:
+    """
+    The source video cut to the keyframes' own crop, as a small H.264 file the page can
+    play. The keyframes are 5-7 a second, so a page stepping through them looks jerky;
+    the clip gives the photo side every frame, and the model side follows its clock.
+    """
+    ff = shutil.which("ffmpeg")
+    if not ff:
+        try:
+            import imageio_ffmpeg
+            ff = imageio_ffmpeg.get_ffmpeg_exe()
+        except Exception:
+            return False
+    cap = cv2.VideoCapture(video)
+    W, H = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)), int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    cap.release()
+    if not W or not H:
+        return False
+    t, b, l, r = crop_tblr or (0.0, 0.0, 0.0, 0.0)
+    # The same integer rounding as video_ingest.apply_crop, so the pixels line up.
+    y0, y1, x0, x1 = int(H * t), H - int(H * b), int(W * l), W - int(W * r)
+    vf = f"crop={x1 - x0}:{y1 - y0}:{x0}:{y0},scale={width}:-2"
+    import subprocess
+    p = subprocess.run([ff, "-y", "-loglevel", "error", "-i", video, "-vf", vf, "-an",
+                        "-c:v", "libx264", "-preset", "slow", "-crf", "22",
+                        "-pix_fmt", "yuv420p", "-movflags", "+faststart", out_path],
+                       capture_output=True, text=True)
+    return p.returncode == 0 and os.path.exists(out_path)
+
+
 def render_sheet(obj_dir: str, run: str, cams: list, out_path: str, width: int = 2400,
                  f_px: float | None = None, prefix: str = "data") -> dict:
     """
@@ -278,6 +308,8 @@ def main():
     ap.add_argument("--id", default=None)
     ap.add_argument("--title", default=None)
     ap.add_argument("--no-sheet", action="store_true", help="skip the plan-view map sheet")
+    ap.add_argument("--video", help="the source video, if the manifest's path has moved")
+    ap.add_argument("--no-clip", action="store_true", help="skip the cropped video clip")
     a = ap.parse_args()
 
     run = os.path.abspath(a.run)
@@ -345,6 +377,11 @@ def main():
                   "level": man.get("level"), "frame": man.get("frame")},
         "cameras": cams,
     }
+    video = a.video or next((os.path.join(ROOT, i["path"]) for i in man.get("inputs", [])
+                             if os.path.exists(os.path.join(ROOT, i["path"]))), None)
+    if video and not a.no_clip and pass_clip(video, stats.get("overlay_crop_trbl"),
+                                             os.path.join(a.out, "pass.mp4")):
+        data["clip"] = {"file": f"{prefix}/pass.mp4"}
     data["detail"] = detail_map(glb, cams, float(cam["f"]), int(cam["w"]), int(cam["h"]))
     if not a.no_sheet:
         data["sheet"] = render_sheet(obj_dir, run, cams, os.path.join(a.out, "sheet.jpg"),
