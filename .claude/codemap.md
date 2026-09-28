@@ -978,6 +978,12 @@ The night's measurements on B1's held-out views: baseline 22.866 dB on master, t
 
 ## paper/
 
+### paper/build_paper.js
+Builds the research paper (paper/Tesseract-research-paper.docx) with the docx npm package: title block, abstract, sections 1-11, eight tables, twelve figures from paper/fig/, IEEE references and a reproduce appendix. All prose and every number is typed in this file, copied from research/05-13, docs/05 and 14, audit/night-7of10/RUNLOG.md and the run manifests.
+Exports: none (CLI `node paper/build_paper.js [out.docx]`)
+Used by: run manually after paper/figures.py and paper/charts.py
+Gotcha: figure and table numbers come from the order of the figure()/table() calls, and the text cites them by number, so moving a figure means renumbering the prose. References are numbered by list position. Needs `npm install` in paper/ (docx 9, image-size 1).
+
 ### paper/figures.py
 Renders the paper's image figures into paper/fig/: the demo model (out/runs/night-b1-final) into keyframe cameras and a new viewpoint with view_check's rasterizer, a Lambert-shaded comparison against out/runs/demo-prior, and composites of saved evidence (the pose fix, web/data/sheet.jpg, the Kolu render).
 Exports: load(run); render(mesh, c2w, K, w, h, up, shade=False); novel(c2w, up, back, lift, pitch_deg); main()
@@ -987,6 +993,12 @@ Gotcha: needs the gitignored runs, out/evidence and web/data on this laptop. Sha
 ### paper/charts.py
 Matplotlib charts and the pipeline diagram for the paper (EXP-09 degeneracy, EXP-05 GNSS floor, stage times for B1, B2, B3 and B5v, Kolu plane residuals), written to paper/fig/ at 300 dpi. Numbers are typed in, not read from runs.
 Used by: run manually (`python paper/charts.py`)
+
+### paper/package.json
+npm manifest for build_paper.js (docx, image-size).
+
+### paper/.gitignore
+Keeps node_modules/, fig/, the .docx and the .pdf out of git: the figures and the paper carry frames of the third-party demo clip (the rule research/09 set for web/data).
 
 ## web/
 

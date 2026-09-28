@@ -1,0 +1,7 @@
+{
+  "name": "tesseract-paper",
+  "private": true,
+  "description": "Builds the research paper docx",
+  "scripts": { "build": "node build_paper.js" },
+  "dependencies": { "docx": "^9.8.1", "image-size": "^1.2.1" }
+}
