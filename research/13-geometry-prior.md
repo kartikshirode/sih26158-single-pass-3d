@@ -185,6 +185,11 @@ pip uninstall -y open3d dash ConfigArgParse retrying janus
   OpenMVS mesh and records `prior_error`.
 - A few small gaps are left at the far edge of the crop, much as in the base model, and
   a few shard triangles at the tree's left flank.
+- The near edge at the start of the pass is ragged, with two small lumps hanging past
+  it: the first frames' near ground is seen by too few tiles for the TSDF, so prior and
+  MVS faces meet there. Clipping the prior to the MVS mesh's plan footprint removed the
+  lumps but also cut the tree's crown, which reaches past the MVS footprint, so it
+  wasn't kept. Density trimming of the Poisson surface punched holes everywhere.
 - 18.8% of the demo model's faces are coloured from the cloud, not a photo. Most of them
   are the ring of MVS faces under the prior (section 9), hidden by it from any view.
 
