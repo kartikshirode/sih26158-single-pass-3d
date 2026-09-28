@@ -53,6 +53,11 @@ jobs:
       - name: texture seams levelled outside OpenMVS
         run: python src/pipeline/test_texture_level.py
 
+      - name: MapAnything depth prior, the parts that need no GPU
+        run: |
+          pip install open3d numba
+          python src/pipeline/test_prior_depth.py
+
       - name: window fusion
         run: python src/pipeline/test_window_fuse.py
 
