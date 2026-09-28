@@ -363,6 +363,11 @@ def replay(run: str) -> dict:
 
 def register(prefix: str, data: dict):
     """List the packed models in web/data/models.js for the pages' model switcher."""
+    if prefix.startswith(".."):
+        # Packed outside web/ (a scratch copy of the site): the live list would point at a
+        # file the site doesn't serve, so it isn't touched.
+        print(f"  {prefix} is outside web/; web/data/models.js left as it is")
+        return
     path = os.path.join(ROOT, "web", "data", "models.js")
     models = []
     if os.path.exists(path):
