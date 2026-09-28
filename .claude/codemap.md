@@ -855,6 +855,10 @@ Gotcha: its numbers come from audit/codex-opt/RUNLOG.md; accuracy figures are sy
 The night of 2026-09-28: what stops a perfect model from one pass (one angle, backs never seen, the sky crop, seams, no GPS, video), the texture findings (unsharp mask off 22.82 to 24.21 dB, smoothness 0.5 to 24.42), the unseen-face fill and seam levelling (24.65 held out), end-to-end B1 293.4 s and 24.63 dB, B3 unchanged at 0.391 m, B5v 547.1 s (R 0.91) at 0.344 m, B2 coverage 61-71% run to run, the workspace and the site, and what is still wrong.
 Gotcha: numbers come from audit/night-7of10/RUNLOG.md; accuracy figures are against synthetic truth.
 
+### research/13-geometry-prior.md
+The MapAnything depth prior (2026-09-28): the demo's real faults (blob houses, crumpled tree, sails, far-field stripes), the method step by step, what was tried on the way, held-out numbers (base 24.643 dB, 0.709, 98.72%; prior stride 2 24.342, 0.678, 97.27%), time (tiles 352 s at stride 1, stride 2 the default), the demo-prior run (892.8 s of 900, prior 572.5 s, holes and stripes, not packed), the stripe tests and the Poisson plus gap-fill fix (24.400, 0.687, 98.68%) still outside the code, the open3d install and its undo, what stays open.
+Gotcha: sections 6 and 6a describe experiment scripts, not prior_depth.py; the Poisson step is not in the pipeline yet.
+
 ### research/08-web-upload.md
 Design of the upload feature (one Cloud Run job per upload, preview before final, status.json contract, limits, uploads kept off curated pages) and two defects it exposed: packing scripts pinned to one laptop, and S1 retaining every full-res frame (~112 GB for a 10-min clip) now fixed with a two-pass decode. A 10-minute clip was first ingested on 2026-09-25 (402 s as the code stood, 55 s after research/09). A 2026-09-24 addendum records the start claim, daily slots and signed byte bound (audit F-04, F-05) and the CORS dependency.
 
