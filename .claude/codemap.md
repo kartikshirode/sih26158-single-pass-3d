@@ -976,6 +976,12 @@ The owner's one-screen summary of the night: the demo model against every 7/10 b
 ### audit/night-7of10/RUNLOG.md
 The night's measurements on B1's held-out views: baseline 22.866 dB on master, the TextureMesh sweeps X0-X10 (sharpness 0 plus smoothness ratio 0.5 kept: 24.415 dB, SSIM 0.7055), the unseen-face fill F1-F2, and the clean night-b1 run (287.6 s, verify PASS, held out 24.443 dB, 0.7037, 98.47%), the machine table, and the final runs: B3 349.0 s at 0.391 m, B5v 547.1 s (R 0.91) at 0.344 m.
 
+## paper/
+
+### paper/charts.py
+Matplotlib charts and the pipeline diagram for the paper (EXP-09 degeneracy, EXP-05 GNSS floor, stage times for B1, B2, B3 and B5v, Kolu plane residuals), written to paper/fig/ at 300 dpi. Numbers are typed in, not read from runs.
+Used by: run manually (`python paper/charts.py`)
+
 ## web/
 
 ### web/README.md
