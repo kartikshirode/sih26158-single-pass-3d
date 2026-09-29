@@ -783,7 +783,11 @@ Gotcha: own :root tokens and Google Fonts over the network. Keep the `const D = 
 ## docs/
 
 ### README.md
-Project front page: what runs today (Tesseract on the local GPU, its measured table with sources, the run, verify and pack_site commands, the web pages, the optional geometry prior with its cost and how to turn it on; the site's demo model is built with it), the six PDF targets and scoring weights, six design-changing findings (VGGT licensed out, straight-pass degeneracy, 1 m unreachable on consumer GNSS, facades cap completeness, India residency, geoid/UTM traps), run commands, measured synthetic results, the 2026-09-04 video gap with a note that it has closed, open questions for the organisers, layout. The Vercel console is described as the earlier, pre-GPU deployment.
+Short project front page: links to the live site, the workspace and the paper PDF; hero image; results table (demo 293 s, held out 24.6 dB, baselines, B5v 548 s and 0.344 m); status against the six targets; the pipeline with one line per stage and the depth prior; why one pass is hard (degeneracy, GNSS floor, facades, height traps, VGGT licence); workspace and runtime images; run commands; limits; links on; team and credits. Images live in docs/img/.
+Gotcha: tools/check_onboarding.py (CI) requires the figures 311 m, 267 m, 0.097, 4.1 m, 14.3%, 52.0%, 1.68 m, 0.6 m/km, -24.3 m, -98.2 m, 2.260 and 0.098 here, and counts the old console URL as the second source for docs/00's link.
+
+### docs/img/
+README images exported from paper/fig at web size: demo-model.jpg (textured demo from a novel view), pipeline.png, depth-prior.jpg, degeneracy.png, workspace.jpg, runtime.png. Regenerate from paper/figures.py and paper/charts.py output.
 
 ### docs/SIH26158.pdf
 The binding problem statement (PS 17, pp. 37-39 of the NTRO document), image-only with no text layer; the sih.gov.in listing has a placeholder instead of the target tables.
