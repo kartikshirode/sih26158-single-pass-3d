@@ -5,6 +5,11 @@ Every run here is clean with no resume, on the RTX 4060 laptop, with `SIH_COLMAP
 `out/exp/scripts/night_queue.ps1` (local only, like the rest of `out/`), and each job's
 log is `out/exp/q-<job>.log`.
 
+Update, 2026-09-29: `out/exp` was cleared. The queue and the scripts it called are now
+committed as `tools/repro/` (`queue.ps1`, `classical.py`, `ma_alone.py`, `ablate.py`), the
+truth check as `tools/b5v_truth.py`, and every job's JSON is in `results/` here. The
+paths below are where things were on the night.
+
 ## The demo with the depth prior (`demo-prior2`)
 
 `SIH DEMO.mp4` with `{"local_gpu": {"geometry_prior": true}}` and the prior's new

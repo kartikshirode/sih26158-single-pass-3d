@@ -204,7 +204,10 @@ Poisson, RefineMesh, gap fill, then TextureMesh. New options: `prior_upsample` (
 ### What the held-out runs said
 
 Same setup as section 4 (`out/exp/scripts/hochain.py`, through the module's own
-functions). Times are for the held-out scene, 159 views.
+functions). Times are for the held-out scene, 159 views. That script is gone now. Through
+the pipeline's own option (`python tools/repro/ablate.py prior geometry_prior=1`) the final
+settings give 24.35 dB, SSIM 0.683 and 98.62% coverage in 589 s, against the last row's
+24.43 dB; the script had fixed the median depth at 3.876 and textured separately.
 
 | Setup | Fusion | Poisson | RefineMesh | PSNR (dB) | SSIM | Coverage |
 |---|---:|---:|---:|---:|---:|---:|

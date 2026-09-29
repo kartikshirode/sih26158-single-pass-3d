@@ -590,6 +590,44 @@ It also writes data["detail"] (detail_map: per GLB vertex, the finest photo pixe
 Exports: frame_transform(run) -> (manifest, tf, to5); cameras(run, to5, fps, f_px, w, h) -> list; pixel_footprint(V, N, cams, f_px); detail_map(glb, cams, f_px, w, h) -> dict; render_sheet(obj_dir, run, cams, out, f_px=None) -> dict; pass_clip(video, crop_tblr, out) -> bool (ffmpeg, or imageio-ffmpeg's; the source video cut to the ingest crop, 1280 px H.264, written as data/pass.mp4 and listed as data["clip"]; --video overrides the manifest's input path, --no-clip skips it); replay(run) -> dict (the run's stage log in the presentation page's eight groups, Screen to Level and export: seconds, tool steps from local_gpu_result.json (the depth prior's MapAnything, fusion, Poisson and RefineMesh steps go under Surface), a one-line result, summing to the wall clock with S3's untimed remainder counted as Texture's "write results"; stored in data["replay"] and in the models.js entry); register(prefix, data) (models.js entries carry id, title, src, units, georef, replay; a pack to --out outside web/ is not registered). --registry-only refreshes a packed run's models.js entry (its replay) without repacking.
 Used by: run manually before opening web/workspace.html; web/run.html reads the replay from models.js
 
+### tools/b5v_truth.py
+Absolute error of a georeferenced synthetic run (B3, B5v) against the scene it shows: rebuilds make_test_video's scene (seed 7, 110 m, 60 degrees down), compares cameras with the true path and a 200k sample of points_geo.npy with the true surface; writes truth.json into the run with RMS, RMSE, median, p90/p95, within 1 m and the same in centre-pixel GSD.
+Exports: script only (`python tools/b5v_truth.py out/runs/<run> [--frames 600]`).
+Used by: tools/repro/queue.ps1 and run manually
+Gotcha: --frames must be the rendered clip's frame count (600 for both B3 and B5v); the true-surface sample is unseeded, so the cloud's third decimal moves.
+
+## tools/repro/
+
+### tools/repro/README.md
+How to rebuild every run behind the paper's tables: setup, inputs with hashes, each run's options, commit and recorded result, the baseline and ablation commands with their recorded scores, and how close a rerun got (control 24.626 against 24.620 dB; the prior through the pipeline 24.35 dB against the experiment script's 24.43).
+
+### tools/repro/common.py
+Shared paths for the repro scripts: ROOT, RUN (out/runs/night-b1-final), EXP (out/exp), sys.path for src, src/pipeline and tools.
+Exports: ROOT, RUN, EXP, tool, demo_keyframes
+Used by: tools/repro/ablate.py, tools/repro/classical.py, tools/repro/ma_alone.py
+Gotcha: demo_keyframes copies the run's keyframes plus ingest.json to out/exp/kf once; tool() exits unless SIH_COLMAP / SIH_OPENMVS are set.
+
+### tools/repro/ablate.py
+One ablation row: local_gpu.run on the demo keyframes with one option changed, every tenth keyframe held out, poses reused from night-b1-final unless --solve, scored per view with view_check (a view under 100 px counts as empty); writes ablation.json and deletes the model unless --keep. `keyframes-nobridge` re-ingests the demo with bridging off.
+Used by: tools/repro/queue.ps1
+Gotcha: a non-pinhole camera (the old pose path) is scored through a SIMPLE_PINHOLE copy with the radial term dropped, recorded as scored_camera.
+
+### tools/repro/classical.py
+The COLMAP baseline: `sparse` runs COLMAP's video workflow at its defaults (one self-calibrated SIMPLE_RADIAL camera, sequential matcher, incremental mapper) and undistorts into out/exp/bl-cl; `dense <tag> defaults|defaults_ns|ours` densifies and textures those poses with OpenMVS defaults, defaults without seam levelling, or Tesseract's dense stage, and scores the held-out views.
+Used by: tools/repro/queue.ps1
+
+### tools/repro/ma_alone.py
+The MapAnything-alone baseline: its own windowed poses and per-view intrinsics fitted to its point maps, TSDF fusion with the depth prior's settings, OpenMVS TextureMesh plus texture_fill and texture_level, each held-out view scored with its own intrinsics.
+Used by: tools/repro/queue.ps1
+Gotcha: writes a points3D with two-view tracks because InterfaceCOLMAP crashes on a model without points.
+
+### tools/repro/queue.ps1
+The whole reproduction queue on one GPU: the B1, B1-with-prior, B3, B5v and three Nicosia runs, then the baselines and the ablation; logs to out/exp/q-<job>.log, stops before a job when C: is under 101.5 GB. Tool paths default to this machine's unless SIH_* are set.
+Gotcha: job 0 rebuilds night-b1-final, which every baseline and ablation reads, so start at 7 to rerun only those.
+
+### tools/repro/prior.json
+The `--config` that turns the depth prior on (`local_gpu.geometry_prior`).
+
 ### tools/site_shots.py
 Headless-Chrome screenshots of web/ pages served on 127.0.0.1:8765 (SHOTS_WEB for another copy): each "page?query=name.png" argument gets 25 s to load, then a shot at 1600x1000 (full page for index), console errors printed. Uses workspace.html's ?demo= hook for measurement states.
 Used by: run manually; its capture of b3 measuring is out/evidence/workspace-measure.png, read by paper/figures.py
@@ -975,6 +1013,12 @@ Gotcha: launch from the main checkout's root with its absolute path; saved outpu
 ### audit/overnight-2026-09-29/RUNLOG.md
 The overnight queue's runs: demo-prior2 (the demo with the depth prior, 752.7 s, the site's b1 model), night-b1-six (B1 again with assimp, 291.8 s, six formats), night-b5v-2 (548.2 s, 0.344 m median, 98.54% within 1 m), and the Nicosia repeats, baselines and ablation rows as they finished.
 
+### audit/overnight-2026-09-29/results/
+The overnight baselines and ablation as JSON, one folder per job (ab-*, bl-*): ablation.json or baseline.json, view_check.json and local_gpu_result.json with every option used; ab-repro-* are the 2026-09-29 reruns.
+
+## audit/runs/
+Recorded outputs of the kept runs (run_manifest.json, qa_report.md, local_gpu_result.json, view_check.json, truth.json, georef/level/screen JSON), so a rerun can be checked after the out/ folders are gone; superseded/ holds the same for runs deleted on 2026-09-29.
+
 ## audit/night-7of10/
 
 ### audit/night-7of10/PLAN.md
@@ -989,7 +1033,7 @@ The night's measurements on B1's held-out views: baseline 22.866 dB on master, t
 ## paper/
 
 ### paper/build_paper.js
-Builds the research paper (paper/Tesseract-research-paper.docx) with the docx npm package: title block, abstract, sections 1-11 (7.7 baselines and ablation, 8.5 the workspace), ten tables, thirteen figures from paper/fig/, 24 IEEE references and a reproduce appendix. All prose and every number is typed in this file, copied from research/05-13, docs/05 and 14, audit/night-7of10/RUNLOG.md, audit/overnight-2026-09-29/RUNLOG.md and the run manifests.
+Builds the research paper (paper/Tesseract-research-paper.docx) with the docx npm package: title block, abstract, sections 1-11 (3 with aerial feed-forward work and products, 7.7 baselines, ablation and repeatability, 8.1 accuracy in GSD and RMSE, 8.5 the workspace), ten tables, thirteen figures from paper/fig/, 31 IEEE references and a reproduce appendix pointing at tools/repro. All prose and every number is typed in this file, copied from research/05-13, docs/05 and 14, audit/night-7of10/RUNLOG.md, audit/overnight-2026-09-29/RUNLOG.md, audit/runs and the run manifests.
 Exports: none (CLI `node paper/build_paper.js [out.docx]`)
 Used by: run manually after paper/figures.py and paper/charts.py
 Gotcha: figure and table numbers come from the order of the figure()/table() calls, and the text cites them by number, so moving a figure means renumbering the prose. References are numbered by list position. Needs `npm install` in paper/ (docx 9, image-size 1).
@@ -1005,7 +1049,7 @@ Matplotlib charts and the pipeline diagram for the paper (EXP-09 degeneracy, EXP
 Used by: run manually (`python paper/charts.py`)
 
 ### paper/HANDOFF.md
-State of the research paper for the next session: rebuild steps (Word COM for the PDF), where each section's numbers come from, what is done, what the owner must settle (names, clip rights, sources) and a ranked list of what would improve it, plus the overnight update of 2026-09-29/30 (prior in the pipeline, baselines, ablation, reruns, Figure 13).
+State of the research paper for the next session: rebuild steps (Word COM for the PDF), where each section's numbers come from, what is done, what the owner must settle (names, clip rights, sources) and a ranked list of what would improve it, plus the overnight update of 2026-09-29/30 (prior in the pipeline, baselines, ablation, reruns, Figure 13) and the 2026-09-29 market check and disk cleanup (which runs are kept, where a reviewer would still push).
 
 ### paper/package.json
 npm manifest for build_paper.js (docx, image-size).
