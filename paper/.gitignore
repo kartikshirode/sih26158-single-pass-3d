@@ -2,3 +2,5 @@ node_modules/
 fig/
 *.docx
 *.pdf
+# The paper itself is published; rebuild and commit it at this same path so links stay valid.
+!Tesseract-research-paper.pdf

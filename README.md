@@ -6,6 +6,8 @@ Convert **one** monocular drone video from a **single flight pass**, plus its GP
 metadata, into a **georeferenced, metrically accurate, textured 3D model**, in under 15 minutes
 for a 10-minute video.
 
+The research paper: [paper/Tesseract-research-paper.pdf](paper/Tesseract-research-paper.pdf). It's rebuilt at the same path, so the link always points at the latest version.
+
 ---
 
 ## What runs today: Tesseract

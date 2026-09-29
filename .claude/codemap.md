@@ -1058,7 +1058,7 @@ npm manifest for build_paper.js (docx, image-size).
 Lockfile for paper/package.json (docx 9.8.1, image-size 1.2.1).
 
 ### paper/.gitignore
-Keeps node_modules/, fig/, the .docx and the .pdf out of git: the figures and the paper carry frames of the third-party demo clip (the rule research/09 set for web/data).
+Keeps node_modules/, fig/, the .docx and any other .pdf out of git (the figures carry frames of the third-party demo clip, the rule research/09 set for web/data), but lets paper/Tesseract-research-paper.pdf in: the published paper, recommitted at the same path after each rebuild so its links stay valid.
 
 ## web/
 
