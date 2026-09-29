@@ -98,7 +98,7 @@ const add = (...xs) => xs.forEach((x) => Array.isArray(x) ? body.push(...x) : bo
 add(new Paragraph({ alignment: AlignmentType.CENTER, spacing: { before: 0, after: 120 },
   children: [new TextRun({ text: "Tesseract: georeferenced 3D models from a single-pass monocular drone video", bold: true, size: 34 })] }));
 add(new Paragraph({ alignment: AlignmentType.CENTER, spacing: { after: 60 },
-  children: [new TextRun({ text: "Team Tesseract  [add member names]", size: 22 })] }));
+  children: [new TextRun({ text: "Team Tesseract  [Kartik Shirode, Mandar Wagh, Aditya Shilalkar, Adityaraj Shinde, Jiya Metha and Sanika Sagavkar]", size: 22 })] }));
 add(new Paragraph({ alignment: AlignmentType.CENTER, spacing: { after: 60 },
   children: [new TextRun({ text: "Smart India Hackathon 2026, problem statement SIH26158 (National Technical Research Organisation), Software, Drone/Robotics", italics: true, size: 19, color: MUTED })] }));
 add(new Paragraph({ alignment: AlignmentType.CENTER, spacing: { after: 240 },

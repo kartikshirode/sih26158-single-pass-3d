@@ -39,9 +39,12 @@ $w = New-Object -ComObject Word.Application; $d = $w.Documents.Open("<docx>", $f
 $d.SaveAs([ref]"<pdf>", [ref]17); $d.Close($false); $w.Quit()
 ```
 
-The docx, the PDF, `fig/` and `node_modules/` are gitignored (`paper/.gitignore`). The
-figures carry frames of the third-party demo clip, and research/09 keeps those out of
-git, the same rule as `web/data/`. Only the three scripts, the npm files and this note
+The docx, `fig/` and `node_modules/` are gitignored (`paper/.gitignore`). The figures
+carry frames of the third-party demo clip, and research/09 keeps those out of git, the
+same rule as `web/data/`. The PDF is the exception: on 2026-09-29 the owner asked for it
+to be published in the repo. After every rebuild, commit it at the same path,
+`paper/Tesseract-research-paper.pdf`, so the README link and any link already shared keep
+working. Only the three scripts, the npm files and this note
 are committed. Copies of the scripts in any session scratchpad are stale; these are the
 real ones.
 
@@ -96,7 +99,8 @@ shaded, from behind keyframe 160), 12 Kolu (research/run-evidence). Made by `cha
 
 ## Left, and what only the owner can settle
 
-1. **Team names.** The title block reads "Team Tesseract [add member names]".
+1. **Team names.** Done on 2026-09-29: the owner added them in Word and they are now in
+   build_paper.js, so a rebuild keeps them.
 2. **Rights to the demo clip.** It's third-party footage with a StrudwickDroneService
    watermark, and the paper prints its frames. Confirm it may be published, or swap
    figures 4 to 9 for B3 renders.
