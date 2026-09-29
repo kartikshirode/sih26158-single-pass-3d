@@ -1,0 +1,157 @@
+{
+  "n_views": 173,
+  "keyframe_size": [
+    1920,
+    1080
+  ],
+  "pose_method": "global",
+  "mapanything_views": 60,
+  "camera": {
+    "f": 1414.33,
+    "cx": 963.068,
+    "cy": 540.93,
+    "w": 1920,
+    "h": 1080,
+    "pp_reference": "keyframe centre",
+    "scale": 0.272,
+    "crop_x0_full": 8.571,
+    "crop_y0_full": 0.0
+  },
+  "intrinsics_fit_residual_px": 0.3875,
+  "stitch": [
+    {
+      "window": 1,
+      "views": [
+        22,
+        52
+      ],
+      "scale": 0.89571,
+      "inlier_frac": 0.753
+    },
+    {
+      "window": 2,
+      "views": [
+        44,
+        60
+      ],
+      "scale": 0.89615,
+      "inlier_frac": 0.765
+    }
+  ],
+  "views_turn_deg": 9.63,
+  "focal_refined": false,
+  "mapanything_s": {
+    "model": 18.7,
+    "images": 2.2,
+    "inference": 18.9,
+    "stitch": 0.4
+  },
+  "mapanything_peak_gib": 6.73,
+  "sparse_after_triangulation": null,
+  "sparse_after_bundle_adjustment": {
+    "Registered images": "173",
+    "Points": "27671",
+    "Observations": "260618",
+    "Mean track length": "9.418453",
+    "Mean observations per image": "1506.462428",
+    "Mean reprojection error": "0.889237px"
+  },
+  "ba_gate": {
+    "passed": true,
+    "problems": []
+  },
+  "unregistered": [],
+  "camera_model": "SIMPLE_PINHOLE",
+  "focal_after_mapper_px": [
+    1414.33
+  ],
+  "options": {
+    "pose_method": "global",
+    "global_match_overlap": 30,
+    "mapper_retriangulate": false,
+    "camera_model": "SIMPLE_PINHOLE",
+    "refine_focal": true,
+    "refine_focal_min_turn_deg": 10.0,
+    "pose_window": 0,
+    "pose_overlap": 8,
+    "pose_size": 0,
+    "intrinsics_views": 60,
+    "sift_features": 4096,
+    "match_overlap": 6,
+    "tri_refinements": 1,
+    "tri_ba_iterations": 3,
+    "ba_iterations": 10,
+    "min_registered": 0.5,
+    "dense_resolution_level": 1,
+    "dense_min_resolution": 320,
+    "dense_views_fuse": 3,
+    "dense_neighbours": 5,
+    "dense_fusion_filter": 1,
+    "mesh_min_point_distance": 4.0,
+    "mesh": true,
+    "texture": true,
+    "texture_decimate": 0.2,
+    "mapper_extra": "",
+    "densify_extra": "",
+    "mesh_extra": "",
+    "texture_extra": "",
+    "keep_intermediate": false
+  },
+  "stages": [
+    {
+      "stage": "poses (MapAnything)",
+      "seconds": 45.15
+    },
+    {
+      "stage": "intrinsics fit",
+      "seconds": 1.75
+    },
+    {
+      "stage": "feature_extractor",
+      "seconds": 6.09
+    },
+    {
+      "stage": "sequential_matcher",
+      "seconds": 16.83
+    },
+    {
+      "stage": "global_mapper",
+      "seconds": 21.93
+    },
+    {
+      "stage": "point_filtering",
+      "seconds": 0.31
+    },
+    {
+      "stage": "analyze_adjusted",
+      "seconds": 0.18
+    },
+    {
+      "stage": "model_converter",
+      "seconds": 1.01
+    },
+    {
+      "stage": "image_undistorter",
+      "seconds": 1.27
+    },
+    {
+      "stage": "InterfaceCOLMAP",
+      "seconds": 0.19
+    },
+    {
+      "stage": "DensifyPointCloud",
+      "seconds": 78.8
+    },
+    {
+      "stage": "ReconstructMesh",
+      "seconds": 52.15
+    },
+    {
+      "stage": "TextureMesh",
+      "seconds": 63.61
+    }
+  ],
+  "total_seconds": 292.6,
+  "dense_points": 9757462,
+  "textured_mesh": "scene_tex.obj"
+}

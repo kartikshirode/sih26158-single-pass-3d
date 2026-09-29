@@ -1,0 +1,23 @@
+{
+ "cameras": 353,
+ "gsd_centre_m": 0.1191,
+ "camera_error_m": {
+  "rms_3d": 0.138,
+  "mean_offset_enu": [
+   -0.033,
+   0.007,
+   -0.065
+  ],
+  "rms_horizontal": 0.076,
+  "rms_vertical": 0.115,
+  "rms_3d_gsd": 1.15
+ },
+ "cloud_to_truth_m": {
+  "median": 0.344,
+  "rmse": 0.506,
+  "p90": 0.611,
+  "p95": 0.725,
+  "within_1m": 0.9855,
+  "median_gsd": 2.89
+ }
+}

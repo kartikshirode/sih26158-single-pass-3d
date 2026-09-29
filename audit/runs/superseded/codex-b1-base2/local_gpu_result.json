@@ -1,0 +1,127 @@
+{
+  "n_views": 177,
+  "keyframe_size": [
+    1920,
+    595
+  ],
+  "options": {
+    "pose_method": "global",
+    "global_match_overlap": 30,
+    "pose_window": 0,
+    "pose_overlap": 8,
+    "pose_size": 0,
+    "intrinsics_views": 60,
+    "sift_features": 4096,
+    "match_overlap": 6,
+    "tri_refinements": 1,
+    "tri_ba_iterations": 3,
+    "ba_iterations": 10,
+    "dense_resolution_level": 1,
+    "dense_views_fuse": 3,
+    "dense_neighbours": 5,
+    "dense_fusion_filter": 1,
+    "mesh_min_point_distance": 2.5,
+    "mesh": true,
+    "texture": true,
+    "texture_decimate": 0.1,
+    "keep_intermediate": false
+  },
+  "pose_method": "global",
+  "mapanything_views": 60,
+  "camera": {
+    "f": 1097.98,
+    "cx": 954.652,
+    "cy": 289.178,
+    "w": 1920,
+    "h": 595,
+    "pp_reference": "keyframe centre",
+    "scale": 0.282,
+    "crop_x0_full": 42.708,
+    "crop_y0_full": 0.0
+  },
+  "intrinsics_fit_residual_px": 0.1613,
+  "stitch": [
+    {
+      "window": 1,
+      "views": [
+        46,
+        60
+      ],
+      "scale": 0.70991,
+      "inlier_frac": 0.808
+    }
+  ],
+  "mapanything_s": {
+    "model": 16.2,
+    "images": 1.7,
+    "inference": 9.5,
+    "stitch": 0.3
+  },
+  "mapanything_peak_gib": 6.66,
+  "sparse_after_triangulation": null,
+  "sparse_after_bundle_adjustment": {
+    "Registered images": "177",
+    "Points": "57078",
+    "Observations": "614579",
+    "Mean track length": "10.767353",
+    "Mean observations per image": "3472.197740",
+    "Mean reprojection error": "0.490121px"
+  },
+  "ba_gate": {
+    "passed": true,
+    "problems": []
+  },
+  "dense_points": 7024575,
+  "textured_mesh": "scene_tex.obj",
+  "stages": [
+    {
+      "stage": "poses (MapAnything)",
+      "seconds": 32.38
+    },
+    {
+      "stage": "intrinsics fit",
+      "seconds": 0.78
+    },
+    {
+      "stage": "feature_extractor",
+      "seconds": 4.42
+    },
+    {
+      "stage": "sequential_matcher",
+      "seconds": 7.2
+    },
+    {
+      "stage": "global_mapper",
+      "seconds": 90.65
+    },
+    {
+      "stage": "analyze_adjusted",
+      "seconds": 0.27
+    },
+    {
+      "stage": "model_converter",
+      "seconds": 1.74
+    },
+    {
+      "stage": "image_undistorter",
+      "seconds": 2.2
+    },
+    {
+      "stage": "InterfaceCOLMAP",
+      "seconds": 0.27
+    },
+    {
+      "stage": "DensifyPointCloud",
+      "seconds": 52.11
+    },
+    {
+      "stage": "ReconstructMesh",
+      "seconds": 62.87
+    },
+    {
+      "stage": "TextureMesh",
+      "seconds": 55.91
+    }
+  ],
+  "total_seconds": 313.3
+}

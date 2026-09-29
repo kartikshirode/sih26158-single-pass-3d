@@ -1,0 +1,132 @@
+{
+  "n_views": 177,
+  "pose_method": "colmap incremental",
+  "ba_gate": {
+    "passed": true,
+    "problems": []
+  },
+  "unregistered": [],
+  "sparse_from": "C:\\Users\\Kartik\\Documents\\Kartik\\EDU\\Local\\Projects\\sih26158-single-pass-3d\\out\\exp\\bl-cl",
+  "options": {
+    "pose_method": "global",
+    "global_match_overlap": 30,
+    "mapper_retriangulate": false,
+    "camera_model": "SIMPLE_PINHOLE",
+    "refine_focal": true,
+    "refine_distortion": false,
+    "principal_point": "fit",
+    "refine_focal_min_turn_deg": 30.0,
+    "pose_window": 0,
+    "pose_overlap": 8,
+    "pose_size": 0,
+    "intrinsics_views": 60,
+    "sift_features": 4096,
+    "match_overlap": 6,
+    "tri_refinements": 1,
+    "tri_ba_iterations": 3,
+    "ba_iterations": 10,
+    "min_registered": 0.5,
+    "dense_resolution_level": 1,
+    "dense_min_resolution": 320,
+    "dense_views_fuse": 3,
+    "dense_neighbours": 5,
+    "dense_fusion_filter": 1,
+    "mesh_min_point_distance": 4.0,
+    "mesh": true,
+    "texture": true,
+    "texture_decimate": 0.2,
+    "texture_sharpness": 0.0,
+    "texture_smoothness": 0.5,
+    "texture_fill": true,
+    "texture_level": true,
+    "geometry_prior": false,
+    "prior_tiles": 3,
+    "prior_window": 8,
+    "prior_stride": 3,
+    "prior_depth": 1.55,
+    "prior_fill_depth": 2.8,
+    "prior_voxel": 240,
+    "prior_upsample": 2,
+    "prior_poisson": 10,
+    "prior_refine": true,
+    "prior_refine_decimate": 0.35,
+    "prior_gap_cell": 120,
+    "prior_gap_below": 120,
+    "prior_gap_ring": 1,
+    "mapper_extra": "",
+    "densify_extra": "",
+    "mesh_extra": "",
+    "texture_extra": "",
+    "keep_intermediate": false
+  },
+  "stages": [
+    {
+      "stage": "dense subset",
+      "seconds": 1.19
+    },
+    {
+      "stage": "image_undistorter",
+      "seconds": 4.3
+    },
+    {
+      "stage": "InterfaceCOLMAP",
+      "seconds": 0.38
+    },
+    {
+      "stage": "DensifyPointCloud",
+      "seconds": 45.88
+    },
+    {
+      "stage": "ReconstructMesh",
+      "seconds": 26.51
+    },
+    {
+      "stage": "TextureMesh",
+      "seconds": 7.65
+    }
+  ],
+  "total_seconds": 92.4,
+  "dense_points": 2439930,
+  "textured_mesh": "scene_tex.obj",
+  "texture_fill": {
+    "faces": 68083,
+    "unseen_faces": 2306,
+    "unseen_fraction": 0.03387,
+    "materials": {
+      "material_00": {
+        "filled": 2306,
+        "atlas": [
+          4096,
+          4136
+        ]
+      }
+    },
+    "seconds": 1.54
+  },
+  "texture_level": {
+    "geometry": "C:\\Users\\Kartik\\Documents\\Kartik\\EDU\\Local\\Projects\\sih26158-single-pass-3d\\out\\exp\\bl-cl-ours",
+    "faces": 68083,
+    "lambda_smooth": 0.1,
+    "robust": null,
+    "pull": 0.03,
+    "materials": 1,
+    "unseen_faces": 0,
+    "fill_faces": 2306,
+    "fill_strip_top_row": {
+      "0": 4096
+    },
+    "fill_handling": "excluded from the solve and left unchanged",
+    "solve_s": 0.34,
+    "patches": 2117,
+    "unknowns": 47861,
+    "seam_edges": 11885,
+    "downweighted_edges": 0,
+    "residual_before": 20.822,
+    "residual_after": 12.63,
+    "offset_abs_mean": 4.045,
+    "offset_abs_p99": 31.926,
+    "clipped_texels": 207,
+    "clipped_fraction": 5.2e-05,
+    "seconds": 2.78
+  }
+}

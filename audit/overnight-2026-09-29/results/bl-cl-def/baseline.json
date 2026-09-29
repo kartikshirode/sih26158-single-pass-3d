@@ -1,0 +1,10 @@
+{
+ "tag": "cl-def",
+ "mode": "defaults",
+ "dense_wall_s": 123.7,
+ "dense_points": 742836,
+ "mean_coverage": 0.73206,
+ "mean_psnr_db": 8.974,
+ "mean_ssim": 0.01345,
+ "unposed": []
+}

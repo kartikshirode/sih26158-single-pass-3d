@@ -1,0 +1,106 @@
+{
+ "views": [
+  {
+   "name": "kf_009_f00030.jpg",
+   "coverage": 0.98418,
+   "psnr_db": 23.641,
+   "ssim": 0.71071
+  },
+  {
+   "name": "kf_019_f00062.jpg",
+   "coverage": 0.96041,
+   "psnr_db": 23.38,
+   "ssim": 0.69107
+  },
+  {
+   "name": "kf_029_f00092.jpg",
+   "coverage": 0.90481,
+   "psnr_db": 22.648,
+   "ssim": 0.62935
+  },
+  {
+   "name": "kf_039_f00128.jpg",
+   "coverage": 0.81736,
+   "psnr_db": 21.733,
+   "ssim": 0.57197
+  },
+  {
+   "name": "kf_049_f00160.jpg",
+   "coverage": 0.7093,
+   "psnr_db": 22.321,
+   "ssim": 0.56031
+  },
+  {
+   "name": "kf_059_f00180.jpg",
+   "coverage": 0.62383,
+   "psnr_db": 24.119,
+   "ssim": 0.63775
+  },
+  {
+   "name": "kf_069_f00200.jpg",
+   "coverage": 0.52884,
+   "psnr_db": 24.003,
+   "ssim": 0.62999
+  },
+  {
+   "name": "kf_079_f00230.jpg",
+   "coverage": 0.39792,
+   "psnr_db": 22.848,
+   "ssim": 0.64134
+  },
+  {
+   "name": "kf_089_f00278.jpg",
+   "coverage": 0.26081,
+   "psnr_db": 21.292,
+   "ssim": 0.57181
+  },
+  {
+   "name": "kf_099_f00330.jpg",
+   "coverage": 0.00179,
+   "psnr_db": 17.339,
+   "ssim": 0.48461
+  },
+  {
+   "name": "kf_109_f00366.jpg",
+   "coverage": 0.0,
+   "psnr_db": NaN,
+   "ssim": NaN
+  },
+  {
+   "name": "kf_119_f00400.jpg",
+   "coverage": 0.0,
+   "psnr_db": NaN,
+   "ssim": NaN
+  },
+  {
+   "name": "kf_129_f00442.jpg",
+   "coverage": 0.0,
+   "psnr_db": NaN,
+   "ssim": NaN
+  },
+  {
+   "name": "kf_139_f00472.jpg",
+   "coverage": 0.0,
+   "psnr_db": NaN,
+   "ssim": NaN
+  },
+  {
+   "name": "kf_149_f00496.jpg",
+   "coverage": 0.0,
+   "psnr_db": NaN,
+   "ssim": NaN
+  },
+  {
+   "name": "kf_159_f00516.jpg",
+   "coverage": 0.0,
+   "psnr_db": NaN,
+   "ssim": NaN
+  },
+  {
+   "name": "kf_169_f00538.jpg",
+   "coverage": 0.0,
+   "psnr_db": NaN,
+   "ssim": NaN
+  }
+ ]
+}

@@ -1,0 +1,24 @@
+{
+ "tag": "repro-prior",
+ "options": {
+  "geometry_prior": true
+ },
+ "solved": false,
+ "keyframes": 177,
+ "wall_s": 589.0,
+ "registered": 177,
+ "reprojection_px": "0.489768px",
+ "dense_points": 6473869,
+ "mean_coverage": 0.9862,
+ "mean_psnr_db": 24.348,
+ "mean_ssim": 0.68333,
+ "empty_views": 0,
+ "scored_camera": [
+  "SIMPLE_PINHOLE",
+  "1920",
+  "595",
+  "1097.9800479741814",
+  "954.65225850898412",
+  "289.17765403277497"
+ ]
+}

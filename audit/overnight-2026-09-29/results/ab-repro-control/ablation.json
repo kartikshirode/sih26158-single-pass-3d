@@ -1,0 +1,22 @@
+{
+ "tag": "repro-control",
+ "options": {},
+ "solved": false,
+ "keyframes": 177,
+ "wall_s": 165.1,
+ "registered": 177,
+ "reprojection_px": "0.489768px",
+ "dense_points": 6474834,
+ "mean_coverage": 0.98845,
+ "mean_psnr_db": 24.626,
+ "mean_ssim": 0.70871,
+ "empty_views": 0,
+ "scored_camera": [
+  "SIMPLE_PINHOLE",
+  "1920",
+  "595",
+  "1097.9800479741814",
+  "954.65225850898412",
+  "289.17765403277497"
+ ]
+}

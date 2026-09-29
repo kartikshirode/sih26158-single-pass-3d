@@ -1,0 +1,417 @@
+{
+  "run_id": "demo_gpu",
+  "source": "video:SIH DEMO.mp4",
+  "schema": "sih26158/run-manifest/1",
+  "git_sha": "b886f24",
+  "config_sha256": "56a8c5c97d3e060fcba857c0c8b032a5868c1e3fb65044a7e833182440ee1cc1",
+  "host": {
+    "python": "3.12.10",
+    "platform": "Windows-11-10.0.26200-SP0",
+    "cpu_count": 20
+  },
+  "region": null,
+  "inputs": [
+    {
+      "path": "SIH DEMO.mp4",
+      "bytes": 47173219,
+      "sha256": "a98a63464702d338472e65fb8cfe93ccfca1bf745f6f8d0c068c74e756fd326a"
+    }
+  ],
+  "stages": [
+    {
+      "id": "S0-screen",
+      "seconds": 1.655,
+      "skipped": false,
+      "codes": [
+        "ADM-HORIZON",
+        "ADM-SKY",
+        "ADM-OVERLAY"
+      ],
+      "outputs": [
+        "screen"
+      ],
+      "facts": {
+        "admissible": true,
+        "screen": {
+          "file": "SIH DEMO.mp4",
+          "resolution": "1920x1080",
+          "fps": 30.0,
+          "duration_s": 18.9,
+          "shots_detected": 1,
+          "longest_shot_s": 18.9,
+          "longest_shot_frac": 1.0,
+          "median_sky": 0.202,
+          "horizon_frac": 1.0,
+          "median_sharpness": 2018.0,
+          "static_overlay_px_frac": 0.00262,
+          "overlay_crop": [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "verdict": "REJECT",
+          "reasons": [
+            "horizon in 100% of frames -> unbounded depth",
+            "median sky 20% -> too much frame carries no geometry"
+          ]
+        },
+        "remedied_by_crop": true
+      },
+      "note": "horizon cropped off rather than refused"
+    },
+    {
+      "id": "S1-ingest",
+      "seconds": 4.104,
+      "skipped": false,
+      "codes": [
+        "ING-NOGNSS"
+      ],
+      "outputs": [
+        "keyframes"
+      ],
+      "facts": {
+        "frames_in": 568,
+        "keyframes": 134,
+        "srt_records": 0,
+        "has_telemetry": false
+      }
+    },
+    {
+      "id": "S2-plan",
+      "seconds": 0.011,
+      "skipped": false,
+      "codes": [],
+      "outputs": [
+        "plan"
+      ],
+      "facts": {
+        "pose_views": 134,
+        "dense_views": 134
+      }
+    },
+    {
+      "id": "S3-geometry",
+      "seconds": 133.526,
+      "skipped": false,
+      "codes": [],
+      "outputs": [
+        "cameras",
+        "colors",
+        "points"
+      ],
+      "facts": {
+        "points": 931348,
+        "geometry_provider": "local",
+        "local_gpu": {
+          "n_views": 134,
+          "dense_points": 931348,
+          "total_seconds": 133.4,
+          "sparse_after_bundle_adjustment": {
+            "Registered images": "134",
+            "Points": "71251",
+            "Observations": "317949",
+            "Mean track length": "4.462379",
+            "Mean observations per image": "2372.753731",
+            "Mean reprojection error": "0.442374px"
+          },
+          "stages": [
+            {
+              "stage": "poses (MapAnything)",
+              "seconds": 45.48
+            },
+            {
+              "stage": "intrinsics fit",
+              "seconds": 0.73
+            },
+            {
+              "stage": "feature_extractor",
+              "seconds": 3.41
+            },
+            {
+              "stage": "sequential_matcher",
+              "seconds": 17.66
+            },
+            {
+              "stage": "point_triangulator",
+              "seconds": 4.1
+            },
+            {
+              "stage": "analyze_triangulated",
+              "seconds": 0.24
+            },
+            {
+              "stage": "bundle_adjuster",
+              "seconds": 3.44
+            },
+            {
+              "stage": "point_filtering",
+              "seconds": 0.38
+            },
+            {
+              "stage": "analyze_adjusted",
+              "seconds": 0.24
+            },
+            {
+              "stage": "model_converter",
+              "seconds": 1.34
+            },
+            {
+              "stage": "image_undistorter",
+              "seconds": 2.39
+            },
+            {
+              "stage": "InterfaceCOLMAP",
+              "seconds": 0.19
+            },
+            {
+              "stage": "DensifyPointCloud",
+              "seconds": 33.28
+            },
+            {
+              "stage": "ReconstructMesh",
+              "seconds": 19.89
+            }
+          ]
+        }
+      },
+      "note": "local GPU, 133.4 s"
+    },
+    {
+      "id": "S4-scale",
+      "seconds": 0.0,
+      "skipped": false,
+      "codes": [],
+      "outputs": [],
+      "facts": {
+        "scale": {
+          "factor": 1.0,
+          "status": "unvalidated",
+          "label": "unvalidated (model units)",
+          "basis": "no external ruler or GNSS for this clip",
+          "source": null
+        },
+        "units": "model units"
+      },
+      "note": "scale unvalidated - lengths are model units, not metres"
+    },
+    {
+      "id": "S5-georef",
+      "seconds": 0.0,
+      "skipped": true,
+      "codes": [
+        "ING-NOGNSS"
+      ],
+      "outputs": [],
+      "facts": {
+        "georeferenced": false,
+        "frame": "F5"
+      },
+      "note": "no telemetry: the result stays in a local frame"
+    },
+    {
+      "id": "S5b-level",
+      "seconds": 0.316,
+      "skipped": false,
+      "codes": [],
+      "outputs": [
+        "points_llf"
+      ],
+      "facts": {
+        "gravity": {
+          "up": [
+            -0.0073762094063339195,
+            -0.9053722939828694,
+            -0.42455459109870736
+          ],
+          "heading_spread": 0.021,
+          "heading_degenerate": true,
+          "ground_correction_deg": 0.77,
+          "residual_roll_deg": 0.18,
+          "residual_roll_max_deg": 0.63,
+          "camera_above_ground_model": 5.2,
+          "horiz_track_model": 37.9,
+          "altitude_spread_model": 2.72
+        },
+        "frame": "F5",
+        "extent_model": [
+          42.81,
+          19.29,
+          3.56
+        ]
+      },
+      "note": "levelled and scaled x1.00"
+    },
+    {
+      "id": "S6-export",
+      "seconds": 0.389,
+      "skipped": false,
+      "codes": [],
+      "outputs": [
+        "export_geotiff",
+        "export_las",
+        "export_ply",
+        "exports"
+      ],
+      "facts": {
+        "frame": "F5",
+        "units": "model units",
+        "exports": [
+          "geotiff",
+          "las",
+          "ply"
+        ],
+        "dsm": {
+          "width": 857,
+          "height": 386,
+          "gsd": 0.05,
+          "filled_fraction": 0.757,
+          "crs": null
+        }
+      }
+    },
+    {
+      "id": "S7-score",
+      "seconds": 0.0,
+      "skipped": true,
+      "codes": [],
+      "outputs": [],
+      "facts": {},
+      "note": "no ground truth for this source"
+    },
+    {
+      "id": "S8-verdict",
+      "seconds": 0.0,
+      "skipped": false,
+      "codes": [],
+      "outputs": [],
+      "facts": {
+        "verdicts": {
+          "R-O1 reconstruction type": "met",
+          "R-O2 processing time": "not measurable (clip is 19 s; the target is for a 10-minute video)",
+          "R-O3 spatial accuracy": "not measurable (no ground truth)",
+          "R-O4 coverage": "not measurable (no ground truth)",
+          "R-O5 formats": "not met (3 of 6 written; missing obj, gltf, fbx)",
+          "R-O6 viewer": "met (tools/build_viewer.py, demo/)",
+          "scale": "unvalidated (model units)"
+        }
+      }
+    }
+  ],
+  "artefacts": {
+    "screen": {
+      "path": "screen.json",
+      "kind": "verdict",
+      "sha256": "f12ccdda78676d813752af31a07ba1e866ec4f3d65f455e3d50da710b5e28266",
+      "bytes": 521
+    },
+    "keyframes": {
+      "path": "ingest.json",
+      "kind": "keyframe-set",
+      "frame": "F0",
+      "sha256": "4094b09492445da78c2b67a5e7fa15e3d531ad755825e5cddbff98594d2b9218",
+      "bytes": 3362
+    },
+    "plan": {
+      "path": "dense_index.npy",
+      "kind": "array",
+      "frame": "F0",
+      "units": "index",
+      "sha256": "98775e1ee78a473f4f9f047515921fa8f04e818e310d6c4861e611c5e0802c24",
+      "bytes": 1200
+    },
+    "points": {
+      "path": "points.npy",
+      "kind": "point-cloud",
+      "frame": "F4",
+      "units": "model units",
+      "sha256": "8314659cbb1d7b71a2c42fbcd358a381e7c2778b5a221649d8d7a2100b655525",
+      "bytes": 11176304
+    },
+    "colors": {
+      "path": "colors.npy",
+      "kind": "array",
+      "frame": "F4",
+      "units": "rgb",
+      "sha256": "0d93173215c9bab5896567fb35030d94b9ab6fbbfb8e3e8aefcc5bf14f123b36",
+      "bytes": 2794172
+    },
+    "cameras": {
+      "path": "cameras.npy",
+      "kind": "array",
+      "frame": "F4",
+      "units": "model units",
+      "sha256": "2311e5cb026bcf3a95582efc14ed8b47062990bf508b3fd2ea4d30a680612ddc",
+      "bytes": 17280
+    },
+    "points_llf": {
+      "path": "points_llf.npy",
+      "kind": "point-cloud",
+      "frame": "F5",
+      "units": "model units",
+      "sha256": "76d7391637d2f38d942c3284c5e8776e5272987471a1e17d0e8337ed056ddfd5",
+      "bytes": 11176304
+    },
+    "export_ply": {
+      "path": "export/cloud.ply",
+      "kind": "ply",
+      "frame": "F5",
+      "units": "model units",
+      "sha256": "466f26232b2d205e89c8ec26d4ae9e0011e7bbbb5d576e78e0c64c59789f1e8d",
+      "bytes": 22352529
+    },
+    "export_las": {
+      "path": "export/cloud.las",
+      "kind": "las",
+      "frame": "F5",
+      "units": "model units",
+      "sha256": "ec841e865ae0f5f5db805b42778207b204590db6a312f6d67519cabcb5ebde61",
+      "bytes": 31666207
+    },
+    "export_geotiff": {
+      "path": "export/dsm.tif",
+      "kind": "geotiff",
+      "frame": "F5",
+      "units": "model units",
+      "sha256": "00b7c1ae34a52d0bd1852c1910249d03c91185019fbefd634b1363e387ecad5b",
+      "bytes": 978147
+    },
+    "exports": {
+      "path": "export",
+      "kind": "directory",
+      "frame": "F5",
+      "units": "model units"
+    }
+  },
+  "frame": "F5",
+  "units": "model units",
+  "scale": {
+    "factor": 1.0,
+    "status": "unvalidated",
+    "label": "unvalidated (model units)",
+    "basis": "no external ruler or GNSS for this clip",
+    "source": null
+  },
+  "georeferenced": false,
+  "level": "L0",
+  "quality": "measured",
+  "codes": [
+    "ADM-HORIZON",
+    "ADM-SKY",
+    "ADM-OVERLAY",
+    "ING-NOGNSS"
+  ],
+  "verdicts": {
+    "R-O1 reconstruction type": "met",
+    "R-O2 processing time": "not measurable (clip is 19 s; the target is for a 10-minute video)",
+    "R-O3 spatial accuracy": "not measurable (no ground truth)",
+    "R-O4 coverage": "not measurable (no ground truth)",
+    "R-O5 formats": "not met (3 of 6 written; missing obj, gltf, fbx)",
+    "R-O6 viewer": "met (tools/build_viewer.py, demo/)",
+    "scale": "unvalidated (model units)"
+  },
+  "seconds": 140.00122849995387,
+  "budget_s": 1800.0,
+  "started": "2026-09-25T00:25:55Z",
+  "within_budget": true
+}

@@ -1,0 +1,91 @@
+{
+  "n_views": 177,
+  "pose_method": "colmap incremental",
+  "ba_gate": {
+    "passed": true,
+    "problems": []
+  },
+  "unregistered": [],
+  "sparse_from": "C:\\Users\\Kartik\\Documents\\Kartik\\EDU\\Local\\Projects\\sih26158-single-pass-3d\\out\\exp\\bl-cl",
+  "options": {
+    "pose_method": "global",
+    "global_match_overlap": 30,
+    "mapper_retriangulate": false,
+    "camera_model": "SIMPLE_PINHOLE",
+    "refine_focal": true,
+    "refine_distortion": false,
+    "principal_point": "fit",
+    "refine_focal_min_turn_deg": 30.0,
+    "pose_window": 0,
+    "pose_overlap": 8,
+    "pose_size": 0,
+    "intrinsics_views": 60,
+    "sift_features": 4096,
+    "match_overlap": 6,
+    "tri_refinements": 1,
+    "tri_ba_iterations": 3,
+    "ba_iterations": 10,
+    "min_registered": 0.5,
+    "dense_resolution_level": 1,
+    "dense_min_resolution": 640,
+    "dense_views_fuse": 2,
+    "dense_neighbours": 8,
+    "dense_fusion_filter": 2,
+    "mesh_min_point_distance": 2.5,
+    "mesh": true,
+    "texture": true,
+    "texture_decimate": 1.0,
+    "texture_sharpness": 0.5,
+    "texture_smoothness": 0.1,
+    "texture_fill": false,
+    "texture_level": false,
+    "geometry_prior": false,
+    "prior_tiles": 3,
+    "prior_window": 8,
+    "prior_stride": 3,
+    "prior_depth": 1.55,
+    "prior_fill_depth": 2.8,
+    "prior_voxel": 240,
+    "prior_upsample": 2,
+    "prior_poisson": 10,
+    "prior_refine": true,
+    "prior_refine_decimate": 0.35,
+    "prior_gap_cell": 120,
+    "prior_gap_below": 120,
+    "prior_gap_ring": 1,
+    "mapper_extra": "",
+    "densify_extra": "--estimate-roi 2 --crop-to-roi 1",
+    "mesh_extra": "",
+    "texture_extra": "--global-seam-leveling 1 --local-seam-leveling 1",
+    "keep_intermediate": false
+  },
+  "stages": [
+    {
+      "stage": "dense subset",
+      "seconds": 1.19
+    },
+    {
+      "stage": "image_undistorter",
+      "seconds": 4.43
+    },
+    {
+      "stage": "InterfaceCOLMAP",
+      "seconds": 0.4
+    },
+    {
+      "stage": "DensifyPointCloud",
+      "seconds": 52.36
+    },
+    {
+      "stage": "ReconstructMesh",
+      "seconds": 24.09
+    },
+    {
+      "stage": "TextureMesh",
+      "seconds": 40.72
+    }
+  ],
+  "total_seconds": 123.7,
+  "dense_points": 742836,
+  "textured_mesh": "scene_tex.obj"
+}

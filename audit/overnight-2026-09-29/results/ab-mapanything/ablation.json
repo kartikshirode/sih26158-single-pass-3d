@@ -1,0 +1,25 @@
+{
+ "tag": "mapanything",
+ "options": {
+  "pose_method": "mapanything"
+ },
+ "solved": true,
+ "keyframes": 177,
+ "wall_s": 240.8,
+ "registered": 177,
+ "reprojection_px": "0.407853px",
+ "dense_points": 5470381,
+ "mean_coverage": 0.99254,
+ "mean_psnr_db": 22.854,
+ "mean_ssim": 0.54575,
+ "empty_views": 0,
+ "scored_camera": [
+  "SIMPLE_RADIAL",
+  "1920",
+  "595",
+  "1115.9875276116002",
+  "955.20650026053352",
+  "279.7814350694274",
+  "-0.011075557307664709"
+ ]
+}

@@ -1,0 +1,17 @@
+{
+ "cameras": 353,
+ "camera_error_m": {
+  "rms_3d": 0.143,
+  "mean_offset_enu": [
+   -0.033,
+   0.007,
+   -0.065
+  ],
+  "rms_horizontal": 0.075
+ },
+ "cloud_to_truth_m": {
+  "median": 0.346,
+  "p90": 0.614,
+  "within_1m": 0.9855
+ }
+}

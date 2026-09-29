@@ -1,0 +1,12 @@
+{
+ "tag": "fusion2",
+ "options": {
+  "dense_fusion_filter": 2
+ },
+ "solved": false,
+ "dense_points": 163566,
+ "mean_coverage": 0.36407,
+ "mean_psnr_db": 22.332,
+ "mean_ssim": 0.61289,
+ "empty_views": 7
+}

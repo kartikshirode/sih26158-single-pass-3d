@@ -1,0 +1,10 @@
+{
+ "n_views": 177,
+ "ba_gate": {
+  "passed": true,
+  "problems": []
+ },
+ "options": {},
+ "pose_method": "colmap incremental",
+ "unregistered": []
+}

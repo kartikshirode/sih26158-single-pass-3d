@@ -1,0 +1,474 @@
+{
+  "run_id": "codex-b3-v2",
+  "source": "video:test_flight.mp4",
+  "schema": "sih26158/run-manifest/1",
+  "git_sha": "b9fdd49",
+  "config_sha256": "56a8c5c97d3e060fcba857c0c8b032a5868c1e3fb65044a7e833182440ee1cc1",
+  "host": {
+    "python": "3.12.10",
+    "platform": "Windows-11-10.0.26200-SP0",
+    "cpu_count": 20
+  },
+  "region": null,
+  "inputs": [
+    {
+      "path": "data/test_flight.mp4",
+      "bytes": 4205055,
+      "sha256": "8226a5dee125949b567157b8f7d0a0620c544e1767a1acfdf723c5ee90b14f60"
+    }
+  ],
+  "stages": [
+    {
+      "id": "S0-screen",
+      "seconds": 1.711,
+      "skipped": false,
+      "codes": [],
+      "outputs": [
+        "screen"
+      ],
+      "facts": {
+        "admissible": true,
+        "screen": {
+          "file": "test_flight.mp4",
+          "resolution": "1920x1080",
+          "fps": 30.0,
+          "duration_s": 20.0,
+          "shots_detected": 1,
+          "longest_shot_s": 20.0,
+          "longest_shot_frac": 1.0,
+          "median_sky": 0.0,
+          "horizon_frac": 0.0,
+          "median_sharpness": 384.0,
+          "static_overlay_px_frac": 0.0,
+          "overlay_crop": [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "verdict": "ACCEPT",
+          "reasons": []
+        },
+        "remedied_by_crop": false
+      }
+    },
+    {
+      "id": "S1-ingest",
+      "seconds": 4.565,
+      "skipped": false,
+      "codes": [],
+      "outputs": [
+        "keyframes"
+      ],
+      "facts": {
+        "frames_in": 600,
+        "keyframes": 173,
+        "srt_records": 600,
+        "has_telemetry": true
+      }
+    },
+    {
+      "id": "S2-plan",
+      "seconds": 0.013,
+      "skipped": false,
+      "codes": [],
+      "outputs": [
+        "plan"
+      ],
+      "facts": {
+        "pose_views": 173,
+        "dense_views": 173
+      }
+    },
+    {
+      "id": "S3-geometry",
+      "seconds": 292.949,
+      "skipped": false,
+      "codes": [],
+      "outputs": [
+        "cameras",
+        "colors",
+        "points"
+      ],
+      "facts": {
+        "points": 9757462,
+        "geometry_provider": "local",
+        "registered_views": 173,
+        "local_gpu": {
+          "n_views": 173,
+          "pose_method": "global",
+          "dense_points": 9757462,
+          "total_seconds": 292.6,
+          "sparse_after_bundle_adjustment": {
+            "Registered images": "173",
+            "Points": "27671",
+            "Observations": "260618",
+            "Mean track length": "9.418453",
+            "Mean observations per image": "1506.462428",
+            "Mean reprojection error": "0.889237px"
+          },
+          "stages": [
+            {
+              "stage": "poses (MapAnything)",
+              "seconds": 45.15
+            },
+            {
+              "stage": "intrinsics fit",
+              "seconds": 1.75
+            },
+            {
+              "stage": "feature_extractor",
+              "seconds": 6.09
+            },
+            {
+              "stage": "sequential_matcher",
+              "seconds": 16.83
+            },
+            {
+              "stage": "global_mapper",
+              "seconds": 21.93
+            },
+            {
+              "stage": "point_filtering",
+              "seconds": 0.31
+            },
+            {
+              "stage": "analyze_adjusted",
+              "seconds": 0.18
+            },
+            {
+              "stage": "model_converter",
+              "seconds": 1.01
+            },
+            {
+              "stage": "image_undistorter",
+              "seconds": 1.27
+            },
+            {
+              "stage": "InterfaceCOLMAP",
+              "seconds": 0.19
+            },
+            {
+              "stage": "DensifyPointCloud",
+              "seconds": 78.8
+            },
+            {
+              "stage": "ReconstructMesh",
+              "seconds": 52.15
+            },
+            {
+              "stage": "TextureMesh",
+              "seconds": 63.61
+            }
+          ],
+          "unregistered": [],
+          "focal_after_mapper_px": [
+            1414.33
+          ],
+          "views_turn_deg": 9.63,
+          "focal_refined": false,
+          "textured_mesh": "scene_tex.obj"
+        }
+      },
+      "note": "local GPU, 292.6 s"
+    },
+    {
+      "id": "S4-scale",
+      "seconds": 0.0,
+      "skipped": false,
+      "codes": [],
+      "outputs": [],
+      "facts": {
+        "scale": {
+          "factor": 1.0,
+          "status": "unvalidated",
+          "label": "unvalidated (model units)",
+          "basis": "no external ruler or GNSS for this clip",
+          "source": null
+        },
+        "units": "model units"
+      },
+      "note": "scale unvalidated - lengths are model units, not metres"
+    },
+    {
+      "id": "S5-georef",
+      "seconds": 2.27,
+      "skipped": false,
+      "codes": [],
+      "outputs": [
+        "georef_transform",
+        "points_geo"
+      ],
+      "facts": {
+        "georeferenced": true,
+        "frame": "F6",
+        "units": "metres",
+        "crs": null,
+        "enu_reference": {
+          "latitude": 28.6139,
+          "longitude": 77.204328,
+          "height": "take-off point (SRT height 0); its absolute height is unknown"
+        },
+        "vertical": "height above take-off (SRT), not orthometric",
+        "gnss_fixes_used": 173,
+        "gnss_track_m": 826.2,
+        "gnss_inlier_fraction": 1.0,
+        "gnss_fit_rms_m": 0.126,
+        "sim3_scale": 69.317618,
+        "dof": 6,
+        "rotation_from": {
+          "gnss": [
+            "yaw",
+            "track slope"
+          ],
+          "gravity": [
+            "roll about the track"
+          ]
+        },
+        "gravity": {
+          "up": [
+            0.00010567625794719985,
+            -0.48912776424634785,
+            -0.8722121410963606
+          ],
+          "heading_spread": 0.0,
+          "heading_degenerate": true,
+          "ground_correction_deg": 0.56,
+          "residual_roll_deg": 0.01,
+          "residual_roll_max_deg": 0.08,
+          "camera_above_ground_m": 110.22,
+          "horiz_track_m": 824.88,
+          "altitude_spread_m": 11.09
+        },
+        "focal_from_pitch": {
+          "applied": true,
+          "pitch_model_deg": 52.583,
+          "attitude_spread_deg": 0.09,
+          "pitch_srt_deg": 60.0,
+          "k": 1.32506,
+          "focal_used_px": 1414.33,
+          "focal_implied_px": 1067.37,
+          "pitch_model_deg_after": 59.997
+        },
+        "scale": {
+          "factor": 69.31761845689645,
+          "status": "gnss",
+          "label": "gnss x69.318",
+          "basis": "consumer GNSS track, residual 0.13 m"
+        }
+      },
+      "note": "SRT track, 173 fixes, fit 0.13 m RMS; heights above take-off; depth rescaled 0.7547 from the gimbal pitch"
+    },
+    {
+      "id": "S5b-level",
+      "seconds": 0.0,
+      "skipped": true,
+      "codes": [],
+      "outputs": [],
+      "facts": {},
+      "note": "already georeferenced (F6/F7); nothing to level"
+    },
+    {
+      "id": "S6-export",
+      "seconds": 16.612,
+      "skipped": false,
+      "codes": [],
+      "outputs": [
+        "export_fbx",
+        "export_geotiff",
+        "export_glb",
+        "export_las",
+        "export_obj",
+        "export_ply",
+        "exports"
+      ],
+      "facts": {
+        "frame": "F6",
+        "units": "metres",
+        "exports": [
+          "fbx",
+          "geotiff",
+          "glb",
+          "las",
+          "obj",
+          "ply"
+        ],
+        "dsm": {
+          "width": 3121,
+          "height": 1233,
+          "gsd": 0.26,
+          "filled_fraction": 0.6845,
+          "crs": null
+        }
+      }
+    },
+    {
+      "id": "S7-score",
+      "seconds": 0.0,
+      "skipped": true,
+      "codes": [],
+      "outputs": [],
+      "facts": {},
+      "note": "no ground truth for this source"
+    },
+    {
+      "id": "S8-verdict",
+      "seconds": 0.0,
+      "skipped": false,
+      "codes": [],
+      "outputs": [],
+      "facts": {
+        "verdicts": {
+          "R-O1 reconstruction type": "met",
+          "R-O2 processing time": "not measurable (clip is 20 s; the target is for a 10-minute video)",
+          "R-O3 spatial accuracy": "not measurable (no ground truth)",
+          "R-O4 coverage": "not measurable (no ground truth)",
+          "R-O5 formats": "met",
+          "R-O6 viewer": "met (tools/build_viewer.py, demo/)",
+          "scale": "gnss x69.318"
+        }
+      }
+    }
+  ],
+  "artefacts": {
+    "screen": {
+      "path": "screen.json",
+      "kind": "verdict",
+      "sha256": "f1c3e97e6a830570bc7b92071283138fda2c7b618e8125be65954eee4e718cf0",
+      "bytes": 400
+    },
+    "keyframes": {
+      "path": "ingest.json",
+      "kind": "keyframe-set",
+      "frame": "F0",
+      "sha256": "5697de20a34e072767a2002cc5b05126c150fd7f92526e8290f59b22f425e108",
+      "bytes": 60189
+    },
+    "plan": {
+      "path": "dense_index.npy",
+      "kind": "array",
+      "frame": "F0",
+      "units": "index",
+      "sha256": "1c27fc3139a6b4e2d57d59c269c4b82bc18fe5a428d8ee4e5c711285017e0b23",
+      "bytes": 1512
+    },
+    "points": {
+      "path": "points.npy",
+      "kind": "point-cloud",
+      "frame": "F4",
+      "units": "model units",
+      "sha256": "66fbb42926c667fe275164a55fdb421eb47cd795cc7f7f090a938ef109b25f76",
+      "bytes": 117089672
+    },
+    "colors": {
+      "path": "colors.npy",
+      "kind": "array",
+      "frame": "F4",
+      "units": "rgb",
+      "sha256": "3e4ae32067796cb90c50c43ed2c6d9afd41b3d57b02609dcbeb33c2756aa99ea",
+      "bytes": 29272514
+    },
+    "cameras": {
+      "path": "cameras.npy",
+      "kind": "array",
+      "frame": "F4",
+      "units": "model units",
+      "sha256": "61f4e26a7ee0abcd000497317f62623cc5a2a4366b374cecb74a1dc570637736",
+      "bytes": 22272
+    },
+    "points_geo": {
+      "path": "points_geo.npy",
+      "kind": "point-cloud",
+      "frame": "F6",
+      "units": "metres",
+      "sha256": "772e2c419d3b9016ccb4b47fb145e9ac0bd85a4177ba9a91b8182a3e859469a2",
+      "bytes": 234179216
+    },
+    "georef_transform": {
+      "path": "georef.json",
+      "kind": "transform",
+      "frame": "F6",
+      "sha256": "b69cb9140f4fb81fd865f4908c9c67335dca76642f0a64e7bd479719abcc0853",
+      "bytes": 1586
+    },
+    "export_ply": {
+      "path": "export/cloud.ply",
+      "kind": "ply",
+      "frame": "F6",
+      "units": "metres",
+      "sha256": "5c5160f1c2fb372781a7031e40397131a976d85feebae41cc0319d79103cd380",
+      "bytes": 234179266
+    },
+    "export_las": {
+      "path": "export/cloud.las",
+      "kind": "las",
+      "frame": "F6",
+      "units": "metres",
+      "sha256": "c70d29413ed0600db02cd3dc456a94299604f5cfd5168739ec96b80156b8f82d",
+      "bytes": 292725081
+    },
+    "export_geotiff": {
+      "path": "export/dsm.tif",
+      "kind": "geotiff",
+      "frame": "F6",
+      "units": "metres",
+      "sha256": "4aa1130447428c54712be6963110fd2db8a654d49a70f48436fca8a022167db2",
+      "bytes": 10024094
+    },
+    "export_obj": {
+      "path": "export/model.obj",
+      "kind": "obj",
+      "frame": "F6",
+      "units": "metres",
+      "sha256": "f24fa99c6182b746c0cfb1d5c47658f8ae19ded0be814873184464e1e9d0ff78",
+      "bytes": 46032109
+    },
+    "export_glb": {
+      "path": "export/model.glb",
+      "kind": "glb",
+      "frame": "F6",
+      "units": "metres",
+      "sha256": "529f494cc6f0eeb5d7500c48a7072d4119992c1aaece404089696ff40d8ea916",
+      "bytes": 31704648
+    },
+    "export_fbx": {
+      "path": "export/model.fbx",
+      "kind": "fbx",
+      "frame": "F6",
+      "units": "metres",
+      "sha256": "28bb98c91940cb9916153cee51e32fa14b8640503420f963bfe7fbd1a4650028",
+      "bytes": 41639216
+    },
+    "exports": {
+      "path": "export",
+      "kind": "directory",
+      "frame": "F6",
+      "units": "metres"
+    }
+  },
+  "frame": "F6",
+  "units": "metres",
+  "scale": {
+    "factor": 69.31761845689645,
+    "status": "gnss",
+    "label": "gnss x69.318",
+    "basis": "consumer GNSS track, residual 0.13 m"
+  },
+  "georeferenced": true,
+  "level": "L0",
+  "quality": "measured",
+  "codes": [],
+  "verdicts": {
+    "R-O1 reconstruction type": "met",
+    "R-O2 processing time": "not measurable (clip is 20 s; the target is for a 10-minute video)",
+    "R-O3 spatial accuracy": "not measurable (no ground truth)",
+    "R-O4 coverage": "not measurable (no ground truth)",
+    "R-O5 formats": "met",
+    "R-O6 viewer": "met (tools/build_viewer.py, demo/)",
+    "scale": "gnss x69.318"
+  },
+  "seconds": 318.1204175999992,
+  "budget_s": 900.0,
+  "started": "2026-09-26T21:47:47Z",
+  "within_budget": true
+}

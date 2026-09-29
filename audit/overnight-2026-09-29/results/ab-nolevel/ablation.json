@@ -1,0 +1,16 @@
+{
+ "tag": "nolevel",
+ "options": {
+  "texture_level": false
+ },
+ "solved": false,
+ "keyframes": 177,
+ "wall_s": 139.7,
+ "registered": 177,
+ "reprojection_px": "0.489768px",
+ "dense_points": 6476105,
+ "mean_coverage": 0.98331,
+ "mean_psnr_db": 24.479,
+ "mean_ssim": 0.70384,
+ "empty_views": 0
+}

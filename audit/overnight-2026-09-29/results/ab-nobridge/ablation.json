@@ -1,0 +1,22 @@
+{
+ "tag": "nobridge",
+ "options": {},
+ "solved": true,
+ "keyframes": 139,
+ "wall_s": 192.2,
+ "registered": 139,
+ "reprojection_px": "0.482574px",
+ "dense_points": 4397881,
+ "mean_coverage": 0.98934,
+ "mean_psnr_db": 24.95,
+ "mean_ssim": 0.71994,
+ "empty_views": 0,
+ "scored_camera": [
+  "SIMPLE_PINHOLE",
+  "1920",
+  "595",
+  "1098.5217402319981",
+  "954.59961403226453",
+  "289.43856563065316"
+ ]
+}

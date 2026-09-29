@@ -1,0 +1,10 @@
+{
+ "tag": "cl-ours",
+ "mode": "ours",
+ "dense_wall_s": 92.4,
+ "dense_points": 2439930,
+ "mean_coverage": 0.88124,
+ "mean_psnr_db": 18.65,
+ "mean_ssim": 0.32674,
+ "unposed": []
+}

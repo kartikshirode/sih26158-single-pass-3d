@@ -1,0 +1,22 @@
+{
+ "seconds": {
+  "feature_extractor": 5.7,
+  "sequential_matcher": 50.2,
+  "mapper": 1062.3,
+  "image_undistorter": 2.0
+ },
+ "models": 1,
+ "registered": 177,
+ "of": 177,
+ "raw_camera": [
+  "1",
+  "SIMPLE_RADIAL",
+  "1920",
+  "595",
+  "591.67384691877623",
+  "960",
+  "297.5",
+  "-0.0068830183315207903"
+ ],
+ "held_out_registered": 17
+}

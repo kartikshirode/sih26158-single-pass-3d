@@ -1,0 +1,24 @@
+{
+  "file": "nicosia_1080p.mp4",
+  "resolution": "1920x1080",
+  "fps": 29.97,
+  "duration_s": 40.0,
+  "shots_detected": 2,
+  "longest_shot_s": 30.3,
+  "longest_shot_frac": 0.75,
+  "median_sky": 0.436,
+  "horizon_frac": 1.0,
+  "median_sharpness": 3233.0,
+  "static_overlay_px_frac": 0.00079,
+  "overlay_crop": [
+    0.0,
+    0.047,
+    0.0,
+    0.0
+  ],
+  "verdict": "REJECT",
+  "reasons": [
+    "horizon in 100% of frames -> unbounded depth",
+    "median sky 44% -> too much frame carries no geometry"
+  ]
+}

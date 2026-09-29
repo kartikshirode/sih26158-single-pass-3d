@@ -1,0 +1,148 @@
+{
+ "tag": "ma",
+ "seconds": {
+  "mapanything": 58.2,
+  "fusion": 9.9,
+  "texture": 97.7
+ },
+ "faces": 899999,
+ "median_depth": 10.683284759521484,
+ "unseen_faces": 12582,
+ "windows": [
+  {
+   "window": 1,
+   "views": [
+    46,
+    100
+   ],
+   "scale": 0.64395,
+   "inlier_frac": 0.806
+  },
+  {
+   "window": 2,
+   "views": [
+    92,
+    146
+   ],
+   "scale": 0.53546,
+   "inlier_frac": 0.899
+  },
+  {
+   "window": 3,
+   "views": [
+    138,
+    177
+   ],
+   "scale": 0.44906,
+   "inlier_frac": 0.838
+  }
+ ],
+ "focal_px_median": 1150.52641681232,
+ "mean_coverage": 0.87073,
+ "mean_psnr_db": 20.857,
+ "mean_ssim": 0.35442,
+ "views": [
+  {
+   "name": "kf_009_f00030.jpg",
+   "coverage": 0.89246,
+   "psnr_db": 19.725,
+   "ssim": 0.28345
+  },
+  {
+   "name": "kf_019_f00062.jpg",
+   "coverage": 0.91165,
+   "psnr_db": 19.896,
+   "ssim": 0.32071
+  },
+  {
+   "name": "kf_029_f00092.jpg",
+   "coverage": 0.91556,
+   "psnr_db": 19.662,
+   "ssim": 0.29995
+  },
+  {
+   "name": "kf_039_f00128.jpg",
+   "coverage": 0.9105,
+   "psnr_db": 19.61,
+   "ssim": 0.30065
+  },
+  {
+   "name": "kf_049_f00160.jpg",
+   "coverage": 0.91892,
+   "psnr_db": 19.385,
+   "ssim": 0.25107
+  },
+  {
+   "name": "kf_059_f00180.jpg",
+   "coverage": 0.93696,
+   "psnr_db": 19.982,
+   "ssim": 0.2927
+  },
+  {
+   "name": "kf_069_f00200.jpg",
+   "coverage": 0.90663,
+   "psnr_db": 19.96,
+   "ssim": 0.27535
+  },
+  {
+   "name": "kf_079_f00230.jpg",
+   "coverage": 0.94628,
+   "psnr_db": 19.807,
+   "ssim": 0.29507
+  },
+  {
+   "name": "kf_089_f00278.jpg",
+   "coverage": 0.92871,
+   "psnr_db": 19.882,
+   "ssim": 0.29363
+  },
+  {
+   "name": "kf_099_f00330.jpg",
+   "coverage": 0.8973,
+   "psnr_db": 19.534,
+   "ssim": 0.29391
+  },
+  {
+   "name": "kf_109_f00366.jpg",
+   "coverage": 0.85599,
+   "psnr_db": 22.045,
+   "ssim": 0.37397
+  },
+  {
+   "name": "kf_119_f00400.jpg",
+   "coverage": 0.83829,
+   "psnr_db": 22.31,
+   "ssim": 0.37673
+  },
+  {
+   "name": "kf_129_f00442.jpg",
+   "coverage": 0.83958,
+   "psnr_db": 22.486,
+   "ssim": 0.4079
+  },
+  {
+   "name": "kf_139_f00472.jpg",
+   "coverage": 0.8149,
+   "psnr_db": 22.235,
+   "ssim": 0.39972
+  },
+  {
+   "name": "kf_149_f00496.jpg",
+   "coverage": 0.79443,
+   "psnr_db": 22.317,
+   "ssim": 0.44341
+  },
+  {
+   "name": "kf_159_f00516.jpg",
+   "coverage": 0.76797,
+   "psnr_db": 22.744,
+   "ssim": 0.54432
+  },
+  {
+   "name": "kf_169_f00538.jpg",
+   "coverage": 0.72636,
+   "psnr_db": 22.982,
+   "ssim": 0.57254
+  }
+ ]
+}

@@ -1,0 +1,119 @@
+{
+ "views": [
+  {
+   "name": "kf_009_f00030.jpg",
+   "coverage": 0.9605,
+   "psnr_db": 21.888,
+   "ssim": 0.5483
+  },
+  {
+   "name": "kf_019_f00062.jpg",
+   "coverage": 0.9978,
+   "psnr_db": 21.692,
+   "ssim": 0.53592
+  },
+  {
+   "name": "kf_029_f00092.jpg",
+   "coverage": 0.99431,
+   "psnr_db": 21.639,
+   "ssim": 0.5314
+  },
+  {
+   "name": "kf_039_f00128.jpg",
+   "coverage": 0.99261,
+   "psnr_db": 21.126,
+   "ssim": 0.48015
+  },
+  {
+   "name": "kf_049_f00160.jpg",
+   "coverage": 0.99579,
+   "psnr_db": 21.009,
+   "ssim": 0.39036
+  },
+  {
+   "name": "kf_059_f00180.jpg",
+   "coverage": 0.99831,
+   "psnr_db": 22.094,
+   "ssim": 0.48803
+  },
+  {
+   "name": "kf_069_f00200.jpg",
+   "coverage": 0.99826,
+   "psnr_db": 22.159,
+   "ssim": 0.50108
+  },
+  {
+   "name": "kf_079_f00230.jpg",
+   "coverage": 0.9977,
+   "psnr_db": 21.88,
+   "ssim": 0.45871
+  },
+  {
+   "name": "kf_089_f00278.jpg",
+   "coverage": 0.99623,
+   "psnr_db": 21.471,
+   "ssim": 0.37453
+  },
+  {
+   "name": "kf_099_f00330.jpg",
+   "coverage": 0.9952,
+   "psnr_db": 21.919,
+   "ssim": 0.47249
+  },
+  {
+   "name": "kf_109_f00366.jpg",
+   "coverage": 0.99562,
+   "psnr_db": 23.832,
+   "ssim": 0.59576
+  },
+  {
+   "name": "kf_119_f00400.jpg",
+   "coverage": 0.99502,
+   "psnr_db": 24.349,
+   "ssim": 0.60771
+  },
+  {
+   "name": "kf_129_f00442.jpg",
+   "coverage": 0.99671,
+   "psnr_db": 24.951,
+   "ssim": 0.64232
+  },
+  {
+   "name": "kf_139_f00472.jpg",
+   "coverage": 0.99195,
+   "psnr_db": 25.038,
+   "ssim": 0.6565
+  },
+  {
+   "name": "kf_149_f00496.jpg",
+   "coverage": 0.99401,
+   "psnr_db": 25.027,
+   "ssim": 0.67308
+  },
+  {
+   "name": "kf_159_f00516.jpg",
+   "coverage": 0.9921,
+   "psnr_db": 24.586,
+   "ssim": 0.66473
+  },
+  {
+   "name": "kf_169_f00538.jpg",
+   "coverage": 0.98102,
+   "psnr_db": 23.866,
+   "ssim": 0.6566
+  }
+ ],
+ "mean_coverage": 0.99254,
+ "mean_psnr_db": 22.854,
+ "mean_ssim": 0.54575,
+ "empty_views": 0,
+ "scored_camera": [
+  "SIMPLE_RADIAL",
+  "1920",
+  "595",
+  "1115.9875276116002",
+  "955.20650026053352",
+  "279.7814350694274",
+  "-0.011075557307664709"
+ ]
+}

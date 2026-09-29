@@ -1,0 +1,21 @@
+{
+  "file": "b5v.mp4",
+  "resolution": "1920x1080",
+  "fps": 1.0,
+  "duration_s": 600.0,
+  "shots_detected": 1,
+  "longest_shot_s": 600.0,
+  "longest_shot_frac": 1.0,
+  "median_sky": 0.0,
+  "horizon_frac": 0.0,
+  "median_sharpness": 440.0,
+  "static_overlay_px_frac": 0.0,
+  "overlay_crop": [
+    0.0,
+    0.0,
+    0.0,
+    0.0
+  ],
+  "verdict": "ACCEPT",
+  "reasons": []
+}

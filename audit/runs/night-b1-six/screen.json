@@ -1,0 +1,24 @@
+{
+  "file": "SIH DEMO.mp4",
+  "resolution": "1920x1080",
+  "fps": 30.0,
+  "duration_s": 18.9,
+  "shots_detected": 1,
+  "longest_shot_s": 18.9,
+  "longest_shot_frac": 1.0,
+  "median_sky": 0.202,
+  "horizon_frac": 1.0,
+  "median_sharpness": 2018.0,
+  "static_overlay_px_frac": 0.00262,
+  "overlay_crop": [
+    0.0,
+    0.0,
+    0.0,
+    0.0
+  ],
+  "verdict": "REJECT",
+  "reasons": [
+    "horizon in 100% of frames -> unbounded depth",
+    "median sky 20% -> too much frame carries no geometry"
+  ]
+}

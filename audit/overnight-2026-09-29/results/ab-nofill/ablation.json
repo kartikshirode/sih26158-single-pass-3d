@@ -1,0 +1,16 @@
+{
+ "tag": "nofill",
+ "options": {
+  "texture_fill": false
+ },
+ "solved": false,
+ "keyframes": 177,
+ "wall_s": 145.9,
+ "registered": 177,
+ "reprojection_px": "0.489768px",
+ "dense_points": 6475113,
+ "mean_coverage": 0.98469,
+ "mean_psnr_db": 24.61,
+ "mean_ssim": 0.7091,
+ "empty_views": 0
+}

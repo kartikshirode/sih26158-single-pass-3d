@@ -1,0 +1,118 @@
+{
+ "views": [
+  {
+   "name": "kf_009_f00030.jpg",
+   "coverage": 0.99785,
+   "psnr_db": 23.998,
+   "ssim": 0.75257
+  },
+  {
+   "name": "kf_019_f00062.jpg",
+   "coverage": 0.99524,
+   "psnr_db": 23.552,
+   "ssim": 0.73505
+  },
+  {
+   "name": "kf_029_f00092.jpg",
+   "coverage": 0.99058,
+   "psnr_db": 23.056,
+   "ssim": 0.69477
+  },
+  {
+   "name": "kf_039_f00128.jpg",
+   "coverage": 0.98745,
+   "psnr_db": 22.597,
+   "ssim": 0.6556
+  },
+  {
+   "name": "kf_049_f00160.jpg",
+   "coverage": 0.98885,
+   "psnr_db": 23.239,
+   "ssim": 0.63868
+  },
+  {
+   "name": "kf_059_f00180.jpg",
+   "coverage": 0.99099,
+   "psnr_db": 24.696,
+   "ssim": 0.69781
+  },
+  {
+   "name": "kf_069_f00200.jpg",
+   "coverage": 0.99131,
+   "psnr_db": 24.253,
+   "ssim": 0.688
+  },
+  {
+   "name": "kf_079_f00230.jpg",
+   "coverage": 0.98915,
+   "psnr_db": 24.212,
+   "ssim": 0.70091
+  },
+  {
+   "name": "kf_089_f00278.jpg",
+   "coverage": 0.98482,
+   "psnr_db": 24.486,
+   "ssim": 0.69671
+  },
+  {
+   "name": "kf_099_f00330.jpg",
+   "coverage": 0.98205,
+   "psnr_db": 25.249,
+   "ssim": 0.71055
+  },
+  {
+   "name": "kf_109_f00366.jpg",
+   "coverage": 0.98454,
+   "psnr_db": 25.602,
+   "ssim": 0.71399
+  },
+  {
+   "name": "kf_119_f00400.jpg",
+   "coverage": 0.98697,
+   "psnr_db": 25.716,
+   "ssim": 0.71698
+  },
+  {
+   "name": "kf_129_f00442.jpg",
+   "coverage": 0.99225,
+   "psnr_db": 25.819,
+   "ssim": 0.71668
+  },
+  {
+   "name": "kf_139_f00472.jpg",
+   "coverage": 0.98798,
+   "psnr_db": 26.097,
+   "ssim": 0.73796
+  },
+  {
+   "name": "kf_149_f00496.jpg",
+   "coverage": 0.98936,
+   "psnr_db": 26.182,
+   "ssim": 0.75612
+  },
+  {
+   "name": "kf_159_f00516.jpg",
+   "coverage": 0.9878,
+   "psnr_db": 25.453,
+   "ssim": 0.73383
+  },
+  {
+   "name": "kf_169_f00538.jpg",
+   "coverage": 0.97639,
+   "psnr_db": 24.442,
+   "ssim": 0.70192
+  }
+ ],
+ "mean_coverage": 0.98845,
+ "mean_psnr_db": 24.626,
+ "mean_ssim": 0.70871,
+ "empty_views": 0,
+ "scored_camera": [
+  "SIMPLE_PINHOLE",
+  "1920",
+  "595",
+  "1097.9800479741814",
+  "954.65225850898412",
+  "289.17765403277497"
+ ]
+}

@@ -1,0 +1,16 @@
+{
+ "tag": "smooth01",
+ "options": {
+  "texture_smoothness": 0.1
+ },
+ "solved": false,
+ "keyframes": 177,
+ "wall_s": 151.1,
+ "registered": 177,
+ "reprojection_px": "0.489768px",
+ "dense_points": 6476383,
+ "mean_coverage": 0.98827,
+ "mean_psnr_db": 24.442,
+ "mean_ssim": 0.69898,
+ "empty_views": 0
+}

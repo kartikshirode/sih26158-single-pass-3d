@@ -1,0 +1,184 @@
+{
+  "n_views": 177,
+  "keyframe_size": [
+    1920,
+    595
+  ],
+  "pose_method": "global",
+  "mapanything_views": 60,
+  "camera": {
+    "f": 1097.98,
+    "cx": 954.652,
+    "cy": 289.178,
+    "w": 1920,
+    "h": 595,
+    "pp_reference": "keyframe centre",
+    "scale": 0.282,
+    "crop_x0_full": 42.708,
+    "crop_y0_full": 0.0
+  },
+  "intrinsics_fit_residual_px": 0.1613,
+  "stitch": [
+    {
+      "window": 1,
+      "views": [
+        46,
+        60
+      ],
+      "scale": 0.70991,
+      "inlier_frac": 0.808
+    }
+  ],
+  "mapanything_s": {
+    "model": 23.5,
+    "images": 1.6,
+    "inference": 9.6,
+    "stitch": 0.3
+  },
+  "mapanything_peak_gib": 6.66,
+  "sparse_after_triangulation": null,
+  "sparse_after_bundle_adjustment": {
+    "Registered images": "177",
+    "Points": "56032",
+    "Observations": "594576",
+    "Mean track length": "10.611365",
+    "Mean observations per image": "3359.186441",
+    "Mean reprojection error": "0.489768px"
+  },
+  "ba_gate": {
+    "passed": true,
+    "problems": []
+  },
+  "unregistered": [],
+  "camera_model": "SIMPLE_PINHOLE",
+  "focal_after_mapper_px": [
+    1097.98
+  ],
+  "views_turn_deg": 6.46,
+  "focal_refined": false,
+  "views_turn_mapper_deg": 2.14,
+  "focal_gate_doubtful": false,
+  "sparse_from": "C:\\Users\\Kartik\\Documents\\Kartik\\EDU\\Local\\Projects\\sih26158-single-pass-3d\\out\\runs\\night-b1-final\\geometry",
+  "options": {
+    "pose_method": "global",
+    "global_match_overlap": 30,
+    "mapper_retriangulate": false,
+    "camera_model": "SIMPLE_PINHOLE",
+    "refine_focal": true,
+    "refine_distortion": false,
+    "principal_point": "fit",
+    "refine_focal_min_turn_deg": 30.0,
+    "pose_window": 0,
+    "pose_overlap": 8,
+    "pose_size": 0,
+    "intrinsics_views": 60,
+    "sift_features": 4096,
+    "match_overlap": 6,
+    "tri_refinements": 1,
+    "tri_ba_iterations": 3,
+    "ba_iterations": 10,
+    "min_registered": 0.5,
+    "dense_resolution_level": 1,
+    "dense_min_resolution": 320,
+    "dense_views_fuse": 3,
+    "dense_neighbours": 5,
+    "dense_fusion_filter": 1,
+    "mesh_min_point_distance": 4.0,
+    "mesh": true,
+    "texture": true,
+    "texture_decimate": 0.2,
+    "texture_sharpness": 0.0,
+    "texture_smoothness": 0.5,
+    "texture_fill": true,
+    "texture_level": true,
+    "geometry_prior": false,
+    "prior_tiles": 3,
+    "prior_window": 8,
+    "prior_stride": 3,
+    "prior_depth": 1.55,
+    "prior_fill_depth": 2.8,
+    "prior_voxel": 240,
+    "prior_upsample": 2,
+    "prior_poisson": 10,
+    "prior_refine": true,
+    "prior_refine_decimate": 0.35,
+    "prior_gap_cell": 120,
+    "prior_gap_below": 120,
+    "prior_gap_ring": 1,
+    "mapper_extra": "",
+    "densify_extra": "",
+    "mesh_extra": "",
+    "texture_extra": "",
+    "keep_intermediate": false
+  },
+  "stages": [
+    {
+      "stage": "dense subset",
+      "seconds": 0.56
+    },
+    {
+      "stage": "image_undistorter",
+      "seconds": 2.04
+    },
+    {
+      "stage": "InterfaceCOLMAP",
+      "seconds": 0.26
+    },
+    {
+      "stage": "DensifyPointCloud",
+      "seconds": 54.04
+    },
+    {
+      "stage": "ReconstructMesh",
+      "seconds": 42.71
+    },
+    {
+      "stage": "TextureMesh",
+      "seconds": 49.11
+    }
+  ],
+  "total_seconds": 165.1,
+  "dense_points": 6474834,
+  "textured_mesh": "scene_tex.obj",
+  "texture_fill": {
+    "faces": 210661,
+    "unseen_faces": 6853,
+    "unseen_fraction": 0.03253,
+    "materials": {
+      "material_00": {
+        "filled": 6853,
+        "atlas": [
+          4096,
+          4208
+        ]
+      }
+    },
+    "seconds": 4.34
+  },
+  "texture_level": {
+    "geometry": "C:\\Users\\Kartik\\Documents\\Kartik\\EDU\\Local\\Projects\\sih26158-single-pass-3d\\out\\exp\\ab-repro-control",
+    "faces": 210661,
+    "lambda_smooth": 0.1,
+    "robust": null,
+    "pull": 0.03,
+    "materials": 1,
+    "unseen_faces": 0,
+    "fill_faces": 6853,
+    "fill_strip_top_row": {
+      "0": 4096
+    },
+    "fill_handling": "excluded from the solve and left unchanged",
+    "solve_s": 1.66,
+    "patches": 12050,
+    "unknowns": 171048,
+    "seam_edges": 53308,
+    "downweighted_edges": 0,
+    "residual_before": 14.225,
+    "residual_after": 8.167,
+    "offset_abs_mean": 3.326,
+    "offset_abs_p99": 23.57,
+    "clipped_texels": 1701,
+    "clipped_fraction": 0.000333,
+    "seconds": 5.07
+  }
+}

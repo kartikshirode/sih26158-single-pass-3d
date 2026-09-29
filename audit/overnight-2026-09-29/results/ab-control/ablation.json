@@ -1,0 +1,22 @@
+{
+ "tag": "control",
+ "options": {},
+ "solved": false,
+ "keyframes": 177,
+ "wall_s": 142.1,
+ "registered": 177,
+ "reprojection_px": "0.489768px",
+ "dense_points": 6474570,
+ "mean_coverage": 0.98868,
+ "mean_psnr_db": 24.62,
+ "mean_ssim": 0.70824,
+ "empty_views": 0,
+ "scored_camera": [
+  "SIMPLE_PINHOLE",
+  "1920",
+  "595",
+  "1097.9800479741814",
+  "954.65225850898412",
+  "289.17765403277497"
+ ]
+}
