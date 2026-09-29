@@ -6,8 +6,8 @@ done, what's left and what would make it better.
 
 ## What it is
 
-`paper/Tesseract-research-paper.docx` (and a PDF beside it): a 19-page research paper on
-SIH26158, about 8,800 words, 13 figures, 10 tables, 24 references, written for the SIH
+`paper/Tesseract-research-paper.docx` (and a PDF beside it): a 21-page research paper on
+SIH26158, about 9,400 words, 13 figures, 10 tables, 31 references, written for the SIH
 judges and technical reviewers.
 
 The owner was asked which report to write, because the template in the repo at the time
@@ -153,7 +153,7 @@ prose is not to be pasted into ZeroGPT (a third-party site). What changed:
 - **New section 7.7 with Table 7 (baselines) and Table 8 (ablation).** The old Tables 7
   and 8 are now 9 and 10. The numbers and their caveats are in
   `audit/overnight-2026-09-29/RUNLOG.md`; the scripts (`classical.py`, `ma_alone.py`,
-  `ablate.py`) are local, in `out/exp/scripts/`.
+  `ablate.py`) are now committed in `tools/repro/` (see the next section).
 - **B1 rerun with SIH_ASSIMP** (`night-b1-six`, 291.8 s, six formats): section 8.4.
 - **B5v rerun** (`night-b5v-2`, 548.2 s, 0.344 m, 98.54%): Table 9, sections 8.1 and 8.2,
   Table 10 and Figure 10 now come from one run. Figure 10 gains a bar for the demo with the
@@ -169,3 +169,35 @@ prose is not to be pasted into ZeroGPT (a third-party site). What changed:
 Still open from the improvement list: items 1 to 3 (real footage with survey, a real
 ten-minute clip, a DJI log with gimbal pitch) need data we don't have, and item 11 (a
 detector score) was not approved. The owner's items 1, 3 and 4 above are unchanged.
+
+## Market check and cleanup (2026-09-29)
+
+The paper was checked against the products and the 2025-2026 UAV work it will be read
+beside. What changed:
+
+- **Related work gains a paragraph on aerial feed-forward work and products** [25]-[29]:
+  Wu et al.'s evaluation of DUSt3R, MASt3R and VGGT on aerial blocks, UAVFF3D, GeoFF3D,
+  OpenDroneMap's video and SRT input since 2023, DJI Terra's July 2026 video and
+  rolling-shutter update, and Pix4D's 1 to 2 GSD for RTK blocks. Every one was opened and
+  checked, arXiv ids included.
+- **Section 8.1 states B5v in GSD and RMSE**: GSD 0.119 m at the image centre, cameras 1.15
+  GSD, cloud median 2.9 GSD, RMSE 0.506 m, and says why a synthetic surface isn't ASPRS
+  checkpoint evidence [31]. From `tools/b5v_truth.py`.
+- **Section 7.7 gains "Repeatability and scale"**: the control rerun (24.626 against
+  24.620 dB), the depth prior through the pipeline's own option (24.35 dB, 0.683, 98.62%,
+  against the experiment script's 24.43 in Table 6), and CityGaussian's 21.55 to 25.77 dB
+  on Mill-19 and UrbanScene3D [30] as a range, not a comparison.
+- **A new limitation**: no commercial tool run on the same clips, and no rolling-shutter
+  model.
+- **Appendix A** points at `tools/repro/`, which reruns every table's runs with one queue.
+
+Where a reviewer would still push: no real surveyed footage (the accuracy is synthetic,
+and 2.9 GSD is looser than the 1 to 2 GSD vendors state for RTK survey blocks), no
+OpenDroneMap or DJI Terra run on the same clips, no LPIPS or geometry metric (Chamfer,
+F-score) on a public UAV benchmark such as UAVFF3D, and held-out video frames are easier
+than the held-out views in the aerial splatting papers.
+
+On disk only these runs are kept: `night-b1-final`, `demo-prior2`, `night-b1-six`,
+`night-b3-final`, `night-b5v-2` and `b2-rep1..3`, plus `out/evidence/` and the B5v clip in
+`out/codex/`. Every other run and scratch folder was deleted; their manifests are in
+`audit/runs/superseded/`.
